@@ -1,0 +1,100 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  client
+  staff
+  admin
+}
+
+enum OrderStatus {
+  en_attente
+  en_preparation
+  prete
+  en_livraison
+  livree
+  annulee
+}
+
+enum Category {
+  tacos
+  boissons
+  accompagnements
+  desserts
+}
+
+model User {
+  id             Int      @id @default(autoincrement())
+  email          String   @unique
+  password       String?
+  google_id      String?  @unique
+  full_name      String
+  phone          String?
+  role           Role     @default(client)
+  loyalty_points Int      @default(0)
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+
+  orders         Order[]
+
+  @@map("users")
+}
+
+model Product {
+  id                   Int         @id @default(autoincrement())
+  name                 String
+  description          String?
+  price                Int         // Prix en centimes
+  discount_percentage  Int         @default(0)
+  category             Category
+  available            Boolean     @default(true)
+  image                String?
+  stock                Int         @default(0)  // Quantité en stock
+  stock_alert_threshold Int        @default(10) // Seuil d'alerte stock
+  created_at           DateTime    @default(now())
+  updated_at           DateTime    @updatedAt
+
+  @@map("products")
+}
+
+model Order {
+  id                String      @id @default(cuid())
+  user_id           Int?
+  user              User?       @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  total_amount      Int         // Montant total en centimes
+  status            OrderStatus @default(en_attente)
+  created_date      DateTime    @default(now())
+  updated_at        DateTime    @updatedAt
+
+  // Order details
+  customer_name     String?
+  customer_phone    String?
+  customer_email    String?
+  order_type        String?     // emporter, sur_place, livraison
+  delivery_address  String?
+  pickup_time       String?
+  notes             String?
+
+  items             OrderItem[]
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id            Int     @id @default(autoincrement())
+  order_id      String
+  order         Order   @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  product_name  String
+  quantity      Int
+
+  @@map("order_items")
+}

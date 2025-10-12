@@ -1,0 +1,7 @@
+- Update Prisma schema: Add order details fields to Order model ✅
+- Update Order.create to save order details ✅
+- Add user update route in backend for orders ✅
+- Update Order entity with user update method ✅
+- Add edit/cancel buttons in Profile.jsx for en_attente orders ✅
+- Create EditOrderDialog component ✅
+- Update order display in Profile to show details ✅

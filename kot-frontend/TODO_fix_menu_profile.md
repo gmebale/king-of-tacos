@@ -1,0 +1,5 @@
+- [x] Add filter method to Order.js
+- [x] Modify Product.list() to return mock products
+- [x] Modify authService.me() to return mock user
+- [x] Modify Order.filter() to return mock orders
+- [ ] Test Menu and Profile pages

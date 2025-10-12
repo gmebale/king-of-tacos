@@ -1,0 +1,8 @@
+# Node modules
+node_modules/
+kot-frontend/node_modules/
+
+# Cache fichiers
+.cache/
+kot-frontend/.cache/
+kot-frontend/node_modules/.cache/
