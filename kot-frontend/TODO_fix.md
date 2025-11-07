@@ -1,5 +1,0 @@
-- [x] Create src/Components/ui/skeleton.jsx with basic Skeleton component
-- [x] Fix import path in LowStockWidget.jsx: './src/utils' -> '../../utils'
-- [x] Fix import path in RecentOrdersWidget.jsx: './utils' -> '../../utils'
-- [x] Create src/integrations/Core.js with stub UploadFile function
-- [x] Add background and foreground colors to tailwind.config.js

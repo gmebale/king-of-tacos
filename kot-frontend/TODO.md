@@ -1,3 +1,0 @@
-- [x] Add error handling in Menu.jsx loadProducts function
-- [x] Add error handling in AdminStock.jsx loadProducts function
-- [ ] Test the app to ensure errors are handled gracefully
