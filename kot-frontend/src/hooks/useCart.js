@@ -11,7 +11,25 @@ export const useCart = () => {
     try {
       const savedCart = localStorage.getItem(CART_STORAGE_KEY);
       if (savedCart) {
-        setCart(JSON.parse(savedCart));
+        let parsedCart = JSON.parse(savedCart);
+        // Migrate old cart format to new format if necessary
+        parsedCart = parsedCart.map(item => {
+          if (item.product) {
+            // Already in new format
+            return item;
+          } else {
+            // Old format: migrate to new format
+            const { id, name, price, displayPrice, image_url, quantity, customizations, customizationSummary } = item;
+            return {
+              product: { id, name, price, displayPrice, image_url },
+              quantity,
+              customizations: customizations || {},
+              customizationSummary: customizationSummary || '',
+              subtotal: quantity * (displayPrice || price || 0)
+            };
+          }
+        });
+        setCart(parsedCart);
       }
     } catch (error) {
       console.error('Erreur lors du chargement du panier:', error);
@@ -31,7 +49,7 @@ export const useCart = () => {
   }, []);
 
   // Ajouter un produit au panier
-  const addToCart = useCallback((product, quantity = 1, customizations = {}) => {
+  const addToCart = useCallback((product, quantity = 1, customizations = {}, customizationSummary = '') => {
     const newCart = [...cart];
     const existingItemIndex = newCart.findIndex(
       item => item.product.id === product.id &&
@@ -40,13 +58,14 @@ export const useCart = () => {
 
     if (existingItemIndex > -1) {
       newCart[existingItemIndex].quantity += quantity;
-      newCart[existingItemIndex].subtotal = newCart[existingItemIndex].quantity * product.price;
+      newCart[existingItemIndex].subtotal = newCart[existingItemIndex].quantity * (product.displayPrice || product.price);
     } else {
       newCart.push({
         product,
         quantity,
         customizations,
-        subtotal: quantity * product.price
+        customizationSummary,
+        subtotal: quantity * (product.displayPrice || product.price)
       });
     }
 
@@ -75,7 +94,7 @@ export const useCart = () => {
         return {
           ...item,
           quantity,
-          subtotal: quantity * item.product.price
+          subtotal: quantity * (item.product.displayPrice || item.product.price)
         };
       }
       return item;

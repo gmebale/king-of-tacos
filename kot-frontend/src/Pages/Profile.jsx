@@ -14,6 +14,7 @@ import { createPageUrl } from '../utils';
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import EditOrderDialog from '../Components/EditOrderDialog';
+import LoyaltyCard from "../Components/LoyaltyCard";
 
 export default function Profile() {
   const navigate = useNavigate();
@@ -254,6 +255,9 @@ export default function Profile() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Loyalty Card */}
+          <LoyaltyCard />
 
           <Card className="border-2">
             <CardHeader>

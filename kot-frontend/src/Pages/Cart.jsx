@@ -1,58 +1,17 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Trash2, Plus, Minus, ShoppingBag, ArrowRight, ArrowLeft } from "lucide-react"; // Added ArrowLeft
 import { Button } from "../Components/ui/button";
 import { Card, CardContent } from "../Components/ui/card";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "../utils";
+import { useCart } from "../hooks/useCart";
 
 export default function Cart() {
   const navigate = useNavigate();
-  const [cart, setCart] = useState([]);
+  const { cart, updateQuantity, removeFromCart, clearCart, getTotal, getTotalItems } = useCart();
 
-  useEffect(() => {
-    loadCart();
-    window.addEventListener('storage', loadCart);
-    return () => window.removeEventListener('storage', loadCart);
-  }, []);
-
-  const loadCart = () => {
-    const savedCart = JSON.parse(localStorage.getItem('kingoftacos_cart') || '[]');
-    setCart(savedCart);
-  };
-
-  const updateQuantity = (productId, change) => {
-    const newCart = cart.map(item => {
-      // For items with customization, their ID might be unique per customization.
-      // We should update based on the full item object if IDs can be identical for different customizations.
-      // Assuming productId is unique enough for now. If not, a more complex `id` or a `uniqueKey` including customization should be used.
-      if (item.id === productId) {
-        return { ...item, quantity: Math.max(1, item.quantity + change) };
-      }
-      return item;
-    });
-    setCart(newCart);
-    localStorage.setItem('kingoftacos_cart', JSON.stringify(newCart));
-    window.dispatchEvent(new Event('storage'));
-  };
-
-  const removeItem = (productId) => {
-    const newCart = cart.filter(item => item.id !== productId);
-    setCart(newCart);
-    localStorage.setItem('kingoftacos_cart', JSON.stringify(newCart));
-    window.dispatchEvent(new Event('storage'));
-  };
-
-  const clearCart = () => {
-    setCart([]);
-    localStorage.removeItem('kingoftacos_cart');
-    window.dispatchEvent(new Event('storage'));
-  };
-
-  const subtotal = cart.reduce((sum, item) => {
-    const price = item.displayPrice || item.price;
-    return sum + (price * item.quantity);
-  }, 0);
+  const subtotal = getTotal();
   const total = subtotal;
 
   if (cart.length === 0) {
@@ -100,7 +59,7 @@ export default function Cart() {
             Votre Panier
           </h1>
           <p className="text-gray-600">
-            {cart.reduce((sum, item) => sum + item.quantity, 0)} article{cart.length > 1 ? 's' : ''}
+            {getTotalItems()} article{cart.length > 1 ? 's' : ''}
           </p>
         </motion.div>
 
@@ -108,7 +67,7 @@ export default function Cart() {
           <AnimatePresence>
             {cart.map((item) => (
               <motion.div
-                key={item.id} // Assuming item.id is unique for each distinct item, including customizations
+                key={`${item.product.id}-${JSON.stringify(item.customizations)}`}
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: 20 }}
@@ -118,10 +77,10 @@ export default function Cart() {
                   <CardContent className="p-4">
                     <div className="flex gap-4">
                       <div className="w-24 h-24 bg-gradient-to-br from-amber-50 to-yellow-100 rounded-2xl flex items-center justify-center flex-shrink-0">
-                        {item.image_url ? (
+                        {item.product.image_url ? (
                           <img
-                            src={item.image_url}
-                            alt={item.name}
+                            src={item.product.image_url}
+                            alt={item.product.name}
                             className="w-full h-full object-cover rounded-2xl"
                           />
                         ) : (
@@ -132,20 +91,20 @@ export default function Cart() {
                       <div className="flex-1">
                         <div className="flex justify-between items-start mb-2">
                           <div>
-                            <h3 className="font-bold text-lg">{item.name}</h3>
+                            <h3 className="font-bold text-lg">{item.product.name}</h3>
                             {item.customizationSummary && (
                               <p className="text-sm text-gray-600 mt-1">
                                 {item.customizationSummary}
                               </p>
                             )}
                             <p className="text-amber-600 font-semibold mt-1">
-                              {(item.displayPrice || item.price).toLocaleString()} FCFA
+                              {(item.product.displayPrice || item.product.price).toLocaleString()} FCFA
                             </p>
                           </div>
                           <Button
                             size="icon"
                             variant="ghost"
-                            onClick={() => removeItem(item.id)}
+                            onClick={() => removeFromCart(item.product.id, item.customizations)}
                             className="text-red-500 hover:bg-red-50"
                           >
                             <Trash2 className="w-4 h-4" />
@@ -156,7 +115,7 @@ export default function Cart() {
                           <Button
                             size="icon"
                             variant="outline"
-                            onClick={() => updateQuantity(item.id, -1)}
+                            onClick={() => updateQuantity(item.product.id, item.quantity - 1, item.customizations)}
                             className="rounded-xl border-amber-400 text-amber-600 hover:bg-amber-50 h-8 w-8"
                           >
                             <Minus className="w-3 h-3" />
@@ -166,13 +125,13 @@ export default function Cart() {
                           </span>
                           <Button
                             size="icon"
-                            onClick={() => updateQuantity(item.id, 1)}
+                            onClick={() => updateQuantity(item.product.id, item.quantity + 1, item.customizations)}
                             className="rounded-xl bg-gradient-to-r from-yellow-400 to-amber-600 text-white h-8 w-8"
                           >
                             <Plus className="w-3 h-3" />
                           </Button>
                           <span className="ml-auto text-lg font-bold">
-                            {((item.displayPrice || item.price) * item.quantity).toLocaleString()} FCFA
+                            {item.subtotal.toLocaleString()} FCFA
                           </span>
                         </div>
                       </div>

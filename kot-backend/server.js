@@ -11,6 +11,8 @@ const orderRoutes = require('./routes/orders');
 const userRoutes = require('./routes/users');
 const uploadRoutes = require('./routes/upload');
 const financeRoutes = require('./routes/finance');
+const kitchenRoutes = require('./routes/kitchen');
+const loyaltyRoutes = require('./routes/loyalty');
 
 const app = express();
 const prisma = new PrismaClient();

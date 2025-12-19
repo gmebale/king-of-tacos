@@ -7,7 +7,9 @@ import {
   Package,
   Printer,
   Download,
-  Star
+  Star,
+  Filter,
+  X
 } from "lucide-react";
 import {
   LineChart,

@@ -8,6 +8,7 @@ generator client {
 datasource db {
   provider = "mysql"
   url      = env("DATABASE_URL")
+  relationMode = "prisma"
 }
 
 enum Role {
@@ -97,4 +98,61 @@ model OrderItem {
   quantity      Int
 
   @@map("order_items")
+}
+
+enum RewardType {
+  free_delivery
+  gifted_product
+  discount
+  custom
+}
+
+model LoyaltyReward {
+  id              String      @id @default(cuid())
+  name            String
+  description     String?
+  type            RewardType
+  points_required Int
+  is_active       Boolean     @default(true)
+  created_at      DateTime    @default(now())
+  updated_at      DateTime    @updatedAt
+
+  redemptions     LoyaltyRedemption[]
+
+  @@map("loyalty_rewards")
+}
+
+model LoyaltyRedemption {
+  id          String      @id @default(cuid())
+  user_id     Int
+  user        User        @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  reward_id   String
+  reward      LoyaltyReward @relation(fields: [reward_id], references: [id], onDelete: Cascade)
+  points_used Int
+  created_at  DateTime    @default(now())
+
+  @@map("loyalty_redemptions")
+}
+
+enum PromoType {
+  percentage
+  fixed_amount
+  free_delivery
+}
+
+model PromoCode {
+  id              String    @id @default(cuid())
+  code            String    @unique
+  description     String?
+  type            PromoType
+  value           Int       // Pourcentage ou montant fixe en centimes
+  min_order_amount Int?     // Montant minimum de commande en centimes
+  max_uses        Int?      // Nombre maximum d'utilisations
+  used_count      Int       @default(0)
+  is_active       Boolean   @default(true)
+  expires_at      DateTime?
+  created_at      DateTime  @default(now())
+  updated_at      DateTime  @updatedAt
+
+  @@map("promo_codes")
 }

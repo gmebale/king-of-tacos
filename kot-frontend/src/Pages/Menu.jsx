@@ -78,7 +78,7 @@ export default function Menu() {
 
     const cartProduct = {
       ...product,
-      displayPrice: finalPrice, // Store the discounted price for cart
+      displayPrice: product.displayPrice || finalPrice, // Use existing displayPrice if set (for customizations), else finalPrice
       originalPrice: product.price
     };
 

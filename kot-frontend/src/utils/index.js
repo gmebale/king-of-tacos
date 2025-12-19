@@ -11,14 +11,18 @@ export function createPageUrl(pageName) {
     Checkout: '/checkout',
     Payment: '/payment',
     OrderSuccess: '/order-success',
+    OrdersPage: '/orders-page',
     Profile: '/profile',
     Login: '/login',
     Register: '/register',
     AdminDashboard: '/admin/dashboard',
     AdminOrders: '/admin/orders',
+    KitchenMode: '/admin/kitchen',
+    CashierMode: '/admin/cashier',
     AdminFinance: '/admin/finance',
     AdminStock: '/admin/stock',
     AdminStaff: '/admin/staff',
+    AdminLoyalty: '/admin/loyalty',
     AdminSettings: '/admin/settings'
   };
 

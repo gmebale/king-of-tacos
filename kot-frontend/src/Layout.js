@@ -8,10 +8,14 @@ import {
   ShoppingCart,
   User as UserIcon,
   LayoutDashboard,
+  ChefHat,
   Package,
+  PackageCheck,
+  Receipt,
   Users,
   Settings,
   LogOut,
+  Star,
   Menu as MenuIcon,
   X,
   TrendingUp
@@ -52,6 +56,7 @@ export default function Layout({ children, currentPageName }) {
   const clientNavItems = [
     { name: "Accueil", path: "Home", icon: Home },
     { name: "Menu", path: "Menu", icon: UtensilsCrossed },
+    { name: "Commandes", path: "OrdersPage", icon: PackageCheck },
     { name: "Panier", path: "Cart", icon: ShoppingCart, badge: cartCount },
     { name: user ? "Profil" : "Connexion", path: user ? "Profile" : "Login", icon: UserIcon }
   ];
@@ -59,9 +64,12 @@ export default function Layout({ children, currentPageName }) {
   const adminNavItems = [
     { name: "Dashboard", path: "AdminDashboard", icon: LayoutDashboard },
     { name: "Commandes", path: "AdminOrders", icon: ShoppingCart },
+    { name: "Cuisine", path: "KitchenMode", icon: ChefHat },
+    { name: "Caissier", path: "CashierMode", icon: Receipt },
     { name: "Finances", path: "AdminFinance", icon: TrendingUp },
     { name: "Stock", path: "AdminStock", icon: Package },
     { name: "Personnel", path: "AdminStaff", icon: Users },
+    { name: "Fidélité", path: "AdminLoyalty", icon: Star },
     { name: "Paramètres", path: "AdminSettings", icon: Settings }
   ];
 

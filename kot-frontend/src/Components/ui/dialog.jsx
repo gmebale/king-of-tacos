@@ -64,3 +64,14 @@ export function DialogDescription({ children, className = '', ...props }) {
     </p>
   );
 }
+
+export function DialogTrigger({ children, asChild, ...props }) {
+  if (asChild) {
+    return React.cloneElement(children, props);
+  }
+  return (
+    <button {...props}>
+      {children}
+    </button>
+  );
+}
