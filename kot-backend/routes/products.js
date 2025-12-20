@@ -52,7 +52,8 @@ router.post('/', authenticateToken, requireRole(['admin']), async (req, res) => 
         available: available !== undefined ? available : true,
         image,
         stock: parseInt(stock) || 0,
-        stock_alert_threshold: parseInt(stock_alert_threshold) || 10
+        stock_alert_threshold: parseInt(stock_alert_threshold) || 10,
+        customization: customization || { isConfigurable: false }
       }
     });
 
@@ -67,7 +68,7 @@ router.post('/', authenticateToken, requireRole(['admin']), async (req, res) => 
 router.put('/:id', authenticateToken, requireRole(['admin']), async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, description, price, discount_percentage, category, available, image, stock, stock_alert_threshold } = req.body;
+    const { name, description, price, discount_percentage, category, available, image, stock, stock_alert_threshold, customization } = req.body;
 
     const data = {};
     if (name !== undefined) data.name = name;

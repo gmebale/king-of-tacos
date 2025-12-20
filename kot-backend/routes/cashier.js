@@ -23,7 +23,12 @@ router.get('/orders', authenticateToken, requireRole(['admin']), async (req, res
       },
       orderBy: { created_date: 'desc' }
     });
-    res.json(orders);
+    // Map delivery_address to customer_address for frontend compatibility
+    const mappedOrders = orders.map(order => ({
+      ...order,
+      customer_address: order.delivery_address
+    }));
+    res.json(mappedOrders);
   } catch (error) {
     console.error('Get cashier orders error:', error);
     res.status(500).json({ message: 'Internal server error' });
@@ -39,13 +44,9 @@ router.get('/invoice/:orderId', authenticateToken, requireRole(['admin']), async
       where: { id: orderId },
       include: {
         user: {
-          select: { id: true, full_name: true, email: true, phone: true, address: true }
+          select: { id: true, full_name: true, email: true, phone: true }
         },
-        items: {
-          include: {
-            product: true
-          }
-        }
+        items: true
       }
     });
 
@@ -100,18 +101,36 @@ router.get('/invoice/:orderId', authenticateToken, requireRole(['admin']), async
     // Items
     let y = doc.y;
     let total = 0;
+    const missingProducts = [];
 
-    order.items.forEach(item => {
-      const itemTotal = item.quantity * item.price;
+    for (const item of order.items) {
+      // Look up product price by name
+      const product = await prisma.product.findFirst({
+        where: { name: item.product_name }
+      });
+
+      if (!product) {
+        missingProducts.push(item.product_name);
+        continue;
+      }
+
+      const price = product.price / 100; // Convert from centimes to euros
+      const itemTotal = item.quantity * price;
       total += itemTotal;
 
       doc.text(item.product_name, 50, y);
       doc.text(item.quantity.toString(), 300, y);
-      doc.text(`${item.price.toFixed(2)} €`, 400, y);
+      doc.text(`${price.toFixed(2)} €`, 400, y);
       doc.text(`${itemTotal.toFixed(2)} €`, 480, y);
 
       y += 20;
-    });
+    }
+
+    if (missingProducts.length > 0) {
+      return res.status(400).json({
+        message: `Produits non trouvés dans la base de données: ${missingProducts.join(', ')}`
+      });
+    }
 
     // Total
     doc.moveTo(50, y + 5).lineTo(550, y + 5).stroke();
@@ -166,36 +185,39 @@ router.get('/reports/:period', authenticateToken, requireRole(['admin']), async 
         }
       },
       include: {
-        items: {
-          include: {
-            product: true
-          }
-        }
+        items: true
       }
     });
 
     // Calculate totals
-    const totalRevenue = orders.reduce((sum, order) => {
-      return sum + order.items.reduce((orderSum, item) => orderSum + (item.quantity * item.price), 0);
-    }, 0);
+    let totalRevenue = 0;
+    const productSales = {};
+
+    for (const order of orders) {
+      for (const item of order.items) {
+        const product = await prisma.product.findFirst({
+          where: { name: item.product_name }
+        });
+
+        if (product) {
+          const price = product.price / 100; // Convert from centimes to euros
+          const itemRevenue = item.quantity * price;
+          totalRevenue += itemRevenue;
+
+          if (!productSales[product.id]) {
+            productSales[product.id] = {
+              name: item.product_name,
+              quantity: 0,
+              revenue: 0
+            };
+          }
+          productSales[product.id].quantity += item.quantity;
+          productSales[product.id].revenue += itemRevenue;
+        }
+      }
+    }
 
     const totalOrders = orders.length;
-
-    // Product sales
-    const productSales = {};
-    orders.forEach(order => {
-      order.items.forEach(item => {
-        if (!productSales[item.product_id]) {
-          productSales[item.product_id] = {
-            name: item.product_name,
-            quantity: 0,
-            revenue: 0
-          };
-        }
-        productSales[item.product_id].quantity += item.quantity;
-        productSales[item.product_id].revenue += item.quantity * item.price;
-      });
-    });
 
     const topProducts = Object.values(productSales)
       .sort((a, b) => b.revenue - a.revenue)

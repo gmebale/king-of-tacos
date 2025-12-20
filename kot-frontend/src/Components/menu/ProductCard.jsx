@@ -4,7 +4,7 @@ import { Plus, Minus, ShoppingCart, TrendingDown } from "lucide-react";
 import { Button } from '../ui/button';
 import { Card, CardContent } from '../ui/card';
 import { Badge } from '../ui/badge';
-import TacosCustomizationDialog from './TacosCustomizationDialog';
+import CustomizationDialog from './CustomizationDialog';
 
 export default function ProductCard({ product, onAddToCart, cartItem, onUpdateQuantity }) {
   const [showCustomization, setShowCustomization] = useState(false);
@@ -15,7 +15,7 @@ export default function ProductCard({ product, onAddToCart, cartItem, onUpdateQu
     : product.price;
 
   const handleAddClick = () => {
-    if (product.category === "tacos") {
+    if (product.customization?.isConfigurable) {
       setShowCustomization(true);
     } else {
       onAddToCart(product);
@@ -138,8 +138,8 @@ export default function ProductCard({ product, onAddToCart, cartItem, onUpdateQu
         </Card>
       </motion.div>
 
-      {product.category === "tacos" && (
-        <TacosCustomizationDialog
+      {product.customization?.isConfigurable && (
+        <CustomizationDialog
           open={showCustomization}
           onOpenChange={setShowCustomization}
           product={product}

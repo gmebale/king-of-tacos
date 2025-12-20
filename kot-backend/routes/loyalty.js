@@ -27,7 +27,7 @@ router.get('/points', authenticateToken, async (req, res) => {
 // Get loyalty rewards available for user
 router.get('/rewards', authenticateToken, async (req, res) => {
   try {
-    const rewards = await prisma.loyaltyReward.findMany({
+    const rewards = await prisma.LoyaltyReward.findMany({
       where: { is_active: true },
       orderBy: { points_required: 'asc' }
     });
@@ -44,7 +44,7 @@ router.post('/redeem/:rewardId', authenticateToken, async (req, res) => {
   try {
     const { rewardId } = req.params;
 
-    const reward = await prisma.loyaltyReward.findUnique({
+    const reward = await prisma.LoyaltyReward.findUnique({
       where: { id: rewardId }
     });
 
@@ -67,7 +67,7 @@ router.post('/redeem/:rewardId', authenticateToken, async (req, res) => {
         where: { id: req.user.id },
         data: { loyalty_points: user.loyalty_points - reward.points_required }
       }),
-      prisma.loyaltyRedemption.create({
+      prisma.LoyaltyRedemption.create({
         data: {
           user_id: req.user.id,
           reward_id: rewardId,
@@ -86,7 +86,7 @@ router.post('/redeem/:rewardId', authenticateToken, async (req, res) => {
 // Get user's redemption history
 router.get('/history', authenticateToken, async (req, res) => {
   try {
-    const redemptions = await prisma.loyaltyRedemption.findMany({
+    const redemptions = await prisma.LoyaltyRedemption.findMany({
       where: { user_id: req.user.id },
       include: {
         reward: true
@@ -127,7 +127,7 @@ router.post('/admin/rewards', authenticateToken, requireRole(['admin']), async (
       return res.status(400).json({ message: 'Name, type, and points_required are required' });
     }
 
-    const reward = await prisma.loyaltyReward.create({
+    const reward = await prisma.LoyaltyReward.create({
       data: {
         name,
         description,
@@ -149,7 +149,7 @@ router.put('/admin/rewards/:id', authenticateToken, requireRole(['admin']), asyn
     const { id } = req.params;
     const { name, description, type, points_required, is_active } = req.body;
 
-    const reward = await prisma.loyaltyReward.update({
+    const reward = await prisma.LoyaltyReward.update({
       where: { id },
       data: {
         name,
@@ -175,7 +175,7 @@ router.delete('/admin/rewards/:id', authenticateToken, requireRole(['admin']), a
   try {
     const { id } = req.params;
 
-    await prisma.loyaltyReward.delete({
+    await prisma.LoyaltyReward.delete({
       where: { id }
     });
 
@@ -283,7 +283,7 @@ router.get('/admin/redemptions', authenticateToken, requireRole(['admin']), asyn
 // Get all promo codes (admin only)
 router.get('/admin/promos', authenticateToken, requireRole(['admin']), async (req, res) => {
   try {
-    const promos = await prisma.promoCode.findMany({
+    const promos = await prisma.PromoCode.findMany({
       orderBy: { created_at: 'desc' }
     });
 

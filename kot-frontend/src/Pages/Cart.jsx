@@ -115,7 +115,7 @@ export default function Cart() {
                           <Button
                             size="icon"
                             variant="outline"
-                            onClick={() => updateQuantity(item.product.id, item.quantity - 1, item.customizations)}
+                            onClick={() => updateQuantity(item.product.id, item.quantity - 1, item.customizations || item.customization)}
                             className="rounded-xl border-amber-400 text-amber-600 hover:bg-amber-50 h-8 w-8"
                           >
                             <Minus className="w-3 h-3" />
@@ -125,7 +125,7 @@ export default function Cart() {
                           </span>
                           <Button
                             size="icon"
-                            onClick={() => updateQuantity(item.product.id, item.quantity + 1, item.customizations)}
+                            onClick={() => updateQuantity(item.product.id, item.quantity + 1, item.customizations || item.customization)}
                             className="rounded-xl bg-gradient-to-r from-yellow-400 to-amber-600 text-white h-8 w-8"
                           >
                             <Plus className="w-3 h-3" />

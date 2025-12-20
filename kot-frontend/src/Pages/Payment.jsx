@@ -22,9 +22,11 @@ export default function Payment() {
     setIsSubmitting(true);
 
     try {
-      const orderItems = cart.map(item => ({
-        product_name: item.name,
-        quantity: item.quantity
+      const orderItems = cart.filter(item => item.product).map(item => ({
+        product_name: item.product.name,
+        quantity: item.quantity,
+        price: item.product.displayPrice || item.product.price,
+        customization: item.customizations || item.customization || null
       }));
 
       await Order.create({
@@ -79,10 +81,10 @@ export default function Payment() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {cart.map((item) => (
+                  {cart.filter(item => item.product).map((item) => (
                     <div key={item.id} className="flex justify-between">
-                      <span>{item.quantity}x {item.name}</span>
-                      <span>{((item.displayPrice || item.price) * item.quantity).toLocaleString()} FCFA</span>
+                      <span>{item.quantity}x {item.product.name}</span>
+                      <span>{((item.product.displayPrice || item.product.price) * item.quantity).toLocaleString()} FCFA</span>
                     </div>
                   ))}
                 </div>

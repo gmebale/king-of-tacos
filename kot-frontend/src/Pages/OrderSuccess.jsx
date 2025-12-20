@@ -77,7 +77,7 @@ export default function OrderSuccess() {
           transition={{ delay: 0.5 }}
           className="space-y-4"
         >
-          <Link to={createPageUrl("Profile")}>
+          <Link to={createPageUrl("OrdersPage")}>
             <Button className="w-full bg-gradient-to-r from-yellow-400 to-amber-600 hover:from-yellow-500 hover:to-amber-700 text-white py-6 rounded-2xl text-lg">
               <List className="mr-2 w-5 h-5" />
               Suivre ma commande

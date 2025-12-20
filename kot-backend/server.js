@@ -12,6 +12,7 @@ const userRoutes = require('./routes/users');
 const uploadRoutes = require('./routes/upload');
 const financeRoutes = require('./routes/finance');
 const kitchenRoutes = require('./routes/kitchen');
+const cashierRoutes = require('./routes/cashier');
 const loyaltyRoutes = require('./routes/loyalty');
 
 const app = express();
@@ -53,6 +54,9 @@ app.use('/api/orders', orderRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/finance', financeRoutes);
+app.use('/api/kitchen', kitchenRoutes);
+app.use('/api/cashier', cashierRoutes);
+app.use('/api/loyalty', loyaltyRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

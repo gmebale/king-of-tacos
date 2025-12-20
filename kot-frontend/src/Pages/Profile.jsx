@@ -58,7 +58,7 @@ export default function Profile() {
 
   const handleSave = async () => {
     try {
-      await User.update({ full_name: editedName, phone: editedPhone });
+      await User.updateProfile({ full_name: editedName, phone: editedPhone });
       await loadUserData();
       setIsEditing(false);
     } catch (error) {

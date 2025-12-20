@@ -269,7 +269,7 @@ export default function CashierMode() {
 
 // Order Card Component
 function OrderCard({ order, onGenerateInvoice, onMarkDelivered, getStatusColor, getStatusText }) {
-  const total = order.items.reduce((sum, item) => sum + (item.quantity * item.price), 0);
+  const total = order.total_amount; 
 
   return (
     <motion.div
@@ -298,10 +298,18 @@ function OrderCard({ order, onGenerateInvoice, onMarkDelivered, getStatusColor, 
           {order.customer_address && (
             <p className="text-sm text-gray-600">{order.customer_address}</p>
           )}
+          <div className="mt-2">
+            <p className="text-sm font-medium text-gray-700">Produits:</p>
+            {order.items.map((item, index) => (
+              <p key={index} className="text-sm text-gray-600">
+                {item.quantity}x {item.product_name}
+              </p>
+            ))}
+          </div>
         </div>
 
         <div className="text-right">
-          <p className="text-lg font-bold text-green-600">{total.toFixed(2)} €</p>
+          <p className="text-lg font-bold text-green-600">{total.toFixed(2)} FCFA</p>
           <p className="text-sm text-gray-600">{order.items.length} article(s)</p>
         </div>
       </div>

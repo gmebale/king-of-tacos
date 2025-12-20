@@ -49,7 +49,7 @@ export default function OrdersPage() {
 
       // Create cart items from order items
       const cartItems = order.items.map(item => ({
-        product_id: item.product_id,
+        product_name: item.product_name,
         quantity: item.quantity,
         price: item.price
       }));
@@ -295,7 +295,7 @@ function OrderCard({
   showReorder,
   showReview
 }) {
-  const total = order.items.reduce((sum, item) => sum + (item.quantity * item.price), 0);
+  const total = order.items.reduce((sum, item) => sum + (item.quantity * item.price / 100), 0);
 
   return (
     <motion.div
@@ -338,10 +338,10 @@ function OrderCard({
         {order.items.map((item, index) => (
           <div key={index} className="flex justify-between items-center py-1 border-b border-gray-100 last:border-b-0">
             <div className="flex-1">
-              <p className="font-medium text-sm">{item.name}</p>
+              <p className="font-medium text-sm">{item.product_name}</p>
               <p className="text-xs text-gray-600">Quantité: {item.quantity}</p>
             </div>
-            <p className="text-sm font-medium">{(item.quantity * item.price).toFixed(2)} €</p>
+            <p className="text-sm font-medium">{(item.quantity * item.price / 100).toFixed(2)} FCFA</p>
           </div>
         ))}
       </div>

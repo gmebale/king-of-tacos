@@ -42,10 +42,12 @@ model User {
   phone          String?
   role           Role     @default(client)
   loyalty_points Int      @default(0)
+
   created_at     DateTime @default(now())
   updated_at     DateTime @updatedAt
 
   orders         Order[]
+  loyaltyRedemptions   LoyaltyRedemption[]
 
   @@map("users")
 }
@@ -61,6 +63,7 @@ model Product {
   image                String?
   stock                Int         @default(0)  // Quantité en stock
   stock_alert_threshold Int        @default(10) // Seuil d'alerte stock
+  customization        Json?       // Configuration des options de personnalisation
   created_at           DateTime    @default(now())
   updated_at           DateTime    @updatedAt
 
@@ -96,6 +99,8 @@ model OrderItem {
   order         Order   @relation(fields: [order_id], references: [id], onDelete: Cascade)
   product_name  String
   quantity      Int
+  price         Int     // Prix unitaire en centimes
+  customization Json?   // Détails de personnalisation du produit
 
   @@map("order_items")
 }

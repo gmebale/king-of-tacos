@@ -111,7 +111,9 @@ router.post('/', async (req, res) => {
         items: {
           create: items.map(item => ({
             product_name: item.product_name,
-            quantity: parseInt(item.quantity)
+            quantity: parseInt(item.quantity),
+            price: parseInt(item.price),
+            customization: item.customization || null
           }))
         }
       },
@@ -186,7 +188,8 @@ router.put('/:id', authenticateToken, async (req, res) => {
         updateData.items = {
           create: items.map(item => ({
             product_name: item.product_name,
-            quantity: parseInt(item.quantity)
+            quantity: parseInt(item.quantity),
+            price: parseInt(item.price)
           }))
         };
       }

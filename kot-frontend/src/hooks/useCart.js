@@ -51,21 +51,25 @@ export const useCart = () => {
   // Ajouter un produit au panier
   const addToCart = useCallback((product, quantity = 1, customizations = {}, customizationSummary = '') => {
     const newCart = [...cart];
+
+    // Handle new customization format
+    const customizationKey = product.customization ? JSON.stringify(product.customization) : JSON.stringify(customizations);
+
     const existingItemIndex = newCart.findIndex(
       item => item.product.id === product.id &&
-      JSON.stringify(item.customizations) === JSON.stringify(customizations)
+      JSON.stringify(item.customizations || item.customization) === customizationKey
     );
 
     if (existingItemIndex > -1) {
       newCart[existingItemIndex].quantity += quantity;
-      newCart[existingItemIndex].subtotal = newCart[existingItemIndex].quantity * (product.displayPrice || product.price);
+      newCart[existingItemIndex].subtotal = newCart[existingItemIndex].quantity * (product.finalPrice || product.displayPrice || product.price);
     } else {
       newCart.push({
         product,
         quantity,
-        customizations,
+        customizations: product.customization || customizations,
         customizationSummary,
-        subtotal: quantity * (product.displayPrice || product.price)
+        subtotal: quantity * (product.finalPrice || product.displayPrice || product.price)
       });
     }
 
@@ -90,11 +94,11 @@ export const useCart = () => {
 
     const newCart = cart.map(item => {
       if (item.product.id === productId &&
-          JSON.stringify(item.customizations) === JSON.stringify(customizations)) {
+          JSON.stringify(item.customizations || item.customization) === JSON.stringify(customizations)) {
         return {
           ...item,
           quantity,
-          subtotal: quantity * (item.product.displayPrice || item.product.price)
+          subtotal: quantity * (item.product.finalPrice || item.product.displayPrice || item.product.price)
         };
       }
       return item;
