@@ -295,7 +295,7 @@ function OrderCard({
   showReorder,
   showReview
 }) {
-  const total = order.items.reduce((sum, item) => sum + (item.quantity * item.price / 100), 0);
+  const total = order.items.reduce((sum, item) => sum + (item.quantity * item.price), 0);
 
   return (
     <motion.div
@@ -328,7 +328,7 @@ function OrderCard({
         </div>
 
         <div className="text-right">
-          <p className="text-lg font-bold text-green-600">{total.toFixed(2)} €</p>
+          <p className="text-lg font-bold text-green-600">{total.toLocaleString()} FCFA</p>
           <p className="text-sm text-gray-600">{order.items.length} article(s)</p>
         </div>
       </div>
@@ -341,7 +341,7 @@ function OrderCard({
               <p className="font-medium text-sm">{item.product_name}</p>
               <p className="text-xs text-gray-600">Quantité: {item.quantity}</p>
             </div>
-            <p className="text-sm font-medium">{(item.quantity * item.price / 100).toFixed(2)} FCFA</p>
+            <p className="text-sm font-medium">{(item.quantity * item.price ).toFixed(2)} FCFA</p>
           </div>
         ))}
       </div>

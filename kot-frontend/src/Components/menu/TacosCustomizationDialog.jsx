@@ -27,9 +27,9 @@ export default function TacosCustomizationDialog({ open, onOpenChange, product, 
 
   const sizes = [
     { id: "S", name: "SOLO", price: 0, description: "1 viande", meatCount: 1 },
-    { id: "M", name: "DOBLE", price: 1000, description: "2 viandes", meatCount: 2 },
-    { id: "L", name: "TRIO", price: 2000, description: "3 viandes", meatCount: 3 },
-    { id: "XL", name: "PATRON", price: 4000, description: "4 viandes", meatCount: 4 }
+    { id: "M", name: "DOBLE", price: 100000, description: "2 viandes", meatCount: 2 },
+    { id: "L", name: "TRIO", price: 200000, description: "3 viandes", meatCount: 3 },
+    { id: "XL", name: "PATRON", price: 400000, description: "4 viandes", meatCount: 4 }
   ];
 
   const meats = [
@@ -41,21 +41,21 @@ export default function TacosCustomizationDialog({ open, onOpenChange, product, 
   ];
 
   const accompagnements = [
-    { id: "frites_simple", name: "Frites simple", price: 500 } ,
-    { id: "frites_cheddar", name: "Frites au cheddar", price: 700 } ,
-    { id: "frites_paprika", name: "Frites au paprika", price: 700 },
-    { id: "alloco", name: "Alloco", price: 600 },
-    { id: "riz_blanc", name: "Riz Blanc", price: 500 }
+    { id: "frites_simple", name: "Frites simple", price: 50000 } ,
+    { id: "frites_cheddar", name: "Frites au cheddar", price: 70000 } ,
+    { id: "frites_paprika", name: "Frites au paprika", price: 70000 },
+    { id: "alloco", name: "Alloco", price: 60000 },
+    { id: "riz_blanc", name: "Riz Blanc", price: 50000 }
   ];
 
   const suppléments = [
-    { id: "oeuf", name: "Oeuf", price: 300 },
-    { id: "poulet_pane", name: "Poulet Pané (Nuggets)", price: 1200 },
-    { id: "poulet_braise", name: "Poulet Braisé", price: 1200 },
-    { id: "cordon_bleu", name: "Cordon Bleu", price: 1300 },
-    { id: "boeuf_marine", name: "Boeuf mariné", price: 1500 },
-    { id: "des_poisson", name: "Dés de poisson", price: 1400 },
-    { id: "crevettes_marinees", name: "Crevettes marinées", price: 1600 }
+    { id: "oeuf", name: "Oeuf", price: 30000 },
+    { id: "poulet_pane", name: "Poulet Pané (Nuggets)", price: 120000 },
+    { id: "poulet_braise", name: "Poulet Braisé", price: 120000 },
+    { id: "cordon_bleu", name: "Cordon Bleu", price: 130000 },
+    { id: "boeuf_marine", name: "Boeuf mariné", price: 150000 },
+    { id: "des_poisson", name: "Dés de poisson", price: 140000 },
+    { id: "crevettes_marinees", name: "Crevettes marinées", price: 160000 }
   ];
 
   const sauces = [
@@ -272,7 +272,7 @@ export default function TacosCustomizationDialog({ open, onOpenChange, product, 
                       <span className="font-medium">{extra.name}</span>
                     </div>
                     <Badge variant="outline">
-                      +{extra.price.toLocaleString()} FCFA
+                      +{(extra.price / 100).toLocaleString()} FCFA
                     </Badge>
                   </label>
                 </motion.div>

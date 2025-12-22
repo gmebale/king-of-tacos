@@ -155,7 +155,8 @@ export default function CustomizationDialog({ open, onOpenChange, product, onCon
     const customizedProduct = {
       ...product,
       customization: selections,
-      finalPrice: totalPrice
+      finalPrice: totalPrice,
+      displayPrice: totalPrice
     };
 
     onConfirm(customizedProduct, quantity);

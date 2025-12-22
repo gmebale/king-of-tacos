@@ -10,10 +10,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "../Components/ui/card"
 import { ShoppingBag, Clock, MapPin, Check, Truck, ArrowLeft } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "../utils";
+import { useCart } from "../hooks/useCart";
 
 export default function Checkout() {
   const navigate = useNavigate();
-  const [cart, setCart] = useState([]);
+  const { cart, getTotal, isLoading } = useCart();
 
   const [user, setUser] = useState(null);
   const [formData, setFormData] = useState({
@@ -27,16 +28,14 @@ export default function Checkout() {
   });
 
   useEffect(() => {
-    loadCart();
-    loadUser();
-  }, []);
-
-  const loadCart = () => {
-    const savedCart = JSON.parse(localStorage.getItem('kingoftacos_cart') || '[]');
-    if (savedCart.length === 0) {
+    if (!isLoading && cart.length === 0) {
       navigate(createPageUrl("Menu"));
     }
-    setCart(savedCart);
+    loadUser();
+  }, [cart, navigate, isLoading]);
+
+  const loadCart = () => {
+    // Cart is now managed by useCart hook
   };
 
   const loadUser = async () => {
@@ -55,10 +54,7 @@ export default function Checkout() {
     }
   };
 
-  const total = cart.reduce((sum, item) => {
-    const price = item.displayPrice || item.price;
-    return sum + (price * item.quantity);
-  }, 0);
+  const total = getTotal();
 
   const deliveryFee = formData.order_type === "livraison" ? 2000 : 0;
   const finalTotal = total + deliveryFee;
@@ -253,12 +249,12 @@ export default function Checkout() {
               </CardHeader>
               <CardContent className="space-y-4">
                 {cart.map((item) => (
-                  <div key={item.id} className="flex justify-between text-sm">
+                  <div key={`${item.product.id}-${JSON.stringify(item.customizations)}`} className="flex justify-between text-sm">
                     <span className="flex-1">
-                      {item.quantity}x {item.name}
+                      {item.quantity}x {item.product.name}
                     </span>
                     <span className="font-semibold">
-                      {((item.displayPrice || item.price) * item.quantity).toLocaleString()} FCFA
+                      {item.subtotal.toLocaleString()} FCFA
                     </span>
                   </div>
                 ))}

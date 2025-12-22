@@ -10,9 +10,9 @@ export default function ProductCard({ product, onAddToCart, cartItem, onUpdateQu
   const [showCustomization, setShowCustomization] = useState(false);
   const quantity = cartItem?.quantity || 0;
   const hasDiscount = product.discount_percentage > 0;
-  const finalPrice = hasDiscount 
-    ? product.price * (1 - product.discount_percentage / 100)
-    : product.price;
+  const finalPrice = hasDiscount
+    ? (product.price / 100) * (1 - product.discount_percentage / 100)
+    : (product.price / 100);
 
   const handleAddClick = () => {
     if (product.customization?.isConfigurable) {
@@ -93,12 +93,12 @@ export default function ProductCard({ product, onAddToCart, cartItem, onUpdateQu
                       </span>
                     </div>
                     <span className="text-sm text-gray-500 line-through">
-                      {product.price.toLocaleString()} FCFA
+                      {(product.price ).toLocaleString()} FCFA
                     </span>
                   </div>
                 ) : (
                   <span className="text-2xl font-bold bg-gradient-to-r from-amber-600 to-yellow-500 bg-clip-text text-transparent">
-                    {product.price.toLocaleString()} FCFA
+                    {(product.price ).toLocaleString()} FCFA
                   </span>
                 )}
               </div>

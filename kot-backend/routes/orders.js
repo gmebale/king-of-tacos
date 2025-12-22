@@ -76,6 +76,8 @@ router.post('/', async (req, res) => {
   try {
     const { items, total_amount, customer_name, customer_phone, customer_email, order_type, delivery_address, pickup_time, notes } = req.body;
 
+    console.log('Received order data:', { items, total_amount, customer_name });
+
     // Check if user is authenticated
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
@@ -121,6 +123,8 @@ router.post('/', async (req, res) => {
         items: true
       }
     });
+
+    console.log('Created order:', order.id, 'with items:', order.items.length);
 
     res.status(201).json(order);
   } catch (error) {

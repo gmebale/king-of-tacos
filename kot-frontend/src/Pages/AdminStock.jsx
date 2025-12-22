@@ -308,12 +308,12 @@ export default function AdminStock() {
                                 </Badge>
                               </div>
                               <span className="text-sm text-gray-500 line-through">
-                                {product.price.toLocaleString()} FCFA
+                                {(product.price ).toLocaleString()} FCFA
                               </span>
                             </>
                           ) : (
                             <span className="font-semibold text-amber-600 text-lg">
-                              {product.price.toLocaleString()} FCFA
+                              {(product.price ).toLocaleString()} FCFA
                             </span>
                           )}
                         </div>

@@ -22,12 +22,14 @@ export default function Payment() {
     setIsSubmitting(true);
 
     try {
+      console.log('Cart before filtering:', cart);
       const orderItems = cart.filter(item => item.product).map(item => ({
         product_name: item.product.name,
         quantity: item.quantity,
-        price: item.product.displayPrice || item.product.price,
+        price: item.subtotal / item.quantity,
         customization: item.customizations || item.customization || null
       }));
+      console.log('Order items to send:', orderItems);
 
       await Order.create({
         items: orderItems,
@@ -84,7 +86,7 @@ export default function Payment() {
                   {cart.filter(item => item.product).map((item) => (
                     <div key={item.id} className="flex justify-between">
                       <span>{item.quantity}x {item.product.name}</span>
-                      <span>{((item.product.displayPrice || item.product.price) * item.quantity).toLocaleString()} FCFA</span>
+                      <span>{item.subtotal.toLocaleString()} FCFA</span>
                     </div>
                   ))}
                 </div>
