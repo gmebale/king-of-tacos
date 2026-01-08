@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Badge } from '../Components/ui/badge';
 import { Textarea } from '../Components/ui/textarea';
 import { toast } from 'react-hot-toast';
-import { api } from '../services';
+import api from '../services/api.service';
 import {
   Star,
   Plus,
@@ -38,6 +38,7 @@ export default function AdminLoyalty() {
   const [selectedReward, setSelectedReward] = useState('');
   const [showRewardDialog, setShowRewardDialog] = useState(false);
   const [showPromoDialog, setShowPromoDialog] = useState(false);
+  const [showAssignDialog, setShowAssignDialog] = useState(false);
   const [editingReward, setEditingReward] = useState(null);
   const [editingPromo, setEditingPromo] = useState(null);
 
@@ -420,7 +421,7 @@ export default function AdminLoyalty() {
                     <SelectContent>
                       {users.map((user) => (
                         <SelectItem key={user.id} value={user.id.toString()}>
-                          {user.full_name} - {user.loyalty_points} points
+                          {user.full_name} - {user.loyalty_points || 0} points
                         </SelectItem>
                       ))}
                     </SelectContent>

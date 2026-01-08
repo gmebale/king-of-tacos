@@ -9,7 +9,20 @@ const prisma = new PrismaClient();
 router.get('/', async (req, res) => {
   try {
     const products = await prisma.product.findMany({
-      orderBy: { created_at: 'desc' }
+      orderBy: { created_at: 'desc' },
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        price: true,
+        discount_percentage: true,
+        category: true,
+        available: true,
+        image: true,
+        stock: true,
+        stock_alert_threshold: true,
+        customization: true
+      }
     });
     res.json(products);
   } catch (error) {
@@ -40,7 +53,16 @@ router.get('/:id', async (req, res) => {
 // Create product (admin only)
 router.post('/', authenticateToken, requireRole(['admin']), async (req, res) => {
   try {
-    const { name, description, price, discount_percentage, category, available, image, stock, stock_alert_threshold } = req.body;
+    const { name, description, price, discount_percentage, category, available, image, stock, stock_alert_threshold, customization } = req.body;
+
+    // Find category by name
+    const categoryRecord = await prisma.categoryModel.findUnique({
+      where: { name: category }
+    });
+
+    if (!categoryRecord) {
+      return res.status(400).json({ message: 'Invalid category' });
+    }
 
     const product = await prisma.product.create({
       data: {
@@ -48,7 +70,7 @@ router.post('/', authenticateToken, requireRole(['admin']), async (req, res) => 
         description,
         price: parseInt(price),
         discount_percentage: parseInt(discount_percentage) || 0,
-        category,
+        categoryId: categoryRecord.id,
         available: available !== undefined ? available : true,
         image,
         stock: parseInt(stock) || 0,
@@ -75,11 +97,20 @@ router.put('/:id', authenticateToken, requireRole(['admin']), async (req, res) =
     if (description !== undefined) data.description = description;
     if (price !== undefined) data.price = parseInt(price);
     if (discount_percentage !== undefined) data.discount_percentage = parseInt(discount_percentage);
-    if (category !== undefined) data.category = category;
+    if (category !== undefined) {
+      const categoryRecord = await prisma.categoryModel.findUnique({
+        where: { name: category }
+      });
+      if (!categoryRecord) {
+        return res.status(400).json({ message: 'Invalid category' });
+      }
+      data.categoryId = categoryRecord.id;
+    }
     if (available !== undefined) data.available = available;
     if (image !== undefined) data.image = image;
     if (stock !== undefined) data.stock = parseInt(stock);
     if (stock_alert_threshold !== undefined) data.stock_alert_threshold = parseInt(stock_alert_threshold);
+    if (customization !== undefined) data.customization = customization;
 
     const product = await prisma.product.update({
       where: { id: parseInt(id) },
@@ -111,6 +142,19 @@ router.delete('/:id', authenticateToken, requireRole(['admin']), async (req, res
       return res.status(404).json({ message: 'Product not found' });
     }
     console.error('Delete product error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// Get all categories
+router.get('/categories/list', async (req, res) => {
+  try {
+    const categories = await prisma.categoryModel.findMany({
+      orderBy: { name: 'asc' }
+    });
+    res.json(categories);
+  } catch (error) {
+    console.error('Get categories error:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 });

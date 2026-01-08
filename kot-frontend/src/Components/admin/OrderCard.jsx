@@ -6,6 +6,7 @@ import { Button } from '../ui/button';
 import { Clock, User, Phone, ShoppingBag, MapPin } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
+import { formatCustomization } from "../../utils/customization";
 
 export default function OrderCard({ order, onUpdateStatus }) {
   const getStatusColor = (status) => {
@@ -117,13 +118,20 @@ export default function OrderCard({ order, onUpdateStatus }) {
             </h4>
             <div className="space-y-2">
               {order.items?.map((item, idx) => (
-                <div key={idx} className="flex justify-between text-sm">
-                  <span className="text-gray-700">
-                    {item.quantity}x {item.product_name}
-                  </span>
-                  <span className="font-semibold">
-                    {item.subtotal?.toLocaleString()} FCFA
-                  </span>
+                <div key={idx} className="text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-700">
+                      {item.quantity}x {item.product_name}
+                    </span>
+                    <span className="font-semibold">
+                      {item.subtotal?.toLocaleString()} FCFA
+                    </span>
+                  </div>
+                  {item.customization && formatCustomization(item.customization) && (
+                    <div className="text-xs text-gray-500 mt-1 ml-4">
+                      {formatCustomization(item.customization)}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

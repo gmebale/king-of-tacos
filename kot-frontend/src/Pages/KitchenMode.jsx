@@ -14,6 +14,7 @@ import { Badge } from "../Components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "../Components/ui/card";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
+import { formatCustomization } from "../utils/customization";
 import api from "../services/api.service";
 
 export default function KitchenMode() {
@@ -272,9 +273,17 @@ function OrderCard({ order, onUpdateStatus, updatingOrder, getNextStatus, getNex
         <div className="space-y-2">
           <p className="text-sm font-medium text-gray-700">Articles:</p>
           {order.items.map((item, index) => (
-            <div key={index} className="flex justify-between text-sm">
-              <span>{item.product_name}</span>
-              <span className="font-medium">x{item.quantity}</span>
+            <div key={index} className="text-sm">
+              <div className="flex justify-between">
+                <span className="text-gray-700">
+                  {item.quantity}x {item.product_name}
+                </span>
+              </div>
+              {item.customization && formatCustomization(item.customization) && (
+                <div className="text-xs text-gray-500 mt-1 ml-4">
+                  {formatCustomization(item.customization)}
+                </div>
+              )}
             </div>
           ))}
         </div>

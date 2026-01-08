@@ -26,18 +26,36 @@ enum OrderStatus {
   annulee
 }
 
+enum PaymentMethod {
+  cash
+  card
+  mobile_money
+  loyalty_points
+}
+
 enum Category {
   tacos
+  burritos
+  burger
   boissons
   accompagnements
   desserts
+  options // Ajouté pour les options de customisation
+}
+
+model CategoryModel {
+  id          Int     @id @default(autoincrement())
+  name        String  @unique
+  displayName String
+  products    Product[]
+
+  @@map("categories")
 }
 
 model User {
   id             Int      @id @default(autoincrement())
   email          String   @unique
   password       String?
-  google_id      String?  @unique
   full_name      String
   phone          String?
   role           Role     @default(client)
@@ -58,32 +76,39 @@ model Product {
   description          String?
   price                Int         // Prix en centimes
   discount_percentage  Int         @default(0)
-  category             Category
+  categoryId           Int
+  category             CategoryModel? @relation(fields: [categoryId], references: [id])
   available            Boolean     @default(true)
   image                String?
   stock                Int         @default(0)  // Quantité en stock
   stock_alert_threshold Int        @default(10) // Seuil d'alerte stock
+  type                 String?     // Type du produit (main, size, meat, sauce, extra, side)
   customization        Json?       // Configuration des options de personnalisation
   created_at           DateTime    @default(now())
   updated_at           DateTime    @updatedAt
+
+  // Relations pour options
+  optionFor            ProductOption[] @relation("optionProducts")
+  options              ProductOption[] @relation("productOptions")
 
   @@map("products")
 }
 
 model Order {
-  id                String      @id @default(cuid())
+  id                String        @id @default(cuid())
   user_id           Int?
-  user              User?       @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  total_amount      Int         // Montant total en centimes
-  status            OrderStatus @default(en_attente)
-  created_date      DateTime    @default(now())
-  updated_at        DateTime    @updatedAt
+  user              User?         @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  total_amount      Int           // Montant total en centimes
+  status            OrderStatus   @default(en_attente)
+  payment_method    PaymentMethod?
+  created_date      DateTime      @default(now())
+  updated_at        DateTime      @updatedAt
 
   // Order details
   customer_name     String?
   customer_phone    String?
   customer_email    String?
-  order_type        String?     // emporter, sur_place, livraison
+  order_type        String?       // emporter, sur_place, livraison
   delivery_address  String?
   pickup_time       String?
   notes             String?
@@ -160,4 +185,34 @@ model PromoCode {
   updated_at      DateTime  @updatedAt
 
   @@map("promo_codes")
+}
+
+model CashRegisterSession {
+  id                Int      @id @default(autoincrement())
+  opened_at         DateTime @default(now())
+  closed_at         DateTime?
+  opening_balance   Int      // Solde d'ouverture en centimes
+  closing_balance   Int?     // Solde de clôture en centimes
+  current_balance   Int      // Solde actuel en centimes
+  total_revenue     Int?     // Revenus totaux en centimes
+  cash_payments     Int?     // Paiements en espèces en centimes
+  card_payments     Int?     // Paiements par carte en centimes
+  mobile_payments   Int?     // Paiements mobile money en centimes
+  loyalty_payments  Int?     // Paiements points fidélité en centimes
+  notes             String?
+
+  @@map("cash_register_sessions")
+}
+
+model ProductOption {
+  id               Int     @id @default(autoincrement())
+  productId        Int
+  product          Product @relation("productOptions", fields: [productId], references: [id])
+  optionProductId  Int
+  optionProduct    Product @relation("optionProducts", fields: [optionProductId], references: [id])
+  required         Boolean @default(false)
+  maxQuantity      Int?
+  optionType       String  // e.g. "size", "meat", "sauce", "extra", "side"
+
+  @@map("product_options")
 }

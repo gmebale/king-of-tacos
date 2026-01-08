@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "../Components/ui/card"
 import { ArrowLeft, CreditCard } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { createPageUrl } from "../utils";
+import { formatCustomization } from "../utils/customization";
 
 export default function Payment() {
   const navigate = useNavigate();
@@ -27,7 +28,7 @@ export default function Payment() {
         product_name: item.product.name,
         quantity: item.quantity,
         price: item.subtotal / item.quantity,
-        customization: item.customizations || item.customization || null
+        customization: item.customization
       }));
       console.log('Order items to send:', orderItems);
 
@@ -83,10 +84,17 @@ export default function Payment() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {cart.filter(item => item.product).map((item) => (
-                    <div key={item.id} className="flex justify-between">
-                      <span>{item.quantity}x {item.product.name}</span>
-                      <span>{item.subtotal.toLocaleString()} FCFA</span>
+                  {cart.filter(item => item.product).map((item, index) => (
+                    <div key={`${item.product.id}-${index}`}>
+                      <div className="flex justify-between">
+                        <span>{item.quantity}x {item.product.name}</span>
+                        <span>{item.subtotal.toLocaleString()} FCFA</span>
+                      </div>
+                      {(item.customizationConfig || item.product?.customization) && formatCustomization(item.customization || {}, item.customizationConfig || item.product?.customization) && (
+                        <div className="text-xs text-gray-500 mt-1 ml-4">
+                          {formatCustomization(item.customization || {}, item.customizationConfig || item.product?.customization)}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

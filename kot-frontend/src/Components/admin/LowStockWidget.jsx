@@ -5,6 +5,7 @@ import { Badge } from '../ui/badge';
 import { Skeleton } from '../ui/skeleton';
 import { Link } from "react-router-dom";
 import { createPageUrl } from '../../utils';
+import { formatCustomizationForDisplay } from '../../utils';
 import { Button } from '../ui/button';
 
 export default function LowStockWidget({ products, isLoading }) {
@@ -43,7 +44,7 @@ export default function LowStockWidget({ products, isLoading }) {
                 >
                   <div className="flex-1">
                     <p className="font-medium text-sm">{product.name}</p>
-                    <p className="text-xs text-gray-600">{product.category}</p>
+                    <p className="text-xs text-gray-600">{formatCustomizationForDisplay(product.category) || 'N/A'}</p>
                   </div>
                   <Badge className="bg-red-500 text-white">
                     {product.stock} restant{product.stock > 1 ? 's' : ''}

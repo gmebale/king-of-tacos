@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Plus, Minus, Check } from 'lucide-react';
-import { Button } from '../ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
-import { RadioGroup, RadioGroupItem } from '../ui/radio-group';
-import { Checkbox } from '../ui/checkbox';
-import { Label } from '../ui/label';
-import { Badge } from '../ui/badge';
+import { Button } from '../ui/button.jsx';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog.jsx';
+import { RadioGroup, RadioGroupItem } from '../ui/radio-group.jsx';
+import { Checkbox } from '../ui/checkbox.jsx';
+import { Label } from '../ui/label.jsx';
+import { Badge } from '../ui/badge.jsx';
+import { formatCustomization } from '../../utils/customization.js';
 
 export default function CustomizationDialog({ open, onOpenChange, product, onConfirm }) {
   const [selections, setSelections] = useState({});
@@ -152,16 +153,29 @@ export default function CustomizationDialog({ open, onOpenChange, product, onCon
   const handleConfirm = () => {
     if (!isValidSelection()) return;
 
-    const customizedProduct = {
-      ...product,
+    const customizationSummary = formatCustomization(selections, product.customization);
+
+    // Créer l'objet pour le panier
+    const cartItem = {
+      product: {
+        id: product.id,
+        name: product.name,
+        price: product.price,
+        displayPrice: totalPrice,
+        image_url: product.image
+      },
+      quantity,
       customization: selections,
-      finalPrice: totalPrice,
-      displayPrice: totalPrice
+      customizationConfig: product.customization,
+      customizationSummary,
+      subtotal: totalPrice * quantity
     };
 
-    onConfirm(customizedProduct, quantity);
+    // Ajouter au panier
+    onConfirm(cartItem);
     onOpenChange(false);
   };
+
 
   const renderOptionGroup = (group) => {
     const selectedValue = selections[group.id];

@@ -10,6 +10,15 @@ class Product {
     }
   }
 
+  static async getCategories() {
+    try {
+      const response = await api.get('/products/categories/list');
+      return response.data;
+    } catch (error) {
+      throw new Error(error.response?.data?.message || 'Erreur de récupération des catégories');
+    }
+  }
+
   static async create(data) {
     const response = await api.post('/products', data);
     return response.data;

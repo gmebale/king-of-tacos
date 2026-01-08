@@ -70,22 +70,6 @@ class AuthService {
     }
   }
 
-  async googleLogin(token) {
-    try {
-      if (token) {
-        localStorage.setItem('auth_token', token);
-        // Dispatch custom event to notify auth state change
-        window.dispatchEvent(new CustomEvent('auth-change'));
-        // Get user info after setting token
-        const user = await this.me();
-        return user;
-      }
-      throw new Error('No token provided');
-    } catch (error) {
-      throw new Error(error.response?.data?.message || 'Erreur de connexion Google');
-    }
-  }
-
   isAuthenticated() {
     return !!localStorage.getItem('auth_token');
   }

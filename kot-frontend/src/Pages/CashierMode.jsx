@@ -9,25 +9,40 @@ import {
   Truck,
   Package,
   Calendar,
-  BarChart3
+  BarChart3,
+  Lock,
+  Unlock,
+  Calculator
 } from "lucide-react";
 import { Button } from "../Components/ui/button";
 import { Badge } from "../Components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "../Components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../Components/ui/tabs";
+import { Input } from "../Components/ui/input";
+import { Label } from "../Components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "../Components/ui/dialog";
+import { Textarea } from "../Components/ui/textarea";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import api from "../services/api.service";
+import { formatCustomizationForDisplay } from "../utils/index";
 
 export default function CashierMode() {
   const [orders, setOrders] = useState([]);
   const [reports, setReports] = useState({});
   const [isLoading, setIsLoading] = useState(true);
   const [selectedPeriod, setSelectedPeriod] = useState('day');
+  const [cashRegisterSession, setCashRegisterSession] = useState(null);
+  const [isOpeningRegister, setIsOpeningRegister] = useState(false);
+  const [isClosingRegister, setIsClosingRegister] = useState(false);
+  const [openingBalance, setOpeningBalance] = useState('');
+  const [closingBalance, setClosingBalance] = useState('');
+  const [closingNotes, setClosingNotes] = useState('');
 
   useEffect(() => {
     loadOrders();
     loadReports(selectedPeriod);
+    loadCashRegisterSession();
   }, [selectedPeriod]);
 
   const loadOrders = async () => {
@@ -88,6 +103,64 @@ export default function CashierMode() {
     }
   };
 
+  const loadCashRegisterSession = async () => {
+    try {
+      const response = await api.get('/cashier/session');
+      setCashRegisterSession(response.data);
+    } catch (error) {
+      console.error('Erreur lors du chargement de la session caisse:', error);
+      setCashRegisterSession({ isOpen: false });
+    }
+  };
+
+  const openCashRegister = async () => {
+    if (!openingBalance || parseFloat(openingBalance) < 0) {
+      alert('Veuillez entrer un solde d\'ouverture valide');
+      return;
+    }
+
+    setIsOpeningRegister(true);
+    try {
+      const response = await api.post('/cashier/session/open', {
+        opening_balance: parseFloat(openingBalance)
+      });
+      setCashRegisterSession({ isOpen: true, session: response.data.session });
+      setOpeningBalance('');
+      alert('Caisse ouverte avec succès !');
+    } catch (error) {
+      console.error('Erreur lors de l\'ouverture de la caisse:', error);
+      alert('Erreur lors de l\'ouverture de la caisse');
+    } finally {
+      setIsOpeningRegister(false);
+    }
+  };
+
+  const closeCashRegister = async () => {
+    if (!closingBalance || parseFloat(closingBalance) < 0) {
+      alert('Veuillez entrer un solde de clôture valide');
+      return;
+    }
+
+    setIsClosingRegister(true);
+    try {
+      const response = await api.post('/cashier/session/close', {
+        closing_balance: parseFloat(closingBalance),
+        notes: closingNotes
+      });
+      setCashRegisterSession({ isOpen: false });
+      setClosingBalance('');
+      setClosingNotes('');
+      alert('Caisse fermée avec succès !');
+      // Actualiser les rapports pour afficher les données mises à jour
+      loadReports(selectedPeriod);
+    } catch (error) {
+      console.error('Erreur lors de la fermeture de la caisse:', error);
+      alert('Erreur lors de la fermeture de la caisse');
+    } finally {
+      setIsClosingRegister(false);
+    }
+  };
+
   const getStatusText = (status) => {
     switch (status) {
       case 'prete': return 'Prête';
@@ -116,6 +189,118 @@ export default function CashierMode() {
           Gestion des factures et rapports de ventes
         </p>
       </motion.div>
+
+      {/* Cash Register Status */}
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Calculator className="w-5 h-5" />
+              État de la Caisse
+            </div>
+            {cashRegisterSession?.isOpen ? (
+              <Badge className="bg-green-100 text-green-800 border-green-200">
+                <Unlock className="w-3 h-3 mr-1" />
+                Ouverte
+              </Badge>
+            ) : (
+              <Badge className="bg-red-100 text-red-800 border-red-200">
+                <Lock className="w-3 h-3 mr-1" />
+                Fermée
+              </Badge>
+            )}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {cashRegisterSession?.isOpen ? (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Ouverture</p>
+                  <p className="text-lg font-bold">
+                    {format(new Date(cashRegisterSession.session.opened_at), 'dd/MM/yyyy HH:mm', { locale: fr })}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Solde d'ouverture</p>
+                  <p className="text-lg font-bold text-green-600">
+                    {cashRegisterSession.session.opening_balance.toFixed(2)} FCFA
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Solde actuel</p>
+                  <p className="text-lg font-bold text-blue-600">
+                    {cashRegisterSession.session.current_balance.toFixed(2)} FCFA
+                  </p>
+                </div>
+              </div>
+
+              <div className="border-t pt-4">
+                <h3 className="text-lg font-semibold mb-4">Fermer la Caisse</h3>
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="closing-balance">Solde de clôture (FCFA)</Label>
+                    <Input
+                      id="closing-balance"
+                      type="number"
+                      step="0.01"
+                      value={closingBalance}
+                      onChange={(e) => setClosingBalance(e.target.value)}
+                      placeholder="Entrez le solde réel"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="closing-notes">Notes (optionnel)</Label>
+                    <Textarea
+                      id="closing-notes"
+                      value={closingNotes}
+                      onChange={(e) => setClosingNotes(e.target.value)}
+                      placeholder="Notes sur la clôture..."
+                    />
+                  </div>
+                  <Button
+                    onClick={closeCashRegister}
+                    disabled={isClosingRegister}
+                    variant="destructive"
+                    className="w-full flex items-center gap-2"
+                  >
+                    <Lock className="w-4 h-4" />
+                    {isClosingRegister ? 'Fermeture...' : 'Fermer la Caisse'}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <p className="text-gray-600">La caisse est actuellement fermée.</p>
+              <div className="border-t pt-4">
+                <h3 className="text-lg font-semibold mb-4">Ouvrir la Caisse</h3>
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="opening-balance">Solde d'ouverture (FCFA)</Label>
+                    <Input
+                      id="opening-balance"
+                      type="number"
+                      step="0.01"
+                      value={openingBalance}
+                      onChange={(e) => setOpeningBalance(e.target.value)}
+                      placeholder="Entrez le solde d'ouverture"
+                    />
+                  </div>
+                  <Button
+                    onClick={openCashRegister}
+                    disabled={isOpeningRegister}
+                    className="w-full bg-green-600 hover:bg-green-700 flex items-center gap-2"
+                  >
+                    <Unlock className="w-4 h-4" />
+                    {isOpeningRegister ? 'Ouverture...' : 'Ouvrir la Caisse'}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <Tabs defaultValue="orders" className="space-y-6">
         <TabsList className="grid w-full grid-cols-2">
@@ -193,7 +378,7 @@ export default function CashierMode() {
                   <div>
                     <p className="text-sm font-medium text-gray-600">Chiffre d'affaires</p>
                     <p className="text-2xl font-bold text-green-600">
-                      {currentReport.totalRevenue?.toFixed(2) || '0.00'} €
+                      {currentReport.totalRevenue?.toFixed(2) || '0.00'} FCFA
                     </p>
                   </div>
                   <DollarSign className="w-8 h-8 text-green-600" />
@@ -221,7 +406,7 @@ export default function CashierMode() {
                   <div>
                     <p className="text-sm font-medium text-gray-600">Panier moyen</p>
                     <p className="text-2xl font-bold text-purple-600">
-                      {currentReport.averageOrderValue?.toFixed(2) || '0.00'} €
+                      {currentReport.averageOrderValue?.toFixed(2) || '0.00'} FCFA
                     </p>
                   </div>
                   <TrendingUp className="w-8 h-8 text-purple-600" />
@@ -233,9 +418,20 @@ export default function CashierMode() {
           {/* Top Products */}
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <BarChart3 className="w-5 h-5" />
-                Top Produits
+              <CardTitle className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <BarChart3 className="w-5 h-5" />
+                  Top Produits
+                </div>
+                <Button
+                  onClick={() => window.print()}
+                  variant="outline"
+                  size="sm"
+                  className="flex items-center gap-2"
+                >
+                  <Download className="w-4 h-4" />
+                  Imprimer Rapport
+                </Button>
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -251,7 +447,7 @@ export default function CashierMode() {
                         <p className="text-sm text-gray-600">{product.quantity} vendus</p>
                       </div>
                     </div>
-                    <p className="font-bold text-green-600">{product.revenue.toFixed(2)} €</p>
+                    <p className="font-bold text-green-600">{product.revenue.toFixed(2)} FCFA</p>
                   </div>
                 )) || (
                   <div className="text-center py-8 text-gray-500">
@@ -300,15 +496,26 @@ function OrderCard({ order, onGenerateInvoice, onMarkDelivered, getStatusColor, 
           )}
           <div className="mt-2">
             <p className="text-sm font-medium text-gray-700">Produits:</p>
-            {order.items.map((item, index) => (
-              <p key={index} className="text-sm text-gray-600">
-                {item.quantity}x {item.product_name}
-              </p>
-            ))}
+            {order.items.map((item, index) => {
+              const customizationText = formatCustomizationForDisplay(
+                item.customizationFormatted,
+                item.customizationDetails
+              );
+              return (
+                <div key={index} className="text-sm text-gray-600">
+                  <p>{item.quantity}x {item.product_name}</p>
+                  {customizationText && (
+                    <p className="text-xs text-orange-600 ml-4 italic">
+                      {customizationText}
+                    </p>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
 
-        <div className="text-right">
+        <div className="text-right" >
           <p className="text-lg font-bold text-green-600">{total.toFixed(2)} FCFA</p>
           <p className="text-sm text-gray-600">{order.items.length} article(s)</p>
         </div>

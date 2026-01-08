@@ -17,6 +17,18 @@ router.get('/', authenticateToken, requireRole(['admin', 'staff']), async (req, 
       },
       orderBy: { created_date: 'desc' }
     });
+
+    // Add product customization config to each item
+    for (const order of orders) {
+      for (const item of order.items) {
+        const product = await prisma.product.findFirst({
+          where: { name: item.product_name },
+          select: { customization: true }
+        });
+        item.productCustomization = product?.customization || null;
+      }
+    }
+
     res.json(orders);
   } catch (error) {
     console.error('Get orders error:', error);
@@ -34,6 +46,18 @@ router.get('/my-orders', authenticateToken, async (req, res) => {
       },
       orderBy: { created_date: 'desc' }
     });
+
+    // Add product customization config to each item
+    for (const order of orders) {
+      for (const item of order.items) {
+        const product = await prisma.product.findFirst({
+          where: { name: item.product_name },
+          select: { customization: true }
+        });
+        item.productCustomization = product?.customization || null;
+      }
+    }
+
     res.json(orders);
   } catch (error) {
     console.error('Get my orders error:', error);
@@ -62,6 +86,15 @@ router.get('/:id', authenticateToken, async (req, res) => {
     // Check if user owns the order or is admin/staff
     if (order.user_id !== req.user.id && !['admin', 'staff'].includes(req.user.role)) {
       return res.status(403).json({ message: 'Access denied' });
+    }
+
+    // Add product customization config to each item
+    for (const item of order.items) {
+      const product = await prisma.product.findFirst({
+        where: { name: item.product_name },
+        select: { customization: true }
+      });
+      item.productCustomization = product?.customization || null;
     }
 
     res.json(order);

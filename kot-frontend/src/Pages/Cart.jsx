@@ -67,7 +67,7 @@ export default function Cart() {
           <AnimatePresence>
             {cart.map((item) => (
               <motion.div
-                key={`${item.product.id}-${JSON.stringify(item.customizations)}`}
+                key={`${item.product.id}-${JSON.stringify(item.customization)}`}
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: 20 }}
@@ -104,7 +104,7 @@ export default function Cart() {
                           <Button
                             size="icon"
                             variant="ghost"
-                            onClick={() => removeFromCart(item.product.id, item.customizations)}
+                            onClick={() => removeFromCart(item.product.id, item.customization)}
                             className="text-red-500 hover:bg-red-50"
                           >
                             <Trash2 className="w-4 h-4" />
@@ -115,7 +115,7 @@ export default function Cart() {
                           <Button
                             size="icon"
                             variant="outline"
-                            onClick={() => updateQuantity(item.product.id, item.quantity - 1, item.customizations || item.customization)}
+                            onClick={() => updateQuantity(item.product.id, item.quantity - 1, item.customization)}
                             className="rounded-xl border-amber-400 text-amber-600 hover:bg-amber-50 h-8 w-8"
                           >
                             <Minus className="w-3 h-3" />
@@ -125,7 +125,7 @@ export default function Cart() {
                           </span>
                           <Button
                             size="icon"
-                            onClick={() => updateQuantity(item.product.id, item.quantity + 1, item.customizations || item.customization)}
+                            onClick={() => updateQuantity(item.product.id, item.quantity + 1, item.customization)}
                             className="rounded-xl bg-gradient-to-r from-yellow-400 to-amber-600 text-white h-8 w-8"
                           >
                             <Plus className="w-3 h-3" />

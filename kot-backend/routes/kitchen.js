@@ -22,6 +22,18 @@ router.get('/orders', authenticateToken, requireRole(['admin', 'staff']), async 
       },
       orderBy: { created_date: 'asc' } // Oldest first for processing
     });
+
+    // Add product customization config to each item
+    for (const order of orders) {
+      for (const item of order.items) {
+        const product = await prisma.product.findFirst({
+          where: { name: item.product_name },
+          select: { customization: true }
+        });
+        item.productCustomization = product?.customization || null;
+      }
+    }
+
     res.json(orders);
   } catch (error) {
     console.error('Get kitchen orders error:', error);

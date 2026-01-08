@@ -1,63 +1,11 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const passport = require('passport');
-const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const { PrismaClient } = require('@prisma/client');
 const { authenticateToken } = require('../middleware/auth');
 
 const router = express.Router();
 const prisma = new PrismaClient();
-
-// Configure Passport Google Strategy
-passport.use(new GoogleStrategy({
-  clientID: process.env.GOOGLE_CLIENT_ID,
-  clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-  callbackURL: process.env.GOOGLE_REDIRECT_URI || 'http://localhost:5000/api/auth/google/callback'
-},
-async (accessToken, refreshToken, profile, done) => {
-  try {
-    // Find or create user
-    let user = await prisma.user.findUnique({
-      where: { google_id: profile.id }
-    });
-
-    if (!user) {
-      // Create new user
-      user = await prisma.user.create({
-        data: {
-          google_id: profile.id,
-          email: profile.emails[0].value,
-          full_name: profile.displayName,
-          password: null
-        }
-      });
-    }
-    return done(null, user);
-  } catch (error) {
-    return done(error, null);
-  }
-}));
-
-// Google OAuth routes
-router.get('/google',
-  passport.authenticate('google', { scope: ['profile', 'email'] })
-);
-
-router.get('/google/callback',
-  passport.authenticate('google', { session: false, failureRedirect: '/login' }),
-  (req, res) => {
-    // Generate JWT token
-    const token = jwt.sign(
-      { userId: req.user.id, email: req.user.email },
-      process.env.JWT_SECRET,
-      { expiresIn: '24h' }
-    );
-    // Redirect or respond with token
-    // For simplicity, redirect with token in query param (consider security implications)
-    res.redirect(`${process.env.FRONTEND_URL}/login?token=${token}`);
-  }
-);
 
 // Register
 router.post('/register', async (req, res) => {

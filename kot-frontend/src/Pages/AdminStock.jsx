@@ -19,6 +19,7 @@ import ProductFormDialog from "../Components/admin/ProductFormDialog";
 
 export default function AdminStock() {
   const [products, setProducts] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [filteredProducts, setFilteredProducts] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
@@ -28,24 +29,38 @@ export default function AdminStock() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    loadProducts();
+    loadData();
   }, []);
 
   useEffect(() => {
     filterProducts();
   }, [products, searchQuery, categoryFilter]);
 
-  const loadProducts = async () => {
+  const loadData = async () => {
     setIsLoading(true);
     setError(null);
+    try {
+      const [productsData, categoriesData] = await Promise.all([
+        Product.list(),
+        Product.getCategories()
+      ]);
+      setProducts(productsData);
+      setCategories(categoriesData);
+    } catch (err) {
+      setError('Erreur de chargement des données. Vérifiez la connexion au serveur.');
+      console.error('Error loading data:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const loadProducts = async () => {
     try {
       const data = await Product.list();
       setProducts(data);
     } catch (err) {
       setError('Erreur de chargement des produits. Vérifiez la connexion au serveur.');
       console.error('Error loading products:', err);
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -53,14 +68,18 @@ export default function AdminStock() {
     let filtered = products;
 
     if (categoryFilter !== "all") {
-      filtered = filtered.filter(p => p.category === categoryFilter);
+      filtered = filtered.filter(p => {
+        const catName = typeof p.category === 'string' ? p.category : p.category?.name;
+        return catName === categoryFilter;
+      });
     }
 
     if (searchQuery) {
-      filtered = filtered.filter(p =>
-        p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        p.category.toLowerCase().includes(searchQuery.toLowerCase())
-      );
+      filtered = filtered.filter(p => {
+        const catLabel = getCategoryLabel(p.category).toLowerCase();
+        return p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+               catLabel.includes(searchQuery.toLowerCase());
+      });
     }
 
     setFilteredProducts(filtered);
@@ -95,13 +114,34 @@ export default function AdminStock() {
   };
 
   const getCategoryLabel = (category) => {
+    if (!category) return "❓ Non catégorisé";
+    
+    // Handle both string (old) and object (new) formats
+    const categoryName = typeof category === 'string' ? category : category.name;
+    
     const labels = {
       tacos: "🌮 Tacos",
+      burritos: "🌯 Burritos",
+      burger: "🍔 Burgers",
       boissons: "🥤 Boissons",
       desserts: "🍰 Desserts",
-      accompagnements: "🍟 Accompagnements"
+      accompagnements: "🍟 Accompagnements",
+      options: "⚙️ Options"
     };
-    return labels[category] || category;
+    return labels[categoryName] || (typeof category === 'object' ? category.displayName || category.name : category);
+  };
+
+  const getCategoryColor = (categoryName) => {
+    const colors = {
+      tacos: "bg-amber-500",
+      burritos: "bg-blue-500",
+      burger: "bg-red-500",
+      boissons: "bg-purple-500",
+      desserts: "bg-green-500",
+      accompagnements: "bg-orange-500",
+      options: "bg-gray-500"
+    };
+    return colors[categoryName] || "bg-gray-500";
   };
 
   const getFinalPrice = (product) => {
@@ -113,13 +153,14 @@ export default function AdminStock() {
 
   const stats = {
     total: products.length,
-    tacos: products.filter(p => p.category === "tacos").length,
-    boissons: products.filter(p => p.category === "boissons").length,
-    desserts: products.filter(p => p.category === "desserts").length,
-    accompagnements: products.filter(p => p.category === "accompagnements").length,
     lowStock: products.filter(p => p.stock <= p.stock_alert_threshold).length,
     withDiscount: products.filter(p => p.discount_percentage > 0).length
   };
+
+  // Dynamically calculate stats for each category
+  categories.forEach(cat => {
+    stats[cat.name] = products.filter(p => p.category?.name === cat.name).length;
+  });
 
   return (
     <div className="p-6 md:p-8">
@@ -191,37 +232,22 @@ export default function AdminStock() {
         </div>
 
         <Tabs value={categoryFilter} onValueChange={setCategoryFilter}>
-          <TabsList className="bg-white border-2 border-gray-200">
+          <TabsList className="bg-white border-2 border-gray-200 overflow-x-auto">
             <TabsTrigger 
               value="all" 
               className="rounded-xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-yellow-400 data-[state=active]:to-amber-500 data-[state=active]:text-white"
             >
               Tous ({stats.total})
             </TabsTrigger>
-            <TabsTrigger 
-              value="tacos"
-              className="rounded-xl data-[state=active]:bg-amber-500 data-[state=active]:text-white"
-            >
-              🌮 Tacos ({stats.tacos})
-            </TabsTrigger>
-            <TabsTrigger 
-              value="boissons"
-              className="rounded-xl data-[state=active]:bg-purple-500 data-[state=active]:text-white"
-            >
-              🥤 Boissons ({stats.boissons})
-            </TabsTrigger>
-            <TabsTrigger
-              value="desserts"
-              className="rounded-xl data-[state=active]:bg-green-500 data-[state=active]:text-white"
-            >
-              🍰 Desserts ({stats.desserts})
-            </TabsTrigger>
-            <TabsTrigger
-              value="accompagnements"
-              className="rounded-xl data-[state=active]:bg-orange-500 data-[state=active]:text-white"
-            >
-              🍟 Accompagnements ({stats.accompagnements || 0})
-            </TabsTrigger>
+            {categories.map(category => (
+              <TabsTrigger
+                key={category.id}
+                value={category.name}
+                className={`rounded-xl data-[state=active]:${getCategoryColor(category.name)} data-[state=active]:text-white`}
+              >
+                {getCategoryLabel(category)} ({stats[category.name] || 0})
+              </TabsTrigger>
+            ))}
           </TabsList>
         </Tabs>
       </div>

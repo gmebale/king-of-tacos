@@ -23,7 +23,7 @@ export const useCart = () => {
             return {
               product: { id, name, price, displayPrice, image_url },
               quantity,
-              customizations: customizations || {},
+              customization: customizations || {},
               customizationSummary: customizationSummary || '',
               subtotal: quantity * (displayPrice || price || 0)
             };
@@ -49,38 +49,33 @@ export const useCart = () => {
   }, []);
 
   // Ajouter un produit au panier
-  const addToCart = useCallback((product, quantity = 1, customizations = {}, customizationSummary = '') => {
-    const newCart = [...cart];
+ const addToCart = useCallback((cartItem) => {
+  const newCart = [...cart];
 
-    // Handle new customization format
-    const customizationKey = product.customization ? JSON.stringify(product.customization) : JSON.stringify(customizations);
+  const existingIndex = newCart.findIndex(
+    item =>
+      item.product.id === cartItem.product.id &&
+      JSON.stringify(item.customization) === JSON.stringify(cartItem.customization)
+  );
 
-    const existingItemIndex = newCart.findIndex(
-      item => item.product.id === product.id &&
-      JSON.stringify(item.customizations || item.customization) === customizationKey
-    );
+  if (existingIndex > -1) {
+    newCart[existingIndex].quantity += cartItem.quantity;
+    newCart[existingIndex].subtotal =
+      newCart[existingIndex].quantity * (cartItem.product.displayPrice || cartItem.product.price);
+  } else {
+    newCart.push(cartItem);
+  }
 
-    if (existingItemIndex > -1) {
-      newCart[existingItemIndex].quantity += quantity;
-      newCart[existingItemIndex].subtotal = newCart[existingItemIndex].quantity * (product.finalPrice || product.displayPrice || product.price);
-    } else {
-      newCart.push({
-        product,
-        quantity,
-        customizations: product.customization || customizations,
-        customizationSummary,
-        subtotal: quantity * (product.finalPrice || product.displayPrice || product.price)
-      });
-    }
+  saveCart(newCart);
+}, [cart, saveCart]);
 
-    saveCart(newCart);
-  }, [cart, saveCart]);
+
 
   // Supprimer un produit du panier
-  const removeFromCart = useCallback((productId, customizations = {}) => {
+  const removeFromCart = useCallback((productId, customization = {}) => {
     const newCart = cart.filter(
       item => !(item.product.id === productId &&
-      JSON.stringify(item.customizations) === JSON.stringify(customizations))
+      JSON.stringify(item.customization) === JSON.stringify(customization))
     );
     saveCart(newCart);
   }, [cart, saveCart]);
@@ -94,7 +89,7 @@ export const useCart = () => {
 
     const newCart = cart.map(item => {
       if (item.product.id === productId &&
-          JSON.stringify(item.customizations || item.customization) === JSON.stringify(customizations)) {
+          JSON.stringify(item.customization) === JSON.stringify(customizations)) {
         return {
           ...item,
           quantity,

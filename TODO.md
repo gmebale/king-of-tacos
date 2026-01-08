@@ -1,16 +1,32 @@
-# TODO: Fix Pricing Issue for Customized Products
+# TODO: Correction de l'affichage des détails de commande sur la page de paiement
 
-## Problem
-When customizing a product (adding supplements), the total price does not include the added supplements' costs.
+## Problème identifié
+- Les détails de personnalisation (taille, viande, sauces, suppléments) ne s'affichaient pas sur la page de paiement
+- La configuration de personnalisation n'était pas préservée séparément des sélections dans le panier
+- Les personnalisations vides ({}) étaient envoyées au backend au lieu de null
 
-## Root Cause
-In Payment.jsx, the order items were using `item.product.displayPrice || item.product.price` instead of the calculated subtotal that includes customization costs.
+## Étape 1: Modifier CustomizationDialog.jsx
+- [x] Ajouter `customizationConfig` pour préserver la configuration originale
+- [x] Générer un `customizationSummary` et le passer à `onConfirm`
 
-## Changes Made
-- [x] Updated Payment.jsx to use `item.subtotal / item.quantity` for the price when sending order items to backend
-- [x] Updated Payment.jsx display to show `item.subtotal` instead of calculated price for each item
+## Étape 2: Mettre à jour useCart.js
+- [x] Ajouter le stockage de `customizationConfig` dans les items du panier
+- [x] Utiliser la bonne propriété pour les personnalisations
 
-## Testing
-- [ ] Test customizing a product with supplements
-- [ ] Verify that the total price includes supplement costs
-- [ ] Check that the order is created with correct pricing
+## Étape 3: Mettre à jour Checkout.jsx
+- [x] Afficher les personnalisations dans le récapitulatif de commande
+- [x] Importer `formatCustomization` et l'utiliser correctement
+
+## Étape 4: Mettre à jour Payment.jsx
+- [x] Corriger l'affichage des personnalisations en utilisant `item.customization` et `item.customizationConfig`
+- [x] Envoyer null au lieu de {} pour les personnalisations vides
+
+## Étape 5: Mettre à jour formatCustomization
+- [x] Afficher les valeurs par défaut quand aucune sélection n'est faite
+- [x] Améliorer la logique d'affichage des personnalisations
+
+## Étape 6: Tester les modifications
+- [x] Vérifier que les détails de commande s'affichent correctement sur la page de paiement (avec valeurs par défaut si aucune sélection)
+- [x] Tester le flux complet : personnalisation → panier → checkout → paiement
+- [x] Vérifier que les données envoyées au backend sont correctes (customization object envoyé)
+- [x] Support ajouté pour le format de personnalisation des tacos (TacosCustomizationDialog)

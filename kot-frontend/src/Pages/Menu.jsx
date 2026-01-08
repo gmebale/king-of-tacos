@@ -15,6 +15,7 @@ import CartSummary from "../Components/menu/CartSummary";
 export default function Menu() {
   const navigate = useNavigate();
   const [products, setProducts] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [filteredProducts, setFilteredProducts] = useState([]);
   const [category, setCategory] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
@@ -23,7 +24,7 @@ export default function Menu() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    loadProducts();
+    loadData();
     loadCart();
   }, []);
 
@@ -31,12 +32,17 @@ export default function Menu() {
     filterProducts();
   }, [category, searchQuery, products]);
 
-  const loadProducts = async () => {
+  const loadData = async () => {
     setIsLoading(true);
     setError(null);
     try {
-      const data = await Product.list();
-      setProducts(data.filter(p => p.available));
+      const [productsData, categoriesData] = await Promise.all([
+        Product.list(),
+        Product.getCategories()
+      ]);
+      setProducts(productsData.filter(p => p.available && p.category?.name !== "options"));
+      // Filter out "options" category from the menu
+      setCategories(categoriesData.filter(cat => cat.name !== "options"));
     } catch (err) {
       setError('Erreur de chargement des produits. Vérifiez la connexion au serveur.');
       console.error('Error loading products:', err);
@@ -54,7 +60,7 @@ export default function Menu() {
     let filtered = products;
 
     if (category !== "all") {
-      filtered = filtered.filter(p => p.category === category);
+      filtered = filtered.filter(p => p.category?.name === category);
     }
 
     if (searchQuery) {
@@ -68,7 +74,10 @@ export default function Menu() {
   };
 
   const addToCart = (product) => {
-    const existingItem = cart.find(item => item.id === product.id);
+    const existingItem = cart.find(item =>
+      item.id === product.id &&
+      JSON.stringify(item.customization || {}) === JSON.stringify(product.customization || {})
+    );
     let newCart;
 
     // Calculate final price with discount
@@ -84,7 +93,8 @@ export default function Menu() {
 
     if (existingItem) {
       newCart = cart.map(item =>
-        item.id === product.id
+        item.id === product.id &&
+        JSON.stringify(item.customization || {}) === JSON.stringify(product.customization || {})
           ? { ...item, quantity: item.quantity + 1 }
           : item
       );
@@ -97,9 +107,10 @@ export default function Menu() {
     window.dispatchEvent(new Event('storage'));
   };
 
-  const updateQuantity = (productId, change) => {
+  const updateQuantity = (productId, change, customization = null) => {
     const newCart = cart.map(item => {
-      if (item.id === productId) {
+      if (item.id === productId &&
+          (!customization || JSON.stringify(item.customization || {}) === JSON.stringify(customization || {}))) {
         const newQuantity = Math.max(0, item.quantity + change);
         return { ...item, quantity: newQuantity };
       }
@@ -159,15 +170,15 @@ export default function Menu() {
               <TabsTrigger value="all" className="rounded-xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-yellow-400 data-[state=active]:to-amber-500 data-[state=active]:text-white">
                 Tous
               </TabsTrigger>
-              <TabsTrigger value="tacos" className="rounded-xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-yellow-400 data-[state=active]:to-amber-500 data-[state=active]:text-white">
-                Tacos
-              </TabsTrigger>
-              <TabsTrigger value="boissons" className="rounded-xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-yellow-400 data-[state=active]:to-amber-500 data-[state=active]:text-white">
-                Boissons
-              </TabsTrigger>
-              <TabsTrigger value="desserts" className="rounded-xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-yellow-400 data-[state=active]:to-amber-500 data-[state=active]:text-white">
-                Desserts
-              </TabsTrigger>
+              {categories.map(cat => (
+                <TabsTrigger 
+                  key={cat.id}
+                  value={cat.name} 
+                  className="rounded-xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-yellow-400 data-[state=active]:to-amber-500 data-[state=active]:text-white"
+                >
+                  {cat.displayName || cat.name}
+                </TabsTrigger>
+              ))}
             </TabsList>
           </Tabs>
         </div>
@@ -187,15 +198,19 @@ export default function Menu() {
               exit={{ opacity: 0 }}
               className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8"
             >
-              {filteredProducts.map((product) => (
-                <ProductCard
-                  key={product.id}
-                  product={product}
-                  onAddToCart={addToCart}
-                  cartItem={cart.find(item => item.id === product.id)}
-                  onUpdateQuantity={updateQuantity}
-                />
-              ))}
+              {filteredProducts.map((product) => {
+                // Find cart item for this product, considering customizations
+                const cartItem = cart.find(item => item.id === product.id);
+                return (
+                  <ProductCard
+                    key={product.id}
+                    product={product}
+                    onAddToCart={addToCart}
+                    cartItem={cartItem}
+                    onUpdateQuantity={updateQuantity}
+                  />
+                );
+              })}
             </motion.div>
           )}
         </AnimatePresence>
@@ -207,7 +222,7 @@ export default function Menu() {
             className="text-center py-20"
           >
             <p className="text-red-500 text-lg">{error}</p>
-            <Button onClick={loadProducts} className="mt-4">Réessayer</Button>
+            <Button onClick={loadData} className="mt-4">Réessayer</Button>
           </motion.div>
         )}
 

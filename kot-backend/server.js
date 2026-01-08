@@ -14,6 +14,7 @@ const financeRoutes = require('./routes/finance');
 const kitchenRoutes = require('./routes/kitchen');
 const cashierRoutes = require('./routes/cashier');
 const loyaltyRoutes = require('./routes/loyalty');
+const settingsRoutes = require('./routes/settings');
 
 const app = express();
 const prisma = new PrismaClient();
@@ -57,6 +58,7 @@ app.use('/api/finance', financeRoutes);
 app.use('/api/kitchen', kitchenRoutes);
 app.use('/api/cashier', cashierRoutes);
 app.use('/api/loyalty', loyaltyRoutes);
+app.use('/api/settings', settingsRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

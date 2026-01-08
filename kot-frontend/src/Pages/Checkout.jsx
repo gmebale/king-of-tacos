@@ -11,6 +11,7 @@ import { ShoppingBag, Clock, MapPin, Check, Truck, ArrowLeft } from "lucide-reac
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "../utils";
 import { useCart } from "../hooks/useCart";
+import { formatCustomization } from "../utils/customization";
 
 export default function Checkout() {
   const navigate = useNavigate();
@@ -42,13 +43,15 @@ export default function Checkout() {
     try {
       const currentUser = await User.me();
       setUser(currentUser);
-      setFormData(prev => ({
-        ...prev,
-        customer_name: currentUser.full_name || "",
-        customer_email: currentUser.email || "",
-        customer_phone: currentUser.phone || "",
-        delivery_address: currentUser.address || ""
-      }));
+      if (currentUser) {
+        setFormData(prev => ({
+          ...prev,
+          customer_name: currentUser.full_name || "",
+          customer_email: currentUser.email || "",
+          customer_phone: currentUser.phone || "",
+          delivery_address: currentUser.address || ""
+        }));
+      }
     } catch (error) {
       console.log("User not logged in");
     }
@@ -249,10 +252,15 @@ export default function Checkout() {
               </CardHeader>
               <CardContent className="space-y-4">
                 {cart.map((item) => (
-                  <div key={`${item.product.id}-${JSON.stringify(item.customizations)}`} className="flex justify-between text-sm">
-                    <span className="flex-1">
-                      {item.quantity}x {item.product.name}
-                    </span>
+                  <div key={`${item.product.id}-${JSON.stringify(item.customization)}`} className="flex justify-between text-sm">
+                    <div className="flex-1">
+                      <span>{item.quantity}x {item.product.name}</span>
+                      {(item.customization) && formatCustomization(item.customization, item.customizationConfig || item.product?.customization) && (
+                        <div className="text-xs text-gray-500 mt-1">
+                          {formatCustomization(item.customization, item.customizationConfig || item.product?.customization)}
+                        </div>
+                      )}
+                    </div>
                     <span className="font-semibold">
                       {item.subtotal.toLocaleString()} FCFA
                     </span>

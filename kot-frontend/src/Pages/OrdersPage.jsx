@@ -8,7 +8,9 @@ import {
   Truck,
   RotateCcw,
   Star,
-  MessageSquare
+  MessageSquare,
+  Edit,
+  X
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "../Components/ui/card";
 import { Button } from "../Components/ui/button";
@@ -18,17 +20,31 @@ import { Textarea } from "../Components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "../Components/ui/dialog";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
+import { useNavigate } from "react-router-dom";
+import { createPageUrl } from "../utils";
 import api from "../services/api.service";
+import { Order } from '../Entities/Order';
+import { Product } from '../Entities/Product';
+import { User } from '../Entities/User';
+import { useCart } from '../hooks/useCart';
+import EditOrderDialog from "../Components/EditOrderDialog";
+import { formatCustomization } from "../utils/customization";
 
 export default function OrdersPage() {
+  const navigate = useNavigate();
+  const { addToCart } = useCart();
   const [orders, setOrders] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [reviewText, setReviewText] = useState("");
   const [reviewRating, setReviewRating] = useState(5);
+  const [editingOrder, setEditingOrder] = useState(null);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [products, setProducts] = useState([]);
 
   useEffect(() => {
     loadOrders();
+    loadProducts();
   }, []);
 
   const loadOrders = async () => {
@@ -42,27 +58,34 @@ export default function OrdersPage() {
     }
   };
 
+  const loadProducts = async () => {
+    try {
+      const response = await Product.list();
+      setProducts(response);
+    } catch (error) {
+      console.error('Error loading products:', error);
+    }
+  };
+
   const reorder = async (orderId) => {
     try {
       const order = orders.find(o => o.id === orderId);
       if (!order) return;
 
-      // Create cart items from order items
-      const cartItems = order.items.map(item => ({
-        product_name: item.product_name,
-        quantity: item.quantity,
-        price: item.price
-      }));
-
-      // Add to cart and redirect to checkout
-      for (const item of cartItems) {
-        await api.post('/cart/add', item);
+      // For each order item, find the corresponding product and add to cart
+      for (const item of order.items) {
+        const product = products.find(p => p.name === item.product_name);
+        if (product) {
+          // Use the addToCart hook with the full product object
+          addToCart(product, item.quantity, item.customization || {}, item.customization_summary || '');
+        }
       }
 
-      // Redirect to cart
-      window.location.href = '/cart';
+      // Navigate to cart page
+      navigate(createPageUrl("Cart"));
     } catch (error) {
       console.error('Error reordering:', error);
+      alert('Erreur lors de la recommande');
     }
   };
 
@@ -82,6 +105,34 @@ export default function OrdersPage() {
     } catch (error) {
       console.error('Error submitting review:', error);
     }
+  };
+
+  const handleEditOrder = (order) => {
+    setEditingOrder(order);
+    setIsEditDialogOpen(true);
+  };
+
+  const handleCancelOrder = async (orderId) => {
+    if (window.confirm('Êtes-vous sûr de vouloir annuler cette commande ?')) {
+      try {
+        await Order.update(orderId, { status: 'annulee' });
+        await loadOrders(); // Refresh orders
+      } catch (error) {
+        console.error('Error canceling order:', error);
+        alert('Erreur lors de l\'annulation de la commande');
+      }
+    }
+  };
+
+  const handleEditDialogClose = () => {
+    setIsEditDialogOpen(false);
+    setEditingOrder(null);
+  };
+
+  const handleEditDialogSave = async () => {
+    await loadOrders(); // Refresh orders
+    setIsEditDialogOpen(false);
+    setEditingOrder(null);
   };
 
   const getStatusColor = (status) => {
@@ -124,6 +175,33 @@ export default function OrdersPage() {
   const completedOrders = orders.filter(order => order.status === 'livree');
   const cancelledOrders = orders.filter(order => order.status === 'annulee');
 
+  // Check if user is authenticated
+  if (!User.isAuthenticated()) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 p-4 md:p-6 flex items-center justify-center">
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="text-center max-w-md"
+        >
+          <Package className="w-16 h-16 mx-auto mb-4 text-gray-400" />
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">
+            Connexion requise
+          </h1>
+          <p className="text-gray-600 mb-6">
+            Vous devez vous connecter pour pouvoir suivre vos commandes.
+          </p>
+          <Button
+            onClick={() => navigate(createPageUrl("Login"))}
+            className="w-full"
+          >
+            Se connecter
+          </Button>
+        </motion.div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 p-4 md:p-6">
       <motion.div
@@ -162,11 +240,15 @@ export default function OrdersPage() {
                 key={order.id}
                 order={order}
                 onReorder={reorder}
+                onEdit={handleEditOrder}
+                onCancel={handleCancelOrder}
                 getStatusColor={getStatusColor}
                 getStatusText={getStatusText}
                 getStatusIcon={getStatusIcon}
                 showReorder={false}
                 showReview={false}
+                showEdit={order.status === 'en_attente'}
+                showCancel={order.status === 'en_attente'}
               />
             ))}
           </AnimatePresence>
@@ -186,11 +268,15 @@ export default function OrdersPage() {
                 order={order}
                 onReorder={reorder}
                 onReview={(order) => setSelectedOrder(order)}
+                onEdit={handleEditOrder}
+                onCancel={handleCancelOrder}
                 getStatusColor={getStatusColor}
                 getStatusText={getStatusText}
                 getStatusIcon={getStatusIcon}
                 showReorder={true}
                 showReview={true}
+                showEdit={false}
+                showCancel={false}
               />
             ))}
           </AnimatePresence>
@@ -280,6 +366,14 @@ export default function OrdersPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Edit Order Dialog */}
+      <EditOrderDialog
+        order={editingOrder}
+        open={isEditDialogOpen}
+        onClose={handleEditDialogClose}
+        onSave={handleEditDialogSave}
+      />
     </div>
   );
 }
@@ -289,11 +383,15 @@ function OrderCard({
   order,
   onReorder,
   onReview,
+  onEdit,
+  onCancel,
   getStatusColor,
   getStatusText,
   getStatusIcon,
   showReorder,
-  showReview
+  showReview,
+  showEdit,
+  showCancel
 }) {
   const total = order.items.reduce((sum, item) => sum + (item.quantity * item.price), 0);
 
@@ -336,17 +434,48 @@ function OrderCard({
       {/* Order Items */}
       <div className="space-y-2 mb-4">
         {order.items.map((item, index) => (
-          <div key={index} className="flex justify-between items-center py-1 border-b border-gray-100 last:border-b-0">
-            <div className="flex-1">
-              <p className="font-medium text-sm">{item.product_name}</p>
-              <p className="text-xs text-gray-600">Quantité: {item.quantity}</p>
+          <div key={index} className="py-1 border-b border-gray-100 last:border-b-0">
+            <div className="flex justify-between items-center">
+              <div className="flex-1">
+                <p className="font-medium text-sm">{item.product_name}</p>
+                <p className="text-xs text-gray-600">Quantité: {item.quantity}</p>
+                {item.customization && formatCustomization(item.customization) && (
+                  <p className="text-xs text-gray-500 mt-1 ml-4">
+                    {formatCustomization(item.customization)}
+                  </p>
+                )}
+              </div>
+              <p className="text-sm font-medium">{(item.quantity * item.price ).toFixed(2)} FCFA</p>
             </div>
-            <p className="text-sm font-medium">{(item.quantity * item.price ).toFixed(2)} FCFA</p>
           </div>
         ))}
       </div>
 
       <div className="flex gap-2">
+        {showEdit && (
+          <Button
+            onClick={() => onEdit(order)}
+            variant="outline"
+            size="sm"
+            className="flex items-center gap-2"
+          >
+            <Edit className="w-4 h-4" />
+            Modifier
+          </Button>
+        )}
+
+        {showCancel && (
+          <Button
+            onClick={() => onCancel(order.id)}
+            variant="destructive"
+            size="sm"
+            className="flex items-center gap-2"
+          >
+            <X className="w-4 h-4" />
+            Annuler
+          </Button>
+        )}
+
         {showReorder && (
           <Button
             onClick={() => onReorder(order.id)}

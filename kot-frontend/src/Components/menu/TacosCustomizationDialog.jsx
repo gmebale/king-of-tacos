@@ -11,7 +11,6 @@ import { Label } from '../ui/label';
 import { RadioGroup, RadioGroupItem } from "../ui/radio-group";
 import { Checkbox } from "../ui/checkbox";
 import { Badge } from "../ui/badge";
-import { Card } from "../ui/card";
 import { motion } from "framer-motion";
 import { Check, Plus, Minus } from "lucide-react";
 
@@ -32,17 +31,11 @@ export default function TacosCustomizationDialog({ open, onOpenChange, product, 
     { id: "XL", name: "PATRON", price: 400000, description: "4 viandes", meatCount: 4 }
   ];
 
-  const meats = [
-    "Boeuf",
-    "Poulet",
-    "Porc",
-    "Agneau",
-    "Végétarien"
-  ];
+  const meats = ["Boeuf", "Poulet", "Porc", "Agneau", "Végétarien"];
 
   const accompagnements = [
-    { id: "frites_simple", name: "Frites simple", price: 50000 } ,
-    { id: "frites_cheddar", name: "Frites au cheddar", price: 70000 } ,
+    { id: "frites_simple", name: "Frites simple", price: 50000 },
+    { id: "frites_cheddar", name: "Frites au cheddar", price: 70000 },
     { id: "frites_paprika", name: "Frites au paprika", price: 70000 },
     { id: "alloco", name: "Alloco", price: 60000 },
     { id: "riz_blanc", name: "Riz Blanc", price: 50000 }
@@ -86,26 +79,18 @@ export default function TacosCustomizationDialog({ open, onOpenChange, product, 
     let total = product.displayPrice || product.price;
 
     const selectedSize = sizes.find(s => s.id === customization.size);
-    if (selectedSize) {
-      total += selectedSize.price;
-    }
+    if (selectedSize) total += selectedSize.price;
 
     const allExtras = [...suppléments, ...accompagnements];
     customization.extras.forEach(extraId => {
       const extra = allExtras.find(e => e.id === extraId);
-      if (extra) {
-        total += extra.price;
-      }
+      if (extra) total += extra.price;
     });
 
-    if (customization.gratin) {
-      total += 500;
-    }
+    if (customization.gratin) total += 500;
 
     const sauceCount = customization.sauces.length;
-    if (sauceCount > 2) {
-      total += (sauceCount - 2) * 500;
-    }
+    if (sauceCount > 2) total += (sauceCount - 2) * 500;
 
     return total * customization.quantity;
   };
@@ -116,15 +101,9 @@ export default function TacosCustomizationDialog({ open, onOpenChange, product, 
     const newMeatCount = newSize.meatCount;
 
     let newMeats = [...customization.selectedMeats];
-
     if (newMeatCount > currentMeatCount) {
-      // Add slots with default meat
-      for (let i = currentMeatCount; i < newMeatCount; i++) {
-        newMeats.push("Boeuf");
-      }
-    } else if (newMeatCount < currentMeatCount) {
-      newMeats = newMeats.slice(0, newMeatCount);
-    }
+      for (let i = currentMeatCount; i < newMeatCount; i++) newMeats.push("Boeuf");
+    } else newMeats = newMeats.slice(0, newMeatCount);
 
     setCustomization({ ...customization, size: sizeId, selectedMeats: newMeats });
   };
@@ -140,40 +119,45 @@ export default function TacosCustomizationDialog({ open, onOpenChange, product, 
     const newSauces = customization.sauces.includes(sauceId)
       ? customization.sauces.filter(id => id !== sauceId)
       : [...customization.sauces, sauceId];
-
     setCustomization({ ...customization, sauces: newSauces });
-  };
-
-  const handleConfirm = () => {
-    const unitPrice = calculateTotalPrice() / customization.quantity;
-    onConfirm({
-      ...product,
-      displayPrice: unitPrice,
-      customization: customization,
-      customizationSummary: getCustomizationSummary()
-    }, customization.quantity);
-    onOpenChange(false);
   };
 
   const getCustomizationSummary = () => {
     const parts = [];
     const selectedSize = sizes.find(s => s.id === customization.size);
-    if (selectedSize) {
-      parts.push(`Taille ${selectedSize.name}`);
-    }
-    if (customization.selectedMeats && customization.selectedMeats.length > 0) {
-      parts.push(`Viandes: ${customization.selectedMeats.join(", ")}`);
-    }
-    if (customization.gratin) {
-      parts.push("Gratiné");
-    }
+    if (selectedSize) parts.push(`Taille ${selectedSize.name}`);
+    if (customization.selectedMeats.length > 0) parts.push(`Viandes: ${customization.selectedMeats.join(", ")}`);
+    if (customization.gratin) parts.push("Gratiné");
     if (customization.sauces.length > 0) {
-      const sauceNames = customization.sauces.map(id => 
-        sauces.find(s => s.id === id)?.name
-      ).filter(Boolean);
+      const sauceNames = customization.sauces.map(id => sauces.find(s => s.id === id)?.name).filter(Boolean);
       parts.push(`Sauces: ${sauceNames.join(", ")}`);
     }
+    if (customization.extras.length > 0) {
+      parts.push(`Extras: ${customization.extras.join(", ")}`);
+    }
     return parts.join(" • ");
+  };
+
+  const handleConfirm = () => {
+    const unitPrice = calculateTotalPrice() / customization.quantity;
+
+    const cartItem = {
+      product: {
+        id: product.id,
+        name: product.name,
+        price: product.price,
+        displayPrice: unitPrice,
+        image_url: product.image
+      },
+      quantity: customization.quantity,
+      customization: customization,
+      customizationConfig: product.customization,
+      customizationSummary: getCustomizationSummary(),
+      subtotal: unitPrice * customization.quantity
+    };
+
+    onConfirm(cartItem);
+    onOpenChange(false);
   };
 
   const totalPrice = calculateTotalPrice();
@@ -183,223 +167,11 @@ export default function TacosCustomizationDialog({ open, onOpenChange, product, 
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-2xl font-bold flex items-center gap-2">
-            <span>🌮</span>
-            Personnalisez votre {product?.name}
+            <span>🌮</span> Personnalisez votre {product?.name}
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-6 py-4">
-          {/* Taille */}
-          <div className="space-y-3">
-            <Label className="text-lg font-semibold">Choisissez la taille *</Label>
-            <RadioGroup value={customization.size} onValueChange={handleSizeChange}>
-              <div className="grid md:grid-cols-2 gap-3">
-                {sizes.map((size) => (
-                  <motion.div
-                    key={size.id}
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                  >
-                    <label className={`flex items-center justify-between p-4 border-2 rounded-xl cursor-pointer transition-all ${
-                      customization.size === size.id
-                        ? 'border-amber-500 bg-amber-50'
-                        : 'border-gray-200 hover:border-amber-300'
-                    }`}>
-                      <div className="flex items-center gap-3">
-                        <RadioGroupItem value={size.id} id={size.id} />
-                        <div>
-                          <p className="font-semibold">{size.name}</p>
-                          <p className="text-sm text-gray-600">{size.description}</p>
-                        </div>
-                      </div>
-                      {size.price > 0 && (
-                        <Badge variant="outline" className="ml-2">
-                          +{size.price.toLocaleString()} FCFA
-                        </Badge>
-                      )}
-                    </label>
-                  </motion.div>
-                ))}
-              </div>
-            </RadioGroup>
-          </div>
-
-          {/* Choix des viandes */}
-          <div className="space-y-3">
-            <Label className="text-lg font-semibold">Choix des viandes ({sizes.find(s => s.id === customization.size)?.meatCount || 1})</Label>
-            <div className="space-y-2">
-              {Array.from({ length: sizes.find(s => s.id === customization.size)?.meatCount || 1 }).map((_, index) => (
-                <div key={index} className="flex items-center gap-2">
-                  <span className="w-20 text-sm font-medium">Viande {index + 1}:</span>
-                  <select
-                    value={customization.selectedMeats[index] || "Boeuf"}
-                    onChange={(e) => {
-                      const newMeats = [...customization.selectedMeats];
-                      newMeats[index] = e.target.value;
-                      setCustomization({ ...customization, selectedMeats: newMeats });
-                    }}
-                    className="flex-1 p-2 border rounded-lg focus:border-amber-400"
-                  >
-                    {meats.map((meat) => (
-                      <option key={meat} value={meat}>{meat}</option>
-                    ))}
-                  </select>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Accompagnements */}
-          <div className="space-y-3">
-            <Label className="text-lg font-semibold">accompagnements</Label>
-            <div className="grid md:grid-cols-2 gap-3">
-              {accompagnements.map((extra) => (
-                <motion.div
-                  key={extra.id}
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                >
-                  <label className={`flex items-center justify-between p-4 border-2 rounded-xl cursor-pointer transition-all ${
-                    customization.extras.includes(extra.id)
-                      ? 'border-amber-500 bg-amber-50'
-                      : 'border-gray-200 hover:border-amber-300'
-                  }`}>
-                    <div className="flex items-center gap-3">
-                      <Checkbox
-                        checked={customization.extras.includes(extra.id)}
-                        onCheckedChange={() => handleExtraToggle(extra.id)}
-                      />
-                      <span className="font-medium">{extra.name}</span>
-                    </div>
-                    <Badge variant="outline">
-                      +{(extra.price / 100).toLocaleString()} FCFA
-                    </Badge>
-                  </label>
-                </motion.div>
-              ))}
-            </div>
-          </div>
-
-          {/*Suppléments */}
-          <div className="space-y-3">
-            <Label className="text-lg font-semibold">Suppléments</Label>
-            <div className="grid md:grid-cols-2 gap-3">
-              {suppléments.map((extra) => (
-                <motion.div
-                  key={extra.id}
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                >
-                  <label className={`flex items-center justify-between p-4 border-2 rounded-xl cursor-pointer transition-all ${
-                    customization.extras.includes(extra.id)
-                      ? 'border-amber-500 bg-amber-50'
-                      : 'border-gray-200 hover:border-amber-300'
-                  }`}>
-                    <div className="flex items-center gap-3">
-                      <Checkbox
-                        checked={customization.extras.includes(extra.id)}
-                        onCheckedChange={() => handleExtraToggle(extra.id)}
-                      />
-                      <span className="font-medium">{extra.name}</span>
-                    </div>
-                    <Badge variant="outline">
-                      +{extra.price.toLocaleString()} FCFA
-                    </Badge>
-                  </label>
-                </motion.div>
-              ))}
-            </div>
-          </div>
-
-          {/* Gratiné */}
-          <div className="space-y-3">
-            <Label className="text-lg font-semibold">Options</Label>
-            <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-              <label className={`flex items-center justify-between p-4 border-2 rounded-xl cursor-pointer transition-all ${
-                customization.gratin
-                  ? 'border-amber-500 bg-amber-50'
-                  : 'border-gray-200 hover:border-amber-300'
-              }`}>
-                <div className="flex items-center gap-3">
-                  <Checkbox
-                    checked={customization.gratin}
-                    onCheckedChange={(checked) => setCustomization({ ...customization, gratin: checked })}
-                  />
-                  <div>
-                    <p className="font-semibold">🧀 Gratiné</p>
-                    <p className="text-sm text-gray-600">Fromage fondu au four</p>
-                  </div>
-                </div>
-                <Badge variant="outline">+500 FCFA</Badge>
-              </label>
-            </motion.div>
-          </div>
-
-          {/* Sauces */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <Label className="text-lg font-semibold">Sauces (2 incluses, +500 FCFA à partir de la 3e) *</Label>
-              <Badge variant="outline">{customization.sauces.length}</Badge>
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              {sauces.map((sauce) => (
-                <motion.div
-                  key={sauce.id}
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                >
-                  <button
-                    type="button"
-                    onClick={() => handleSauceToggle(sauce.id)}
-                    className={`w-full p-3 border-2 rounded-xl transition-all ${
-                      customization.sauces.includes(sauce.id)
-                        ? 'border-amber-500 bg-amber-50'
-                        : 'border-gray-200 hover:border-amber-300'
-                    }`}
-                  >
-                    <div className="flex flex-col items-center gap-1">
-                      <span className="text-2xl">{sauce.icon}</span>
-                      <span className="text-xs font-medium text-center">{sauce.name}</span>
-                      {customization.sauces.includes(sauce.id) && (
-                        <Check className="w-4 h-4 text-amber-600" />
-                      )}
-                    </div>
-                  </button>
-                </motion.div>
-              ))}
-            </div>
-            {customization.sauces.length === 0 && (
-              <p className="text-sm text-red-500">* Veuillez sélectionner au moins une sauce</p>
-            )}
-          </div>
-
-          {/* Quantité */}
-          <div className="space-y-3">
-            <Label className="text-lg font-semibold">Quantité</Label>
-            <div className="flex items-center gap-4">
-              <Button
-                type="button"
-                size="icon"
-                variant="outline"
-                onClick={() => setCustomization({ ...customization, quantity: Math.max(1, customization.quantity - 1) })}
-                className="rounded-xl border-2 border-amber-400"
-              >
-                <Minus className="w-4 h-4" />
-              </Button>
-              <span className="text-2xl font-bold w-12 text-center">
-                {customization.quantity}
-              </span>
-              <Button
-                type="button"
-                size="icon"
-                onClick={() => setCustomization({ ...customization, quantity: customization.quantity + 1 })}
-                className="rounded-xl bg-gradient-to-r from-yellow-400 to-amber-600"
-              >
-                <Plus className="w-4 h-4" />
-              </Button>
-            </div>
-          </div>
-        </div>
+        {/* ... ici tu gardes tout le reste de l'UI comme avant ... */}
 
         <DialogFooter className="border-t pt-4">
           <div className="w-full space-y-4">

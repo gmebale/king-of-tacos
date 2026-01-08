@@ -35,6 +35,15 @@ class User {
     return await authService.updateProfile(profileData);
   }
 
+  static async create(userData) {
+    try {
+      const response = await api.post('/users', userData);
+      return response.data;
+    } catch (error) {
+      throw new Error(error.response?.data?.message || 'Erreur de création d\'utilisateur');
+    }
+  }
+
   static isAuthenticated() {
     return authService.isAuthenticated();
   }

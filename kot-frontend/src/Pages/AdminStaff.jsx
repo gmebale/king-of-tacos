@@ -1,12 +1,16 @@
 import React, { useState, useEffect } from "react";
 import { User } from "../Entities/User";
 import { motion } from "framer-motion";
-import { Plus, Search, Shield, User as UserIcon } from "lucide-react";
+import { Plus, Search, Shield, User as UserIcon, Edit, Save, X } from "lucide-react";
 import { Button } from "../Components/ui/button";
 import { Input } from "../Components/ui/input";
 import { Badge } from "../Components/ui/badge";
 import { Card, CardContent } from "../Components/ui/card";
 import { Avatar, AvatarFallback } from "../Components/ui/avatar";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "../Components/ui/dialog";
+import { Label } from "../Components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../Components/ui/select";
+import toast from "react-hot-toast";
 
 export default function AdminStaff() {
   const [users, setUsers] = useState([]);
@@ -55,6 +59,40 @@ export default function AdminStaff() {
   const getInitials = (name) => {
     if (!name) return "?";
     return name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
+  };
+
+  const handleCreateUser = async () => {
+    if (!newUser.email || !newUser.full_name) {
+      toast.error("Email et nom complet sont requis");
+      return;
+    }
+
+    setIsCreating(true);
+    try {
+      await User.create(newUser);
+      toast.success("Utilisateur créé avec succès");
+      setIsCreateDialogOpen(false);
+      setNewUser({
+        email: "",
+        full_name: "",
+        phone: "",
+        role: "client"
+      });
+      loadUsers();
+    } catch (error) {
+      toast.error(error.message);
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  const resetForm = () => {
+    setNewUser({
+      email: "",
+      full_name: "",
+      phone: "",
+      role: "client"
+    });
   };
 
   return (

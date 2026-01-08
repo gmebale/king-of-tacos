@@ -2,17 +2,243 @@ const express = require('express');
 const { PrismaClient } = require('@prisma/client');
 const { authenticateToken, requireRole } = require('../middleware/auth');
 const PDFDocument = require('pdfkit');
+const ExcelJS = require('exceljs');
 
 const router = express.Router();
 const prisma = new PrismaClient();
 
-// Get orders for cashier view (admin only)
+// Utility function to format customization details
+function formatCustomization(customization, productCustomization) {
+  if (!customization || !productCustomization?.isConfigurable) {
+    return { formattedText: '', details: [] };
+  }
+
+  const details = [];
+  let formattedParts = [];
+
+  // Process each option group
+  productCustomization.optionGroups?.forEach(group => {
+    const groupSelections = customization[group.id];
+
+    if (!groupSelections) return;
+
+    if (group.type === 'single') {
+      // Single selection (e.g., size)
+      const selectedOption = group.options.find(opt => opt.id === groupSelections);
+      if (selectedOption) {
+        details.push({
+          groupName: group.name,
+          type: 'single',
+          value: selectedOption.name,
+          priceModifier: selectedOption.priceModifier || 0
+        });
+        formattedParts.push(`${group.name}: ${selectedOption.name}`);
+      }
+    } else if (group.type === 'multiple') {
+      // Multiple selection (e.g., supplements, sauces, meats)
+      if (Array.isArray(groupSelections) && groupSelections.length > 0) {
+        const selectedOptions = group.options.filter(opt => groupSelections.includes(opt.id));
+        if (selectedOptions.length > 0) {
+          const optionNames = selectedOptions.map(opt => opt.name);
+          details.push({
+            groupName: group.name,
+            type: 'multiple',
+            values: optionNames,
+            priceModifiers: selectedOptions.map(opt => opt.priceModifier || 0)
+          });
+          formattedParts.push(`${group.name}: ${optionNames.join(', ')}`);
+        }
+      }
+    }
+  });
+
+  return {
+    formattedText: formattedParts.join(' | '),
+    details: details
+  };
+}
+
+// Get current cash register session
+router.get('/session', authenticateToken, requireRole(['admin']), async (req, res) => {
+  try {
+    const session = await prisma.cashRegisterSession.findFirst({
+      where: { closed_at: null },
+      orderBy: { opened_at: 'desc' }
+    });
+
+    if (!session) {
+      return res.json({ isOpen: false });
+    }
+
+    res.json({
+      isOpen: true,
+      session: {
+        id: session.id,
+        opened_at: session.opened_at,
+        opening_balance: session.opening_balance,
+        current_balance: session.current_balance
+      }
+    });
+  } catch (error) {
+    console.error('Get cash register session error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// Open cash register
+router.post('/session/open', authenticateToken, requireRole(['admin']), async (req, res) => {
+  try {
+    const { opening_balance } = req.body;
+
+    if (opening_balance === undefined || opening_balance < 0) {
+      return res.status(400).json({ message: 'Opening balance is required and must be non-negative' });
+    }
+
+    // Check if there's already an open session
+    const existingSession = await prisma.cashRegisterSession.findFirst({
+      where: { closed_at: null }
+    });
+
+    if (existingSession) {
+      return res.status(400).json({ message: 'A cash register session is already open' });
+    }
+
+    // Check if the last closed session was closed today
+    const lastClosedSession = await prisma.cashRegisterSession.findFirst({
+      where: { closed_at: { not: null } },
+      orderBy: { closed_at: 'desc' }
+    });
+
+    if (lastClosedSession) {
+      const lastClosedDate = new Date(lastClosedSession.closed_at);
+      const today = new Date();
+      const lastClosedDay = lastClosedDate.toDateString();
+      const currentDay = today.toDateString();
+
+      if (lastClosedDay === currentDay) {
+        return res.status(400).json({
+          message: 'La caisse a été fermée aujourd\'hui. Elle ne peut être ouverte que demain.'
+        });
+      }
+    }
+
+    const session = await prisma.cashRegisterSession.create({
+      data: {
+        opening_balance: opening_balance,
+        current_balance: opening_balance
+      }
+    });
+
+    res.json({
+      message: 'Cash register opened successfully',
+      session: {
+        id: session.id,
+        opened_at: session.opened_at,
+        opening_balance: session.opening_balance,
+        current_balance: session.current_balance
+      }
+    });
+  } catch (error) {
+    console.error('Open cash register error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// Close cash register
+router.post('/session/close', authenticateToken, requireRole(['admin']), async (req, res) => {
+  try {
+    const { closing_balance, notes } = req.body;
+
+    if (closing_balance === undefined || closing_balance < 0) {
+      return res.status(400).json({ message: 'Closing balance is required and must be non-negative' });
+    }
+
+    // Get current open session
+    const session = await prisma.cashRegisterSession.findFirst({
+      where: { closed_at: null }
+    });
+
+    if (!session) {
+      return res.status(400).json({ message: 'No open cash register session found' });
+    }
+
+    // Calculate session totals
+    const orders = await prisma.order.findMany({
+      where: {
+        created_date: {
+          gte: session.opened_at
+        },
+        status: {
+          in: ['livree', 'prete']
+        }
+      },
+      include: { items: true }
+    });
+
+    let totalRevenue = 0;
+    const paymentMethods = {
+      cash: 0,
+      card: 0,
+      mobile_money: 0,
+      loyalty_points: 0
+    };
+
+    for (const order of orders) {
+      for (const item of order.items) {
+        const product = await prisma.product.findFirst({
+          where: { name: item.product_name }
+        });
+        if (product) {
+          const itemRevenue = item.quantity * (product.price / 100);
+          totalRevenue += itemRevenue;
+
+          // Count by payment method
+          if (order.payment_method) {
+            paymentMethods[order.payment_method] += itemRevenue;
+          }
+        }
+      }
+    }
+
+    // Update session
+    const updatedSession = await prisma.cashRegisterSession.update({
+      where: { id: session.id },
+      data: {
+        closed_at: new Date(),
+        closing_balance: closing_balance,
+        total_revenue: Math.round(totalRevenue * 100), // Store in centimes
+        cash_payments: Math.round(paymentMethods.cash * 100),
+        card_payments: Math.round(paymentMethods.card * 100),
+        mobile_payments: Math.round(paymentMethods.mobile_money * 100),
+        loyalty_payments: Math.round(paymentMethods.loyalty_points * 100),
+        notes: notes || null
+      }
+    });
+
+    res.json({
+      message: 'Cash register closed successfully',
+      session: updatedSession,
+      summary: {
+        totalRevenue,
+        paymentMethods,
+        expectedBalance: session.opening_balance + totalRevenue,
+        actualBalance: closing_balance,
+        difference: closing_balance - (session.opening_balance + totalRevenue)
+      }
+    });
+  } catch (error) {
+    console.error('Close cash register error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// Get orders for cashier view (admin only) - all initiated orders
 router.get('/orders', authenticateToken, requireRole(['admin']), async (req, res) => {
   try {
     const orders = await prisma.order.findMany({
       where: {
         status: {
-          in: ['prete', 'en_livraison', 'livree']
+          not: 'en_attente' // Exclude only pending orders, show all initiated
         }
       },
       include: {
@@ -23,12 +249,34 @@ router.get('/orders', authenticateToken, requireRole(['admin']), async (req, res
       },
       orderBy: { created_date: 'desc' }
     });
-    // Map delivery_address to customer_address for frontend compatibility
-    const mappedOrders = orders.map(order => ({
-      ...order,
-      customer_address: order.delivery_address
+
+    // Process orders to include formatted customizations
+    const processedOrders = await Promise.all(orders.map(async (order) => {
+      const processedItems = await Promise.all(order.items.map(async (item) => {
+        // Get product customization configuration
+        const product = await prisma.product.findFirst({
+          where: { name: item.product_name },
+          select: { customization: true }
+        });
+
+        // Format customization details
+        const customizationInfo = formatCustomization(item.customization, product?.customization);
+
+        return {
+          ...item,
+          customizationFormatted: customizationInfo.formattedText,
+          customizationDetails: customizationInfo.details
+        };
+      }));
+
+      return {
+        ...order,
+        items: processedItems,
+        customer_address: order.delivery_address // Map for frontend compatibility
+      };
     }));
-    res.json(mappedOrders);
+
+    res.json(processedOrders);
   } catch (error) {
     console.error('Get cashier orders error:', error);
     res.status(500).json({ message: 'Internal server error' });
@@ -200,8 +448,8 @@ router.get('/reports/:period', authenticateToken, requireRole(['admin']), async 
         });
 
         if (product) {
-          const price = product.price / 100; // Convert from centimes to euros
-          const itemRevenue = item.quantity * price;
+          const priceInCFA = product.price / 100; // Convert from centimes to CFA
+          const itemRevenue = item.quantity * priceInCFA;
           totalRevenue += itemRevenue;
 
           if (!productSales[product.id]) {

@@ -8,7 +8,7 @@ export default function CartSummary({ cart, cartTotal, cartCount, onCheckout }) 
     <motion.div
       initial={{ y: 100 }}
       animate={{ y: 0 }}
-      className="fixed bottom-0 left-0 right-0 bg-white border-t-2 border-gray-200 shadow-2xl z-40 md:bottom-4 md:left-auto md:right-4 md:w-96 md:rounded-3xl md:border-2"
+      className="hidden md:fixed md:bottom-4 md:left-auto md:right-4 md:w-96 md:rounded-3xl md:border-2 md:bg-white md:border-t-2 md:border-gray-200 md:shadow-2xl md:z-40"
     >
       <div className="p-6">
         <div className="flex items-center justify-between mb-4">
@@ -30,7 +30,7 @@ export default function CartSummary({ cart, cartTotal, cartCount, onCheckout }) 
 
         <Button
           onClick={onCheckout}
-          className="w-full bg-gradient-to-r from-yellow-400 to-amber-600 hover:from-yellow-500 hover:to-amber-700 text-white py-6 rounded-2xl shadow-lg text-lg font-semibold group"
+          className="w-full bg-gradient-to-r from-yellow-400 to-amber-600 hover:from-yellow-500 hover:to-amber-700 text-white py-6 rounded-2xl shadow-lg text-lg font-semibold group md:border-0 border-2 border-amber-400"
         >
           Voir le panier
           <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
