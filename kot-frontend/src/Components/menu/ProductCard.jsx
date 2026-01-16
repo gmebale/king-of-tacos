@@ -5,18 +5,35 @@ import { Button } from '../ui/button';
 import { Card, CardContent } from '../ui/card';
 import { Badge } from '../ui/badge';
 import CustomizationDialog from './CustomizationDialog';
+import { Product } from '../../Entities/Product';
 
 export default function ProductCard({ product, onAddToCart, cartItem, onUpdateQuantity }) {
   const [showCustomization, setShowCustomization] = useState(false);
+  const [productOptions, setProductOptions] = useState(null);
+  const [loadingOptions, setLoadingOptions] = useState(false);
   const quantity = cartItem?.quantity || 0;
   const hasDiscount = product.discount_percentage > 0;
   const finalPrice = hasDiscount
     ? (product.price / 100) * (1 - product.discount_percentage / 100)
     : (product.price / 100);
 
-  const handleAddClick = () => {
-    if (product.customization?.isConfigurable) {
-      setShowCustomization(true);
+  // Check if product is configurable based on category
+  const isConfigurable = ['tacos', 'burritos', 'burger'].includes(product.category?.name);
+
+  const handleAddClick = async () => {
+    if (isConfigurable) {
+      setLoadingOptions(true);
+      try {
+        const options = await Product.getOptions(product.id);
+        setProductOptions(options);
+        setShowCustomization(true);
+      } catch (error) {
+        console.error('Error loading options:', error);
+        // Fallback to adding without customization
+        onAddToCart(product);
+      } finally {
+        setLoadingOptions(false);
+      }
     } else {
       onAddToCart(product);
     }
@@ -109,7 +126,7 @@ export default function ProductCard({ product, onAddToCart, cartItem, onUpdateQu
                   className="bg-gradient-to-r from-yellow-400 to-amber-600 hover:from-yellow-500 hover:to-amber-700 text-white rounded-xl shadow-lg"
                 >
                   <Plus className="w-4 h-4 mr-1" />
-                  {product.category === "tacos" ? "Personnaliser" : "Ajouter"}
+                  {isConfigurable ? "Composer" : "Ajouter"}
                 </Button>
               ) : (
                 <div className="flex items-center gap-2">
@@ -138,11 +155,12 @@ export default function ProductCard({ product, onAddToCart, cartItem, onUpdateQu
         </Card>
       </motion.div>
 
-      {product.customization?.isConfigurable && (
+      {isConfigurable && productOptions && (
         <CustomizationDialog
           open={showCustomization}
           onOpenChange={setShowCustomization}
           product={product}
+          optionGroups={productOptions.optionGroups}
           onConfirm={handleCustomizationConfirm}
         />
       )}

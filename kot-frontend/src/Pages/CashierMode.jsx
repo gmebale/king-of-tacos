@@ -38,6 +38,7 @@ export default function CashierMode() {
   const [openingBalance, setOpeningBalance] = useState('');
   const [closingBalance, setClosingBalance] = useState('');
   const [closingNotes, setClosingNotes] = useState('');
+  const [isDownloadingReport, setIsDownloadingReport] = useState(false);
 
   useEffect(() => {
     loadOrders();
@@ -65,6 +66,29 @@ export default function CashierMode() {
     }
   };
 
+  const downloadReport = async () => {
+    setIsDownloadingReport(true);
+    try {
+      const response = await api.get(`/cashier/reports/${selectedPeriod}/pdf`, {
+        responseType: 'blob'
+      });
+
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `rapport-ventes-${selectedPeriod}-${format(new Date(), 'yyyy-MM-dd-HH-mm')}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error downloading report:', error);
+      alert('Impossible de générer le rapport PDF.');
+    } finally {
+      setIsDownloadingReport(false);
+    }
+  };
+
   const generateInvoice = async (orderId) => {
     try {
       const response = await api.get(`/cashier/invoice/${orderId}`, {
@@ -87,10 +111,86 @@ export default function CashierMode() {
 
   const markAsDelivered = async (orderId) => {
     try {
+      // Use backend deliver endpoint
       await api.put(`/cashier/orders/${orderId}/deliver`);
-      await loadOrders(); // Refresh orders
+      await loadOrders(); // Reload orders to reflect the change
+      // Refresh cash register to show updated balance after cash collection
+      await loadCashRegisterSession();
     } catch (error) {
       console.error('Error marking order as delivered:', error);
+    }
+  };
+
+  const loadCashRegisterSession = async () => {
+    try {
+      const response = await api.get('/cashier/session');
+      setCashRegisterSession(response.data);
+    } catch (error) {
+      console.error('Error loading cash register session:', error);
+      setCashRegisterSession({ isOpen: false });
+    }
+  };
+
+  const openCashRegister = async () => {
+    if (!openingBalance || openingBalance < 0) {
+      alert('Veuillez entrer un solde d\'ouverture valide');
+      return;
+    }
+
+    setIsOpeningRegister(true);
+    try {
+      await api.post('/cashier/session/open', { opening_balance: parseInt(openingBalance) });
+      await loadCashRegisterSession();
+      setOpeningBalance('');
+    } catch (error) {
+      console.error('Error opening cash register:', error);
+      alert('Erreur lors de l\'ouverture de la caisse');
+    } finally {
+      setIsOpeningRegister(false);
+    }
+  };
+
+  const closeCashRegister = async () => {
+    if (!closingBalance) {
+      alert('Veuillez entrer le solde de clôture');
+      return;
+    }
+
+    setIsClosingRegister(true);
+    try {
+      const closeResponse = await api.post('/cashier/session/close', {
+        closing_balance: parseInt(closingBalance),
+        notes: closingNotes
+      });
+      // Télécharger automatiquement le rapport PDF de fermeture
+      const sessionId = closeResponse?.data?.session?.id;
+      if (sessionId) {
+        try {
+          const pdfResponse = await api.get('/cashier/session/close-report', {
+            params: { sessionId },
+            responseType: 'blob'
+          });
+          const url = window.URL.createObjectURL(new Blob([pdfResponse.data]));
+          const link = document.createElement('a');
+          link.href = url;
+          link.setAttribute('download', `fermeture-caisse-${sessionId}.pdf`);
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+          window.URL.revokeObjectURL(url);
+        } catch (pdfError) {
+          console.error('Error downloading close report:', pdfError);
+          alert('Clôture effectuée mais le rapport PDF n’a pas pu être téléchargé.');
+        }
+      }
+      await loadCashRegisterSession();
+      setClosingBalance('');
+      setClosingNotes('');
+    } catch (error) {
+      console.error('Error closing cash register:', error);
+      alert('Erreur lors de la fermeture de la caisse');
+    } finally {
+      setIsClosingRegister(false);
     }
   };
 
@@ -100,64 +200,6 @@ export default function CashierMode() {
       case 'en_livraison': return 'bg-blue-100 text-blue-800 border-blue-200';
       case 'livree': return 'bg-green-100 text-green-800 border-green-200';
       default: return 'bg-gray-100 text-gray-800 border-gray-200';
-    }
-  };
-
-  const loadCashRegisterSession = async () => {
-    try {
-      const response = await api.get('/cashier/session');
-      setCashRegisterSession(response.data);
-    } catch (error) {
-      console.error('Erreur lors du chargement de la session caisse:', error);
-      setCashRegisterSession({ isOpen: false });
-    }
-  };
-
-  const openCashRegister = async () => {
-    if (!openingBalance || parseFloat(openingBalance) < 0) {
-      alert('Veuillez entrer un solde d\'ouverture valide');
-      return;
-    }
-
-    setIsOpeningRegister(true);
-    try {
-      const response = await api.post('/cashier/session/open', {
-        opening_balance: parseFloat(openingBalance)
-      });
-      setCashRegisterSession({ isOpen: true, session: response.data.session });
-      setOpeningBalance('');
-      alert('Caisse ouverte avec succès !');
-    } catch (error) {
-      console.error('Erreur lors de l\'ouverture de la caisse:', error);
-      alert('Erreur lors de l\'ouverture de la caisse');
-    } finally {
-      setIsOpeningRegister(false);
-    }
-  };
-
-  const closeCashRegister = async () => {
-    if (!closingBalance || parseFloat(closingBalance) < 0) {
-      alert('Veuillez entrer un solde de clôture valide');
-      return;
-    }
-
-    setIsClosingRegister(true);
-    try {
-      const response = await api.post('/cashier/session/close', {
-        closing_balance: parseFloat(closingBalance),
-        notes: closingNotes
-      });
-      setCashRegisterSession({ isOpen: false });
-      setClosingBalance('');
-      setClosingNotes('');
-      alert('Caisse fermée avec succès !');
-      // Actualiser les rapports pour afficher les données mises à jour
-      loadReports(selectedPeriod);
-    } catch (error) {
-      console.error('Erreur lors de la fermeture de la caisse:', error);
-      alert('Erreur lors de la fermeture de la caisse');
-    } finally {
-      setIsClosingRegister(false);
     }
   };
 
@@ -424,13 +466,14 @@ export default function CashierMode() {
                   Top Produits
                 </div>
                 <Button
-                  onClick={() => window.print()}
+                  onClick={downloadReport}
                   variant="outline"
                   size="sm"
+                  disabled={isDownloadingReport}
                   className="flex items-center gap-2"
                 >
                   <Download className="w-4 h-4" />
-                  Imprimer Rapport
+                  {isDownloadingReport ? 'Génération...' : 'Imprimer Rapport'}
                 </Button>
               </CardTitle>
             </CardHeader>
@@ -466,6 +509,7 @@ export default function CashierMode() {
 // Order Card Component
 function OrderCard({ order, onGenerateInvoice, onMarkDelivered, getStatusColor, getStatusText }) {
   const total = order.total_amount; 
+  const displayCode = order.order_code || `KOT-${order.id?.slice(-6) || ''}`;
 
   return (
     <motion.div
@@ -477,7 +521,7 @@ function OrderCard({ order, onGenerateInvoice, onMarkDelivered, getStatusColor, 
     >
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
-          <h3 className="font-semibold text-gray-900">#{order.id.slice(-6)}</h3>
+          <h3 className="font-semibold text-gray-900">#{displayCode}</h3>
           <Badge className={`${getStatusColor(order.status)} border`}>
             {getStatusText(order.status)}
           </Badge>

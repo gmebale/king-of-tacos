@@ -126,11 +126,13 @@ export default function EditOrderDialog({ order, isOpen, onClose, onSave }) {
     return sum + (product ? product.price * item.quantity : 0);
   }, 0);
 
+  const displayCode = order?.order_code || `KOT-${order?.id?.slice(-6) || ''}`;
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Modifier la commande #{order?.id.slice(-6)}</DialogTitle>
+          <DialogTitle>Modifier la commande #{displayCode}</DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-6">

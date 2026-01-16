@@ -253,7 +253,7 @@ export default function Login() {
 1. **Créer un projet** : https://console.cloud.google.com/
 2. **Activer Google+ API** : APIs & Services > Library > Google+ API
 3. **Créer credentials OAuth 2.0** :
-   - Type : Web Application
+   - Type : Web Application 
    - URI de redirection : `http://localhost:5000/api/auth/google/callback`
 4. **Récupérer** : Client ID et Client Secret
 

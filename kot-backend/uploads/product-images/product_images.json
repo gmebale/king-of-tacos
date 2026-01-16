@@ -1,0 +1,10 @@
+{
+  "description": "Fichier listant les images des produits clients. Les images sont stockées dans ce dossier.",
+  "images": {
+    "tacos": "tacos.jpg",
+    "burrito": "burrito.jpg",
+    "farita": "farita.jpg",
+    "burger": "burger.jpg"
+  },
+  "usage": "Utilisez le champ 'image' dans la table products pour pointer vers ces fichiers, ex: '/uploads/product-images/tacos.jpg'"
+}

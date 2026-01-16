@@ -240,6 +240,7 @@ export default function KitchenMode() {
 // Order Card Component
 function OrderCard({ order, onUpdateStatus, updatingOrder, getNextStatus, getNextStatusText, getStatusColor, getStatusIcon, getStatusText }) {
   const nextStatus = getNextStatus(order.status);
+  const displayCode = order.order_code || `KOT-${order.id?.slice(-6) || ''}`;
 
   return (
     <motion.div
@@ -252,7 +253,7 @@ function OrderCard({ order, onUpdateStatus, updatingOrder, getNextStatus, getNex
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg font-semibold text-gray-900">
-            #{order.id.slice(-6)}
+            #{displayCode}
           </CardTitle>
           <Badge className={`${getStatusColor(order.status)} border`}>
             {getStatusIcon(order.status)}
@@ -279,9 +280,9 @@ function OrderCard({ order, onUpdateStatus, updatingOrder, getNextStatus, getNex
                   {item.quantity}x {item.product_name}
                 </span>
               </div>
-              {item.customization && formatCustomization(item.customization) && (
+              {item.customizationSummary && (
                 <div className="text-xs text-gray-500 mt-1 ml-4">
-                  {formatCustomization(item.customization)}
+                  {item.customizationSummary}
                 </div>
               )}
             </div>

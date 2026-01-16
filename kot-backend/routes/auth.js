@@ -1,4 +1,7 @@
 const express = require('express');
+const passport = require('passport');
+const GoogleStrategy = require('passport-google-oauth20').Strategy;
+const appleSignin = require('apple-signin-auth');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { PrismaClient } = require('@prisma/client');
@@ -6,6 +9,128 @@ const { authenticateToken } = require('../middleware/auth');
 
 const router = express.Router();
 const prisma = new PrismaClient();
+
+// Configuration Passport Google Strategy
+passport.use(new GoogleStrategy({
+  clientID: process.env.GOOGLE_CLIENT_ID,
+  clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+  callbackURL: process.env.GOOGLE_REDIRECT_URI
+},
+async (accessToken, refreshToken, profile, done) => {
+  try {
+    // Recherche ou création d'utilisateur
+    let user = await prisma.user.findUnique({
+      where: { google_id: profile.id }
+    });
+
+    if (!user) {
+      // Vérifier si l'email existe déjà
+      const existingUser = await prisma.user.findUnique({
+        where: { email: profile.emails[0].value }
+      });
+
+      if (existingUser) {
+        // Lier le compte Google existant
+        user = await prisma.user.update({
+          where: { id: existingUser.id },
+          data: { google_id: profile.id }
+        });
+      } else {
+        // Créer nouveau utilisateur
+        user = await prisma.user.create({
+          data: {
+            google_id: profile.id,
+            email: profile.emails[0].value,
+            full_name: profile.displayName,
+            password: null
+          }
+        });
+      }
+    }
+    return done(null, user);
+  } catch (error) {
+    return done(error, null);
+  }
+}));
+
+// Routes Google OAuth
+router.get('/google',
+  passport.authenticate('google', { scope: ['profile', 'email'] })
+);
+
+router.get('/google/callback',
+  passport.authenticate('google', { session: false, failureRedirect: '/login' }),
+  (req, res) => {
+    // Génération token JWT
+    const token = jwt.sign(
+      { userId: req.user.id, email: req.user.email },
+      process.env.JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+    // Redirection avec token
+    res.redirect(`${process.env.FRONTEND_URL}/login?token=${token}`);
+  }
+);
+
+// Route Sign in with Apple
+router.post('/apple', async (req, res) => {
+  try {
+    const { identityToken, authorizationCode } = req.body;
+
+    // Vérifier le token Apple
+    const appleUser = await appleSignin.verifyIdToken(identityToken, {
+      audience: process.env.APPLE_CLIENT_ID,
+      ignoreExpiration: true, // Pour développement
+    });
+
+    // Recherche ou création utilisateur
+    let user = await prisma.user.findUnique({
+      where: { apple_id: appleUser.sub }
+    });
+
+    if (!user) {
+      const existingUser = await prisma.user.findUnique({
+        where: { email: appleUser.email }
+      });
+
+      if (existingUser) {
+        user = await prisma.user.update({
+          where: { id: existingUser.id },
+          data: { apple_id: appleUser.sub }
+        });
+      } else {
+        user = await prisma.user.create({
+          data: {
+            apple_id: appleUser.sub,
+            email: appleUser.email,
+            full_name: appleUser.email.split('@')[0], // Nom temporaire
+            password: null
+          }
+        });
+      }
+    }
+
+    // Générer token JWT
+    const token = jwt.sign(
+      { userId: user.id, email: user.email },
+      process.env.JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+
+    res.json({
+      token,
+      user: {
+        id: user.id,
+        email: user.email,
+        full_name: user.full_name,
+        role: user.role
+      }
+    });
+  } catch (error) {
+    console.error('Apple auth error:', error);
+    res.status(500).json({ message: 'Erreur authentification Apple' });
+  }
+});
 
 // Register
 router.post('/register', async (req, res) => {

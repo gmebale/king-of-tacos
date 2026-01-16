@@ -175,7 +175,7 @@ router.delete('/admin/rewards/:id', authenticateToken, requireRole(['admin']), a
   try {
     const { id } = req.params;
 
-    await prisma.LoyaltyReward.delete({
+    await prisma.loyaltyReward.delete({
       where: { id }
     });
 
@@ -280,6 +280,15 @@ router.get('/admin/redemptions', authenticateToken, requireRole(['admin']), asyn
 
 // Promo codes management
 
+// Helper: convert euro string/number to integer cents (null-safe)
+const toCents = (value) => {
+  if (value === undefined || value === null || value === '') return null;
+  const num = typeof value === 'string' ? value.replace(',', '.') : value;
+  const parsed = parseFloat(num);
+  if (Number.isNaN(parsed)) return null;
+  return Math.round(parsed * 100);
+};
+
 // Get all promo codes (admin only)
 router.get('/admin/promos', authenticateToken, requireRole(['admin']), async (req, res) => {
   try {
@@ -299,19 +308,33 @@ router.post('/admin/promos', authenticateToken, requireRole(['admin']), async (r
   try {
     const { code, description, type, value, min_order_amount, max_uses, expires_at } = req.body;
 
-    if (!code || !type || !value) {
-      return res.status(400).json({ message: 'Code, type, and value are required' });
+    if (!code || !type) {
+      return res.status(400).json({ message: 'Code and type are required' });
     }
+
+    if (type !== 'free_delivery' && (value === undefined || value === null || value === '')) {
+      return res.status(400).json({ message: 'Value is required for this promo type' });
+    }
+
+    const normalizedValue =
+      type === 'percentage'
+        ? parseInt(value)
+        : type === 'free_delivery'
+          ? 0
+          : toCents(value);
+
+    const normalizedMinAmount = toCents(min_order_amount);
 
     const promo = await prisma.promoCode.create({
       data: {
         code: code.toUpperCase(),
         description,
         type,
-        value: parseInt(value),
-        min_order_amount: min_order_amount ? parseInt(min_order_amount) : null,
+        value: normalizedValue,
+        min_order_amount: normalizedMinAmount,
         max_uses: max_uses ? parseInt(max_uses) : null,
-        expires_at: expires_at ? new Date(expires_at) : null
+        expires_at: expires_at ? new Date(expires_at) : null,
+        is_active: req.body.is_active !== undefined ? req.body.is_active : true
       }
     });
 
@@ -331,14 +354,26 @@ router.put('/admin/promos/:id', authenticateToken, requireRole(['admin']), async
     const { id } = req.params;
     const { code, description, type, value, min_order_amount, max_uses, is_active, expires_at } = req.body;
 
+    const normalizedValue =
+      type === 'percentage'
+        ? (value !== undefined && value !== null && value !== '' ? parseInt(value) : undefined)
+        : type === 'free_delivery'
+          ? 0
+          : (value !== undefined && value !== null && value !== '' ? toCents(value) : undefined);
+
+    const normalizedMinAmount =
+      min_order_amount !== undefined && min_order_amount !== null && min_order_amount !== ''
+        ? toCents(min_order_amount)
+        : undefined;
+
     const promo = await prisma.promoCode.update({
       where: { id },
       data: {
         code: code ? code.toUpperCase() : undefined,
         description,
         type,
-        value: value ? parseInt(value) : undefined,
-        min_order_amount: min_order_amount ? parseInt(min_order_amount) : null,
+        value: normalizedValue,
+        min_order_amount: normalizedMinAmount,
         max_uses: max_uses ? parseInt(max_uses) : null,
         is_active,
         expires_at: expires_at ? new Date(expires_at) : null

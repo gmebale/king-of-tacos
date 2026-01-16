@@ -1,0 +1,14 @@
+{
+    email you@example.com
+}
+
+your-domain.com {
+    encode gzip
+
+    handle_path /api/* {
+        reverse_proxy api:5000
+    }
+
+    reverse_proxy web:80
+}
+

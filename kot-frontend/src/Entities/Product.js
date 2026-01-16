@@ -30,7 +30,17 @@ class Product {
   }
 
   static async delete(id) {
-    await api.delete(`/products/${id}`);
+    const response = await api.delete(`/products/${id}`);
+    return response.data;
+  }
+
+  static async getOptions(productId) {
+    try {
+      const response = await api.get(`/products/${productId}/options`);
+      return response.data;
+    } catch (error) {
+      throw new Error(error.response?.data?.message || 'Erreur de récupération des options');
+    }
   }
 }
 

@@ -68,7 +68,7 @@ export default function RecentOrdersWidget({ orders, isLoading }) {
               >
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
-                    <p className="font-semibold">#{order.id.slice(-6)}</p>
+                    <p className="font-semibold">#{order.order_code || `KOT-${order.id?.slice(-6) || ''}`}</p>
                     <Badge className={`border ${getStatusColor(order.status)}`}>
                       {getStatusLabel(order.status)}
                     </Badge>

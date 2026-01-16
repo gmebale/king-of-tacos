@@ -255,9 +255,9 @@ export default function Checkout() {
                   <div key={`${item.product.id}-${JSON.stringify(item.customization)}`} className="flex justify-between text-sm">
                     <div className="flex-1">
                       <span>{item.quantity}x {item.product.name}</span>
-                      {(item.customization) && formatCustomization(item.customization, item.customizationConfig || item.product?.customization) && (
+                      {item.customizationSummary && (
                         <div className="text-xs text-gray-500 mt-1">
-                          {formatCustomization(item.customization, item.customizationConfig || item.product?.customization)}
+                          {item.customizationSummary}
                         </div>
                       )}
                     </div>

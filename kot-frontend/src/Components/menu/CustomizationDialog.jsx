@@ -1,5 +1,4 @@
-import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useState, useEffect, useCallback } from 'react';
 import { X, Plus, Minus, Check } from 'lucide-react';
 import { Button } from '../ui/button.jsx';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog.jsx';
@@ -7,25 +6,64 @@ import { RadioGroup, RadioGroupItem } from '../ui/radio-group.jsx';
 import { Checkbox } from '../ui/checkbox.jsx';
 import { Label } from '../ui/label.jsx';
 import { Badge } from '../ui/badge.jsx';
-import { formatCustomization } from '../../utils/customization.js';
 
-export default function CustomizationDialog({ open, onOpenChange, product, onConfirm }) {
+export default function CustomizationDialog({ open, onOpenChange, product, optionGroups, onConfirm }) {
   const [selections, setSelections] = useState({});
   const [quantity, setQuantity] = useState(1);
   const [totalPrice, setTotalPrice] = useState(product.price);
 
-  const customization = product.customization || { isConfigurable: false };
+  // Use optionGroups from props, or fallback to product.customization.optionGroups
+  const effectiveOptionGroups = optionGroups || product.customization?.optionGroups || [];
+
+  const customization = { isConfigurable: true, optionGroups: effectiveOptionGroups };
+
+  const calculatePrice = useCallback((currentSelections) => {
+    if (!effectiveOptionGroups || effectiveOptionGroups.length === 0) {
+      setTotalPrice(product.price);
+      return;
+    }
+
+    let price = product.price;
+
+    effectiveOptionGroups.forEach(group => {
+      const groupSelections = currentSelections[group.id];
+
+      if (group.type === 'single' && groupSelections) {
+        const selectedOption = group.options.find(opt => opt.id === groupSelections);
+        if (selectedOption) {
+          const optionPrice = selectedOption.priceModifier !== undefined ? selectedOption.priceModifier : selectedOption.price;
+          if (group.priceBehavior === 'replace') {
+            // Replace base price with product.price + modifier (for sizes)
+            price = product.price + optionPrice;
+          } else {
+            // Add to price (default behavior)
+            price += optionPrice;
+          }
+        }
+      } else if (group.type === 'multiple' && Array.isArray(groupSelections)) {
+        groupSelections.forEach(optionId => {
+          const option = group.options.find(opt => opt.id === optionId);
+          if (option) {
+            const optionPrice = option.priceModifier !== undefined ? option.priceModifier : option.price;
+            price += optionPrice;
+          }
+        });
+      }
+    });
+
+    setTotalPrice(price);
+  }, [effectiveOptionGroups, product.price]);
 
   useEffect(() => {
-    if (open && customization.isConfigurable) {
+    if (open && optionGroups) {
       // Initialize selections with defaults
       const initialSelections = {};
-      customization.optionGroups?.forEach(group => {
+      optionGroups.forEach(group => {
         if (group.type === 'single') {
-          // Find default option or first option
-          const defaultOption = group.options.find(opt => opt.default) || group.options[0];
-          if (defaultOption) {
-            initialSelections[group.id] = defaultOption.id;
+          // Find first option as default
+          const firstOption = group.options[0];
+          if (firstOption) {
+            initialSelections[group.id] = firstOption.id;
           }
         } else {
           // Multiple selection - initialize empty array
@@ -35,57 +73,7 @@ export default function CustomizationDialog({ open, onOpenChange, product, onCon
       setSelections(initialSelections);
       calculatePrice(initialSelections);
     }
-  }, [open, customization]);
-
-  const calculatePrice = (currentSelections) => {
-    if (!customization.isConfigurable) {
-      setTotalPrice(product.price);
-      return;
-    }
-
-    let price = customization.basePrice || product.price;
-
-    customization.optionGroups?.forEach(group => {
-      const groupSelections = currentSelections[group.id];
-
-      if (group.type === 'single' && groupSelections) {
-        const selectedOption = group.options.find(opt => opt.id === groupSelections);
-        if (selectedOption) {
-          price += selectedOption.priceModifier || 0;
-        }
-      } else if (group.type === 'multiple' && Array.isArray(groupSelections)) {
-        let selectedCount = groupSelections.length;
-
-        // Handle included count and extra pricing
-        if (group.includedCount && group.extraPrice) {
-          const extraCount = Math.max(0, selectedCount - group.includedCount);
-          const includedOptions = groupSelections.slice(0, group.includedCount);
-          const extraOptions = groupSelections.slice(group.includedCount);
-
-          // Add price modifiers for all selected options
-          groupSelections.forEach(optionId => {
-            const option = group.options.find(opt => opt.id === optionId);
-            if (option) {
-              price += option.priceModifier || 0;
-            }
-          });
-
-          // Add extra price for options beyond included count
-          price += extraCount * (group.extraPrice || 0);
-        } else {
-          // Simple multiple selection
-          groupSelections.forEach(optionId => {
-            const option = group.options.find(opt => opt.id === optionId);
-            if (option) {
-              price += option.priceModifier || 0;
-            }
-          });
-        }
-      }
-    });
-
-    setTotalPrice(price);
-  };
+  }, [open, optionGroups, calculatePrice]);
 
   const handleSelectionChange = (groupId, optionId, checked = null) => {
     const newSelections = { ...selections };
@@ -120,14 +108,14 @@ export default function CustomizationDialog({ open, onOpenChange, product, onCon
         }
       }
 
-      // Apply min/max constraints
-      if (group.minSelections && newSelections[groupId].length < group.minSelections) {
-        // Don't allow below minimum
+      // Apply constraints
+      if (group.required && newSelections[groupId].length === 0) {
+        // Don't allow empty if required
         return;
       }
-      if (group.maxSelections && newSelections[groupId].length > group.maxSelections) {
-        // Don't allow above maximum
-        return;
+      if (group.maxQuantity && newSelections[groupId].length > group.maxQuantity) {
+        // Don't allow more than max
+        newSelections[groupId] = newSelections[groupId].slice(0, group.maxQuantity);
       }
     }
 
@@ -136,16 +124,16 @@ export default function CustomizationDialog({ open, onOpenChange, product, onCon
   };
 
   const isValidSelection = () => {
-    if (!customization.isConfigurable) return true;
+    if (!effectiveOptionGroups || effectiveOptionGroups.length === 0) return true;
 
-    return customization.optionGroups?.every(group => {
+    return effectiveOptionGroups.every(group => {
       if (!group.required) return true;
 
       if (group.type === 'single') {
         return selections[group.id];
       } else {
         const selected = selections[group.id] || [];
-        return selected.length >= (group.minSelections || 1);
+        return selected.length > 0;
       }
     });
   };
@@ -153,26 +141,30 @@ export default function CustomizationDialog({ open, onOpenChange, product, onCon
   const handleConfirm = () => {
     if (!isValidSelection()) return;
 
-    const customizationSummary = formatCustomization(selections, product.customization);
+    // Create customization summary
+    const customizationSummary = effectiveOptionGroups.map(group => {
+      const selected = selections[group.id];
+      if (group.type === 'single' && selected) {
+        const option = group.options.find(opt => opt.id === selected);
+        return `${group.name}: ${option?.name || selected}`;
+      } else if (group.type === 'multiple' && selected?.length > 0) {
+        const optionNames = selected.map(id => group.options.find(opt => opt.id === id)?.name || id);
+        return `${group.name}: ${optionNames.join(', ')}`;
+      }
+      return null;
+    }).filter(Boolean).join(' | ');
 
-    // Créer l'objet pour le panier
-    const cartItem = {
-      product: {
-        id: product.id,
-        name: product.name,
-        price: product.price,
-        displayPrice: totalPrice,
-        image_url: product.image
-      },
-      quantity,
+    // Créer l'objet produit personnalisé pour le panier
+    const customizedProduct = {
+      ...product,
       customization: selections,
-      customizationConfig: product.customization,
+      customizationConfig: { optionGroups },
       customizationSummary,
-      subtotal: totalPrice * quantity
+      displayPrice: totalPrice
     };
 
     // Ajouter au panier
-    onConfirm(cartItem);
+    onConfirm(customizedProduct, quantity);
     onOpenChange(false);
   };
 
@@ -265,7 +257,7 @@ export default function CustomizationDialog({ open, onOpenChange, product, onCon
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-full sm:max-w-2xl max-h-[90vh] overflow-y-auto mx-4">
         <DialogHeader>
           <DialogTitle className="flex items-center justify-between">
             <span>Personnaliser {product.name}</span>

@@ -1,6 +1,42 @@
 import api from './api.service';
 
 class AuthService {
+
+  async googleLogin(token) {
+    try {
+      if (token) {
+        localStorage.setItem('auth_token', token);
+        // Dispatch event pour notifier changement état auth
+        window.dispatchEvent(new CustomEvent('auth-change'));
+        // Récupérer infos utilisateur après stockage token
+        const user = await this.me();
+        return user;
+      }
+      throw new Error('No token provided');
+    } catch (error) {
+      throw new Error(error.response?.data?.message || 'Erreur connexion Google');
+    }
+  }
+  async appleLogin(identityToken, authorizationCode) {
+    try {
+      const response = await api.post('/auth/apple', {
+        identityToken,
+        authorizationCode
+      });
+      const { token, user } = response.data;
+
+      if (token) {
+        localStorage.setItem('auth_token', token);
+        window.dispatchEvent(new CustomEvent('auth-change'));
+      }
+
+      return user;
+    } catch (error) {
+      throw new Error(error.response?.data?.message || 'Erreur connexion Apple');
+    }
+  }
+
+
   async login(credentials) {
     try {
       const response = await api.post('/auth/login', credentials);

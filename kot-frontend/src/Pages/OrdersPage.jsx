@@ -89,11 +89,10 @@ export default function OrdersPage() {
     }
   };
 
-  const submitReview = async (orderId, productId) => {
+  const submitReview = async (orderId) => {
     try {
-      await api.post('/orders/review', {
-        order_id: orderId,
-        product_id: productId,
+      await api.post('/reviews', {
+        orderId,
         rating: reviewRating,
         comment: reviewText
       });
@@ -350,7 +349,7 @@ export default function OrdersPage() {
             </div>
             <div className="flex gap-2">
               <Button
-                onClick={() => submitReview(selectedOrder.id, selectedOrder.items[0]?.product_id)}
+                onClick={() => submitReview(selectedOrder.id)}
                 className="flex-1"
               >
                 <MessageSquare className="w-4 h-4 mr-2" />
@@ -394,6 +393,7 @@ function OrderCard({
   showCancel
 }) {
   const total = order.items.reduce((sum, item) => sum + (item.quantity * item.price), 0);
+  const displayCode = order.order_code || `KOT-${order.id?.slice(-6) || ''}`;
 
   return (
     <motion.div
@@ -405,7 +405,7 @@ function OrderCard({
     >
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
-          <h3 className="font-semibold text-gray-900">#{order.id.slice(-6)}</h3>
+          <h3 className="font-semibold text-gray-900">#{displayCode}</h3>
           <Badge className={`${getStatusColor(order.status)} border flex items-center gap-1`}>
             {getStatusIcon(order.status)}
             {getStatusText(order.status)}
@@ -439,9 +439,9 @@ function OrderCard({
               <div className="flex-1">
                 <p className="font-medium text-sm">{item.product_name}</p>
                 <p className="text-xs text-gray-600">Quantité: {item.quantity}</p>
-                {item.customization && formatCustomization(item.customization) && (
+                {item.customizationSummary && (
                   <p className="text-xs text-gray-500 mt-1 ml-4">
-                    {formatCustomization(item.customization)}
+                    {item.customizationSummary}
                   </p>
                 )}
               </div>

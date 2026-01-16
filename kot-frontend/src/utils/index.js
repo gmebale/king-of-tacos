@@ -28,7 +28,8 @@ export function createPageUrl(pageName) {
     AdminStock: '/admin/stock',
     AdminStaff: '/admin/staff',
     AdminLoyalty: '/admin/loyalty',
-    AdminSettings: '/admin/settings'
+    AdminSettings: '/admin/settings',
+    AdminReviews: '/admin/reviews'
   };
 
   return routes[pageName] || '/';

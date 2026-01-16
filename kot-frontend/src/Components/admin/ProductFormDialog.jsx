@@ -15,7 +15,7 @@ import { Switch } from "../ui/switch";
 import { UploadFile } from "../../integrations/Core";
 import { Upload, X, Image as ImageIcon, Loader2 } from "lucide-react";
 import { Card } from "../ui/card";
-import { CATEGORIES, CATEGORY_LABELS } from "../../utils/constants";
+import { Product } from "../../Entities/Product";
 
 export default function ProductFormDialog({ open, onOpenChange, product, onSave }) {
   const [formData, setFormData] = useState({
@@ -23,14 +23,19 @@ export default function ProductFormDialog({ open, onOpenChange, product, onSave 
     description: "",
     price: 0,
     discount_percentage: 0,
-    category: "tacos",
+    category: "",
     image: "",
     stock: 0,
     stock_alert_threshold: 10,
     available: true
   });
+  const [categories, setCategories] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [imagePreview, setImagePreview] = useState(null);
+
+  useEffect(() => {
+    loadCategories();
+  }, []);
 
   useEffect(() => {
     if (product) {
@@ -42,7 +47,7 @@ export default function ProductFormDialog({ open, onOpenChange, product, onSave 
         description: "",
         price: 0,
         discount_percentage: 0,
-        category: "tacos",
+        category: categories.length > 0 ? categories[0].name : "",
         image: "",
         stock: 0,
         stock_alert_threshold: 5,
@@ -50,7 +55,16 @@ export default function ProductFormDialog({ open, onOpenChange, product, onSave 
       });
       setImagePreview(null);
     }
-  }, [product, open]);
+  }, [product, open, categories]);
+
+  const loadCategories = async () => {
+    try {
+      const data = await Product.getCategories();
+      setCategories(data);
+    } catch (err) {
+      console.error('Error loading categories:', err);
+    }
+  };
 
   const handleImageUpload = async (e) => {
     const file = e.target.files[0];
@@ -154,13 +168,12 @@ export default function ProductFormDialog({ open, onOpenChange, product, onSave 
                 <SelectTrigger  className={`transition-all ${
                   formData.category ? "bg-amber-50 border-amber-300 text-amber-800" : "text-gray-500"
                 }`}>
-                  <SelectValue placeholder="Sélectionner une catégorie" displayValue={CATEGORY_LABELS[formData.category]} />
-
+                  <SelectValue placeholder="Sélectionner une catégorie" />
                 </SelectTrigger>
                 <SelectContent className={formData.category ? "bg-amber-50 border-amber-300" : ""}>
-                  {CATEGORIES.map((category) => (
-                    <SelectItem key={category.value} value={category.value}>
-                      {category.label}
+                  {categories.map((category) => (
+                    <SelectItem key={category.id} value={category.name}>
+                      {category.displayName || category.name}
                     </SelectItem>
                   ))}
                 </SelectContent>

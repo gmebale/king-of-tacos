@@ -18,7 +18,8 @@ import {
   Star,
   Menu as MenuIcon,
   X,
-  TrendingUp
+  TrendingUp,
+  MessageSquare
 } from "lucide-react";
 import { Button } from "./Components/ui/button";
 import { motion } from "framer-motion";
@@ -70,6 +71,7 @@ export default function Layout({ children, currentPageName }) {
     { name: "Stock", path: "AdminStock", icon: Package },
     { name: "Personnel", path: "AdminStaff", icon: Users },
     { name: "Fidélité", path: "AdminLoyalty", icon: Star },
+    { name: "Avis", path: "AdminReviews", icon: MessageSquare },
     { name: "Paramètres", path: "AdminSettings", icon: Settings }
   ];
 
@@ -85,7 +87,7 @@ export default function Layout({ children, currentPageName }) {
         `}</style>
 
         {/* Sidebar */}
-        <aside className={`fixed lg:static lg:top-0 top-16 left-0 h-full transition-transform duration-300 ease-in-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 lg:flex lg:flex-col w-64 bg-gradient-to-b from-gray-900 to-black text-white border-r border-gray-800 z-[60]`}>
+        <aside className={`fixed lg:static lg:top-0 top-16 left-0 bottom-0 transition-transform duration-300 ease-in-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 flex flex-col w-64 bg-gradient-to-b from-gray-900 to-black text-white border-r border-gray-800 z-[60]`}>
           <div className="p-6 border-b border-gray-800">
             <Link to={createPageUrl("Home")} className="flex items-center gap-3">
               <div className="w-10 h-10 bg-gradient-to-br from-yellow-400 to-amber-600 rounded-xl flex items-center justify-center">
@@ -98,7 +100,7 @@ export default function Layout({ children, currentPageName }) {
             </Link>
           </div>
 
-          <nav className="flex-1 p-4 space-y-1">
+          <nav className="flex-1 overflow-y-auto p-4 space-y-1">
             {adminNavItems.map((item) => {
               const isActive = location.pathname === createPageUrl(item.path);
               return (

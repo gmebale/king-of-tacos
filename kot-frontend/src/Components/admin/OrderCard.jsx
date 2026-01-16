@@ -53,6 +53,8 @@ export default function OrderCard({ order, onUpdateStatus }) {
     return labels[currentStatus];
   };
 
+  const displayCode = order.order_code || `KOT-${order.id?.slice(-6) || ''}`;
+
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.95 }}
@@ -64,7 +66,7 @@ export default function OrderCard({ order, onUpdateStatus }) {
           <div className="flex justify-between items-start">
             <div>
               <h3 className="text-xl font-bold mb-1">
-                Commande #{order.id.slice(-6)}
+                Commande #{displayCode}
               </h3>
               <div className="flex items-center gap-2 text-sm text-gray-600">
                 <Clock className="w-4 h-4" />
@@ -127,9 +129,9 @@ export default function OrderCard({ order, onUpdateStatus }) {
                       {item.subtotal?.toLocaleString()} FCFA
                     </span>
                   </div>
-                  {item.customization && formatCustomization(item.customization) && (
+                  {item.customizationSummary && (
                     <div className="text-xs text-gray-500 mt-1 ml-4">
-                      {formatCustomization(item.customization)}
+                      {item.customizationSummary}
                     </div>
                   )}
                 </div>

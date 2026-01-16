@@ -6,6 +6,7 @@ import { Button } from "../Components/ui/button";
 import { Input } from "../Components/ui/input";
 import { Badge } from "../Components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "../Components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../Components/ui/select";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "../utils";
 
@@ -40,9 +41,9 @@ export default function Menu() {
         Product.list(),
         Product.getCategories()
       ]);
-      setProducts(productsData.filter(p => p.available && p.category?.name !== "options"));
-      // Filter out "options" category from the menu
-      setCategories(categoriesData.filter(cat => cat.name !== "options"));
+      setProducts(productsData.filter(p => p.available && p.category?.name !== "options" && p.category?.name !== "supp" && p.category?.name !== "viande" && p.category?.name !== "sauces" && p.category?.name !== "goûts"));
+      // Filter out "options", "Suppléments", and "Viande" categories from the menu
+      setCategories(categoriesData.filter(cat => cat.name !== "options" && cat.name !== "supp" && cat.name !== "viande" && cat.name !== "sauces" && cat.name !== "goûts"));
     } catch (err) {
       setError('Erreur de chargement des produits. Vérifiez la connexion au serveur.');
       console.error('Error loading products:', err);
@@ -165,22 +166,42 @@ export default function Menu() {
             />
           </div>
 
-          <Tabs value={category} onValueChange={setCategory}>
-            <TabsList className="bg-white border-2 border-gray-200">
-              <TabsTrigger value="all" className="rounded-xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-yellow-400 data-[state=active]:to-amber-500 data-[state=active]:text-white">
-                Tous
-              </TabsTrigger>
-              {categories.map(cat => (
-                <TabsTrigger 
-                  key={cat.id}
-                  value={cat.name} 
-                  className="rounded-xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-yellow-400 data-[state=active]:to-amber-500 data-[state=active]:text-white"
-                >
-                  {cat.displayName || cat.name}
+          {/* Category Filter - Desktop */}
+          <div className="hidden md:block">
+            <Tabs value={category} onValueChange={setCategory}>
+              <TabsList className="bg-white border-2 border-gray-200 flex-wrap h-auto p-1">
+                <TabsTrigger value="all" className="rounded-xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-yellow-400 data-[state=active]:to-amber-500 data-[state=active]:text-white px-4 py-2">
+                  Tous
                 </TabsTrigger>
-              ))}
-            </TabsList>
-          </Tabs>
+                {categories.map(cat => (
+                  <TabsTrigger 
+                    key={cat.id}
+                    value={cat.name} 
+                    className="rounded-xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-yellow-400 data-[state=active]:to-amber-500 data-[state=active]:text-white px-4 py-2"
+                  >
+                    {cat.displayName || cat.name}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </Tabs>
+          </div>
+
+          {/* Category Filter - Mobile */}
+          <div className="md:hidden">
+            <Select value={category} onValueChange={setCategory}>
+              <SelectTrigger className="w-full h-12 rounded-2xl border-2 focus:border-amber-400 bg-white">
+                <SelectValue placeholder="Sélectionner une catégorie" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tous</SelectItem>
+                {categories.map(cat => (
+                  <SelectItem key={cat.id} value={cat.name}>
+                    {cat.displayName || cat.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
         {/* Products Grid */}

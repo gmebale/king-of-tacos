@@ -22,7 +22,7 @@ async function main() {
     }
   });
 
-  // Create regular user
+  /* Create regular user
   const user = await prisma.user.upsert({
     where: { email: 'user@test.com' },
     update: {},
@@ -33,15 +33,15 @@ async function main() {
       phone: '0987654321',
       role: 'client'
     }
-  });
+  }); */
 
   console.log('Test users created:');
   console.log('Admin: admin@test.com / password123');
-  console.log('User: user@test.com / password123');
+  //console.log('User: user@test.com / password123');
 
-  console.log('Seeding products...');
+  //console.log('Seeding products...');
 
-  // French Tacos - Configurable
+  /* French Tacos - Configurable
   const frenchTacos = await prisma.product.upsert({
     where: { id: 1 },
     update: {},
@@ -142,9 +142,9 @@ async function main() {
         ]
       }
     }
-  });
+  }); */
 
-  // Burger Classique - Configurable
+  /* Burger Classique - Configurable
   const burgerClassique = await prisma.product.upsert({
     where: { id: 2 },
     update: {},
@@ -199,9 +199,9 @@ async function main() {
         ]
       }
     }
-  });
+  }); */
 
-  // Menu Maxi Best Of - Configurable
+  /* Menu Maxi Best Of - Configurable
   const menuMaxi = await prisma.product.upsert({
     where: { id: 3 },
     update: {},
@@ -253,9 +253,9 @@ async function main() {
         ]
       }
     }
-  });
+  }); */
 
-  // Produits simples
+  /* Produits simples
   const frites = await prisma.product.upsert({
     where: { id: 4 },
     update: {},
@@ -269,7 +269,7 @@ async function main() {
       stock: 200,
       customization: { isConfigurable: false }
     }
-  });
+  }); 
 
   const coca = await prisma.product.upsert({
     where: { id: 5 },
@@ -284,7 +284,7 @@ async function main() {
       stock: 150,
       customization: { isConfigurable: false }
     }
-  });
+  }); 
 
   const tiramisu = await prisma.product.upsert({
     where: { id: 6 },
@@ -302,7 +302,7 @@ async function main() {
   });
 
   console.log('Products seeded successfully');
-}
+} */
 
 main()
   .catch((e) => {
@@ -311,4 +311,5 @@ main()
   })
   .finally(async () => {
     await prisma.$disconnect();
-  });
+  })  
+};

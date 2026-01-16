@@ -1,9 +1,27 @@
 const { PrismaClient } = require('@prisma/client');
+const bcrypt = require('bcryptjs');
 
 const prisma = new PrismaClient();
 
 async function main() {
   console.log('Seeding database with categories, products, and customizations...');
+
+  // Hash password for test users
+    const hashedPassword = await bcrypt.hash('password123', 10);
+  
+    // Create admin user
+    const admin = await prisma.user.upsert({
+      where: { email: 'admin@test.com' },
+      update: {},
+      create: {
+        email: 'admin@test.com',
+        password: hashedPassword,
+        full_name: 'Admin Test',
+        phone: '0123456789',
+        role: 'admin'
+      }
+    });
+  
 
   // Catégories
   const categories = [
@@ -183,6 +201,7 @@ async function main() {
     // Et ainsi de suite pour les autres burritos, en ajoutant viandes, sauces, etc.
     // Pour brièveté, je n'ai pas répété pour tous, mais le pattern est le même
   ];
+
 
   for (const po of productOptions) {
     if (!po.optionProductId) {

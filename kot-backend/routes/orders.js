@@ -1,9 +1,75 @@
 const express = require('express');
 const { PrismaClient } = require('@prisma/client');
 const { authenticateToken, requireRole } = require('../middleware/auth');
+const { format } = require('date-fns');
 
 const router = express.Router();
 const prisma = new PrismaClient();
+
+// Utility function to format customization details
+function formatCustomization(customization, productCustomization) {
+  if (!customization || !productCustomization?.isConfigurable) {
+    return { formattedText: '', details: [] };
+  }
+
+  const details = [];
+  let formattedParts = [];
+
+  // Process each option group
+  productCustomization.optionGroups?.forEach(group => {
+    const groupSelections = customization[group.id];
+
+    if (!groupSelections) return;
+
+    if (group.type === 'single') {
+      // Single selection (e.g., size)
+      const selectedOption = group.options.find(opt => opt.id === groupSelections);
+      if (selectedOption) {
+        details.push({
+          groupName: group.name,
+          type: 'single',
+          value: selectedOption.name,
+          priceModifier: selectedOption.priceModifier || 0
+        });
+        formattedParts.push(`${group.name}: ${selectedOption.name}`);
+      }
+    } else if (group.type === 'multiple') {
+      // Multiple selection (e.g., supplements, sauces, meats)
+      if (Array.isArray(groupSelections) && groupSelections.length > 0) {
+        const selectedOptions = group.options.filter(opt => groupSelections.includes(opt.id));
+        if (selectedOptions.length > 0) {
+          const optionNames = selectedOptions.map(opt => opt.name);
+          details.push({
+            groupName: group.name,
+            type: 'multiple',
+            values: optionNames,
+            priceModifiers: selectedOptions.map(opt => opt.priceModifier || 0)
+          });
+          formattedParts.push(`${group.name}: ${optionNames.join(', ')}`);
+        }
+      }
+    }
+  });
+
+  return {
+    formattedText: formattedParts.join(' | '),
+    details: details
+  };
+}
+
+async function generateOrderCode() {
+  const today = new Date();
+  const datePart = format(today, 'yyMMdd');
+
+  const sequence = await prisma.orderCodeSequence.upsert({
+    where: { date: datePart },
+    update: { counter: { increment: 1 } },
+    create: { date: datePart, counter: 1 }
+  });
+
+  const paddedCounter = String(sequence.counter).padStart(4, '0');
+  return `KOT-${datePart}-${paddedCounter}`;
+}
 
 // Get all orders (admin/staff only)
 router.get('/', authenticateToken, requireRole(['admin', 'staff']), async (req, res) => {
@@ -26,6 +92,14 @@ router.get('/', authenticateToken, requireRole(['admin', 'staff']), async (req, 
           select: { customization: true }
         });
         item.productCustomization = product?.customization || null;
+        
+        // Generate customization summary
+        if (item.customization && product?.customization) {
+          const customizationInfo = formatCustomization(item.customization, product.customization);
+          item.customizationSummary = customizationInfo.formattedText;
+        } else {
+          item.customizationSummary = '';
+        }
       }
     }
 
@@ -55,6 +129,14 @@ router.get('/my-orders', authenticateToken, async (req, res) => {
           select: { customization: true }
         });
         item.productCustomization = product?.customization || null;
+        
+        // Generate customization summary
+        if (item.customization && product?.customization) {
+          const customizationInfo = formatCustomization(item.customization, product.customization);
+          item.customizationSummary = customizationInfo.formattedText;
+        } else {
+          item.customizationSummary = '';
+        }
       }
     }
 
@@ -107,7 +189,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
 // Create order (allows guest orders)
 router.post('/', async (req, res) => {
   try {
-    const { items, total_amount, customer_name, customer_phone, customer_email, order_type, delivery_address, pickup_time, notes } = req.body;
+    const { items, total_amount, customer_name, customer_phone, customer_email, order_type, delivery_address, pickup_time, notes, pay_on_delivery } = req.body;
 
     console.log('Received order data:', { items, total_amount, customer_name });
 
@@ -131,6 +213,20 @@ router.post('/', async (req, res) => {
       }
     }
 
+    // Validate cash/on-delivery only for allowed order types
+    const cashAllowedTypes = ['livraison', 'emporter', 'pickup', 'sur_place'];
+    if (pay_on_delivery && !cashAllowedTypes.includes(order_type)) {
+      return res.status(400).json({ message: 'Le paiement en espèce est disponible pour livraison, pickup ou sur place.' });
+    }
+
+    // Prepare notes with optional pay-on-delivery tag
+    const combinedNotes = [];
+    if (notes) combinedNotes.push(notes);
+    if (pay_on_delivery) combinedNotes.push('Paiement à la livraison');
+    const finalNotes = combinedNotes.length > 0 ? combinedNotes.join(' | ') : null;
+
+    const orderCode = await generateOrderCode();
+
     // Create order
     const order = await prisma.order.create({
       data: {
@@ -142,13 +238,17 @@ router.post('/', async (req, res) => {
         order_type,
         delivery_address,
         pickup_time,
-        notes,
+        notes: finalNotes,
+        order_code: orderCode,
+        payment_method: pay_on_delivery ? 'cash' : null,
+        payment_status: 'pending',
         items: {
           create: items.map(item => ({
             product_name: item.product_name,
             quantity: parseInt(item.quantity),
             price: parseInt(item.price),
-            customization: item.customization || null
+            customization: item.customization || null,
+            customizationSummary: item.customizationSummary || null
           }))
         }
       },

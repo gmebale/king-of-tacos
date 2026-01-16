@@ -6,8 +6,8 @@ generator client {
 }
 
 datasource db {
-  provider = "mysql"
-  url      = env("DATABASE_URL")
+  provider     = "mysql"
+  url          = env("DATABASE_URL")
   relationMode = "prisma"
 }
 
@@ -31,6 +31,16 @@ enum PaymentMethod {
   card
   mobile_money
   loyalty_points
+  paypal
+  stripe
+}
+
+enum PaymentStatus {
+  pending
+  requires_action
+  paid
+  failed
+  refunded
 }
 
 enum Category {
@@ -44,8 +54,8 @@ enum Category {
 }
 
 model CategoryModel {
-  id          Int     @id @default(autoincrement())
-  name        String  @unique
+  id          Int       @id @default(autoincrement())
+  name        String    @unique
   displayName String
   products    Product[]
 
@@ -53,79 +63,99 @@ model CategoryModel {
 }
 
 model User {
-  id             Int      @id @default(autoincrement())
-  email          String   @unique
+  id             Int     @id @default(autoincrement())
+  email          String  @unique
   password       String?
+  google_id      String? @unique
+  apple_id       String? @unique
   full_name      String
   phone          String?
-  role           Role     @default(client)
-  loyalty_points Int      @default(0)
+  role           Role    @default(client)
+  loyalty_points Int     @default(0)
+  is_active      Boolean @default(true)
 
-  created_at     DateTime @default(now())
-  updated_at     DateTime @updatedAt
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
 
-  orders         Order[]
-  loyaltyRedemptions   LoyaltyRedemption[]
+  orders             Order[]
+  loyaltyRedemptions LoyaltyRedemption[]
+  reviews            Review[]
 
   @@map("users")
 }
 
 model Product {
-  id                   Int         @id @default(autoincrement())
-  name                 String
-  description          String?
-  price                Int         // Prix en centimes
-  discount_percentage  Int         @default(0)
-  categoryId           Int
-  category             CategoryModel? @relation(fields: [categoryId], references: [id])
-  available            Boolean     @default(true)
-  image                String?
-  stock                Int         @default(0)  // Quantité en stock
-  stock_alert_threshold Int        @default(10) // Seuil d'alerte stock
-  type                 String?     // Type du produit (main, size, meat, sauce, extra, side)
-  customization        Json?       // Configuration des options de personnalisation
-  created_at           DateTime    @default(now())
-  updated_at           DateTime    @updatedAt
+  id                    Int            @id @default(autoincrement())
+  name                  String
+  description           String?
+  price                 Int // Prix en centimes
+  discount_percentage   Int            @default(0)
+  categoryId            Int
+  category              CategoryModel? @relation(fields: [categoryId], references: [id])
+  available             Boolean        @default(true)
+  image                 String?
+  stock                 Int            @default(0) // Quantité en stock
+  stock_alert_threshold Int            @default(10) // Seuil d'alerte stock
+  type                  String? // Type du produit (main, size, meat, sauce, extra, side)
+  customization         Json? // Configuration des options de personnalisation
+  created_at            DateTime       @default(now())
+  updated_at            DateTime       @updatedAt
 
   // Relations pour options
-  optionFor            ProductOption[] @relation("optionProducts")
-  options              ProductOption[] @relation("productOptions")
+  optionFor ProductOption[] @relation("optionProducts")
+  options   ProductOption[] @relation("productOptions")
 
   @@map("products")
 }
 
 model Order {
-  id                String        @id @default(cuid())
-  user_id           Int?
-  user              User?         @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  total_amount      Int           // Montant total en centimes
-  status            OrderStatus   @default(en_attente)
-  payment_method    PaymentMethod?
-  created_date      DateTime      @default(now())
-  updated_at        DateTime      @updatedAt
+  id                  String         @id @default(cuid())
+  order_code          String?        @unique
+  user_id             Int?
+  user                User?          @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  total_amount        Int // Montant total en centimes
+  status              OrderStatus    @default(en_attente)
+  payment_method      PaymentMethod?
+  payment_status      PaymentStatus  @default(pending)
+  payment_provider_id String?
+  payment_receipt_url String?
+  created_date        DateTime       @default(now())
+  updated_at          DateTime       @updatedAt
 
   // Order details
-  customer_name     String?
-  customer_phone    String?
-  customer_email    String?
-  order_type        String?       // emporter, sur_place, livraison
-  delivery_address  String?
-  pickup_time       String?
-  notes             String?
+  customer_name    String?
+  customer_phone   String?
+  customer_email   String?
+  order_type       String? // emporter, sur_place, livraison
+  delivery_address String?
+  pickup_time      String?
+  notes            String?
 
-  items             OrderItem[]
+  items   OrderItem[]
+  reviews Review[]
 
   @@map("orders")
 }
 
+model OrderCodeSequence {
+  id         Int      @id @default(autoincrement())
+  date       String   @unique
+  counter    Int      @default(0)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@map("order_code_sequences")
+}
+
 model OrderItem {
-  id            Int     @id @default(autoincrement())
-  order_id      String
-  order         Order   @relation(fields: [order_id], references: [id], onDelete: Cascade)
-  product_name  String
-  quantity      Int
-  price         Int     // Prix unitaire en centimes
-  customization Json?   // Détails de personnalisation du produit
+  id                   Int     @id @default(autoincrement())
+  order_id             String
+  order                Order   @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  product_name         String
+  quantity             Int
+  price                Int // Prix unitaire en centimes
+  customization        Json? // Détails de personnalisation du produit
+  customizationSummary String? // Résumé textuel des personnalisations
 
   @@map("order_items")
 }
@@ -138,28 +168,28 @@ enum RewardType {
 }
 
 model LoyaltyReward {
-  id              String      @id @default(cuid())
+  id              String     @id @default(cuid())
   name            String
   description     String?
   type            RewardType
   points_required Int
-  is_active       Boolean     @default(true)
-  created_at      DateTime    @default(now())
-  updated_at      DateTime    @updatedAt
+  is_active       Boolean    @default(true)
+  created_at      DateTime   @default(now())
+  updated_at      DateTime   @updatedAt
 
-  redemptions     LoyaltyRedemption[]
+  redemptions LoyaltyRedemption[]
 
   @@map("loyalty_rewards")
 }
 
 model LoyaltyRedemption {
-  id          String      @id @default(cuid())
+  id          String        @id @default(cuid())
   user_id     Int
-  user        User        @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  user        User          @relation(fields: [user_id], references: [id], onDelete: Cascade)
   reward_id   String
   reward      LoyaltyReward @relation(fields: [reward_id], references: [id], onDelete: Cascade)
   points_used Int
-  created_at  DateTime    @default(now())
+  created_at  DateTime      @default(now())
 
   @@map("loyalty_redemptions")
 }
@@ -171,48 +201,89 @@ enum PromoType {
 }
 
 model PromoCode {
-  id              String    @id @default(cuid())
-  code            String    @unique
-  description     String?
-  type            PromoType
-  value           Int       // Pourcentage ou montant fixe en centimes
-  min_order_amount Int?     // Montant minimum de commande en centimes
-  max_uses        Int?      // Nombre maximum d'utilisations
-  used_count      Int       @default(0)
-  is_active       Boolean   @default(true)
-  expires_at      DateTime?
-  created_at      DateTime  @default(now())
-  updated_at      DateTime  @updatedAt
+  id               String    @id @default(cuid())
+  code             String    @unique
+  description      String?
+  type             PromoType
+  value            Int // Pourcentage ou montant fixe en centimes
+  min_order_amount Int? // Montant minimum de commande en centimes
+  max_uses         Int? // Nombre maximum d'utilisations
+  used_count       Int       @default(0)
+  is_active        Boolean   @default(true)
+  expires_at       DateTime?
+  created_at       DateTime  @default(now())
+  updated_at       DateTime  @updatedAt
 
   @@map("promo_codes")
 }
 
+enum ReviewStatus {
+  pending
+  published
+  hidden
+}
+
+model Review {
+  id         String       @id @default(cuid())
+  order_id   String
+  order      Order        @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  user_id    Int
+  user       User         @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  rating     Int
+  comment    String
+  status     ReviewStatus @default(pending)
+  created_at DateTime     @default(now())
+  updated_at DateTime     @updatedAt
+
+  @@map("reviews")
+}
+
 model CashRegisterSession {
-  id                Int      @id @default(autoincrement())
-  opened_at         DateTime @default(now())
-  closed_at         DateTime?
-  opening_balance   Int      // Solde d'ouverture en centimes
-  closing_balance   Int?     // Solde de clôture en centimes
-  current_balance   Int      // Solde actuel en centimes
-  total_revenue     Int?     // Revenus totaux en centimes
-  cash_payments     Int?     // Paiements en espèces en centimes
-  card_payments     Int?     // Paiements par carte en centimes
-  mobile_payments   Int?     // Paiements mobile money en centimes
-  loyalty_payments  Int?     // Paiements points fidélité en centimes
-  notes             String?
+  id               Int       @id @default(autoincrement())
+  opened_at        DateTime  @default(now())
+  closed_at        DateTime?
+  opening_balance  Int // Solde d'ouverture en centimes
+  closing_balance  Int? // Solde de clôture en centimes
+  current_balance  Int // Solde actuel en centimes
+  total_revenue    Int? // Revenus totaux en centimes
+  cash_payments    Int? // Paiements en espèces en centimes
+  card_payments    Int? // Paiements par carte en centimes
+  mobile_payments  Int? // Paiements mobile money en centimes
+  loyalty_payments Int? // Paiements points fidélité en centimes
+  notes            String?
 
   @@map("cash_register_sessions")
 }
 
 model ProductOption {
-  id               Int     @id @default(autoincrement())
-  productId        Int
-  product          Product @relation("productOptions", fields: [productId], references: [id])
-  optionProductId  Int
-  optionProduct    Product @relation("optionProducts", fields: [optionProductId], references: [id])
-  required         Boolean @default(false)
-  maxQuantity      Int?
-  optionType       String  // e.g. "size", "meat", "sauce", "extra", "side"
+  id              Int     @id @default(autoincrement())
+  productId       Int
+  product         Product @relation("productOptions", fields: [productId], references: [id], onDelete: Cascade)
+  optionProductId Int
+  optionProduct   Product @relation("optionProducts", fields: [optionProductId], references: [id], onDelete: Cascade)
+  required        Boolean @default(false)
+  maxQuantity     Int?
+  optionType      String // e.g. "size", "meat", "sauce", "extra", "side"
 
   @@map("product_options")
+}
+
+model Settings {
+  id    Int    @id @default(autoincrement())
+  key   String @unique
+  value String
+
+  @@map("settings")
+}
+
+model ProductCustomizationRule {
+  id            Int    @id @default(autoincrement())
+  productId     Int // Produit principal (ex: tacos, burrito)
+  sizeOptionId  Int? // Option de taille (ex: Solo) - NULL si règle générale
+  optionType    String // 'meat', 'sauce', 'extra', 'goût'
+  maxQuantity   Int
+  includedCount Int    @default(0) // Nombre inclus gratuit (ex: 2 sauces)
+  extraPrice    Int    @default(0) // Prix supplémentaire par unité
+
+  @@map("product_customization_rules")
 }

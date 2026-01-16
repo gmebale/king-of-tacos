@@ -22,6 +22,7 @@ import AdminFinance from './Pages/AdminFinance';
 import KitchenMode from './Pages/KitchenMode';
 import CashierMode from './Pages/CashierMode';
 import AdminLoyalty from './Pages/AdminLoyalty';
+import AdminReviews from './Pages/AdminReviews';
 
 function App() {
   return (
@@ -46,6 +47,7 @@ function App() {
           <Route path="/admin/cashier" element={<ProtectedRoute requiredRoles={['admin']}><Layout currentPageName="CashierMode"><CashierMode /></Layout></ProtectedRoute>} />
           <Route path="/admin/loyalty" element={<ProtectedRoute requiredRoles={['admin']}><Layout currentPageName="AdminLoyalty"><AdminLoyalty /></Layout></ProtectedRoute>} />
           <Route path="/admin/settings" element={<ProtectedRoute requiredRoles={['admin']}><Layout currentPageName="AdminSettings"><AdminSettings /></Layout></ProtectedRoute>} />
+          <Route path="/admin/reviews" element={<ProtectedRoute requiredRoles={['admin']}><Layout currentPageName="AdminReviews"><AdminReviews /></Layout></ProtectedRoute>} />
           <Route path="/login" element={<Layout currentPageName="Auth"><Login /></Layout>} />
           <Route path="/register" element={<Layout currentPageName="Auth"><Register /></Layout>} />
         </Routes>

@@ -5,7 +5,7 @@ import { Input } from '../Components/ui/input';
 import { Label } from '../Components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../Components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../Components/ui/tabs';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../Components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../Components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../Components/ui/table';
 import { Badge } from '../Components/ui/badge';
 import { Textarea } from '../Components/ui/textarea';
@@ -18,7 +18,6 @@ import {
   Trash2,
   Award,
   Users,
-  Gift,
   Tag,
   Calendar,
   DollarSign,
@@ -38,7 +37,6 @@ export default function AdminLoyalty() {
   const [selectedReward, setSelectedReward] = useState('');
   const [showRewardDialog, setShowRewardDialog] = useState(false);
   const [showPromoDialog, setShowPromoDialog] = useState(false);
-  const [showAssignDialog, setShowAssignDialog] = useState(false);
   const [editingReward, setEditingReward] = useState(null);
   const [editingPromo, setEditingPromo] = useState(null);
 
@@ -47,7 +45,8 @@ export default function AdminLoyalty() {
     name: '',
     description: '',
     type: 'free_delivery',
-    points_required: ''
+    points_required: '',
+    is_active: true
   });
 
   // Promo form
@@ -58,7 +57,8 @@ export default function AdminLoyalty() {
     value: '',
     min_order_amount: '',
     max_uses: '',
-    expires_at: ''
+    expires_at: '',
+    is_active: true
   });
 
   useEffect(() => {
@@ -88,7 +88,8 @@ export default function AdminLoyalty() {
 
   const handleCreateReward = async () => {
     try {
-      await api.post('/loyalty/admin/rewards', rewardForm);
+      const payload = { ...rewardForm };
+      await api.post('/loyalty/admin/rewards', payload);
       toast.success('Récompense créée avec succès');
       setShowRewardDialog(false);
       resetRewardForm();
@@ -101,7 +102,8 @@ export default function AdminLoyalty() {
 
   const handleUpdateReward = async () => {
     try {
-      await api.put(`/loyalty/admin/rewards/${editingReward.id}`, rewardForm);
+      const payload = { ...rewardForm };
+      await api.put(`/loyalty/admin/rewards/${editingReward.id}`, payload);
       toast.success('Récompense mise à jour avec succès');
       setShowRewardDialog(false);
       setEditingReward(null);
@@ -146,7 +148,12 @@ export default function AdminLoyalty() {
 
   const handleCreatePromo = async () => {
     try {
-      await api.post('/loyalty/admin/promos', promoForm);
+      const payload = {
+        ...promoForm,
+        value: promoForm.type === 'free_delivery' ? 0 : promoForm.value,
+        min_order_amount: promoForm.min_order_amount
+      };
+      await api.post('/loyalty/admin/promos', payload);
       toast.success('Code promo créé avec succès');
       setShowPromoDialog(false);
       resetPromoForm();
@@ -159,7 +166,12 @@ export default function AdminLoyalty() {
 
   const handleUpdatePromo = async () => {
     try {
-      await api.put(`/loyalty/admin/promos/${editingPromo.id}`, promoForm);
+      const payload = {
+        ...promoForm,
+        value: promoForm.type === 'free_delivery' ? 0 : promoForm.value,
+        min_order_amount: promoForm.min_order_amount
+      };
+      await api.put(`/loyalty/admin/promos/${editingPromo.id}`, payload);
       toast.success('Code promo mis à jour avec succès');
       setShowPromoDialog(false);
       setEditingPromo(null);
@@ -189,7 +201,8 @@ export default function AdminLoyalty() {
       name: '',
       description: '',
       type: 'free_delivery',
-      points_required: ''
+      points_required: '',
+      is_active: true
     });
   };
 
@@ -201,7 +214,8 @@ export default function AdminLoyalty() {
       value: '',
       min_order_amount: '',
       max_uses: '',
-      expires_at: ''
+      expires_at: '',
+      is_active: true
     });
   };
 
@@ -211,7 +225,8 @@ export default function AdminLoyalty() {
       name: reward.name,
       description: reward.description || '',
       type: reward.type,
-      points_required: reward.points_required.toString()
+      points_required: reward.points_required.toString(),
+      is_active: reward.is_active
     });
     setShowRewardDialog(true);
   };
@@ -222,10 +237,11 @@ export default function AdminLoyalty() {
       code: promo.code,
       description: promo.description || '',
       type: promo.type,
-      value: promo.value.toString(),
-      min_order_amount: promo.min_order_amount?.toString() || '',
+      value: promo.type === 'fixed_amount' ? (promo.value / 100).toString() : promo.value.toString(),
+      min_order_amount: promo.min_order_amount ? (promo.min_order_amount / 100).toString() : '',
       max_uses: promo.max_uses?.toString() || '',
-      expires_at: promo.expires_at ? new Date(promo.expires_at).toISOString().split('T')[0] : ''
+      expires_at: promo.expires_at ? new Date(promo.expires_at).toISOString().split('T')[0] : '',
+      is_active: promo.is_active
     });
     setShowPromoDialog(true);
   };
@@ -249,6 +265,12 @@ export default function AdminLoyalty() {
     return labels[type] || type;
   };
 
+  const stats = {
+    users: users.length,
+    activePromos: promos.filter(p => p.is_active).length,
+    redemptions: redemptions.length
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -264,6 +286,27 @@ export default function AdminLoyalty() {
           <h1 className="text-3xl font-bold text-gray-900">Gestion Fidélité</h1>
           <p className="text-gray-600">Gérez les récompenses et codes promo</p>
         </div>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardDescription>Utilisateurs</CardDescription>
+            <CardTitle className="text-3xl">{stats.users}</CardTitle>
+          </CardHeader>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardDescription>Promos actives</CardDescription>
+            <CardTitle className="text-3xl">{stats.activePromos}</CardTitle>
+          </CardHeader>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardDescription>Échanges cumulés</CardDescription>
+            <CardTitle className="text-3xl">{stats.redemptions}</CardTitle>
+          </CardHeader>
+        </Card>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
@@ -294,13 +337,14 @@ export default function AdminLoyalty() {
                   <CardTitle>Récompenses de Fidélité</CardTitle>
                   <CardDescription>Gérez les récompenses disponibles pour les utilisateurs</CardDescription>
                 </div>
+                <Button
+                  onClick={() => { resetRewardForm(); setEditingReward(null); setShowRewardDialog(true); }}
+                  className="bg-amber-500 hover:bg-amber-600 text-white"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Nouvelle Récompense
+                </Button>
                 <Dialog open={showRewardDialog} onOpenChange={setShowRewardDialog}>
-                  <DialogTrigger asChild>
-                    <Button onClick={() => { resetRewardForm(); setEditingReward(null); }}>
-                      <Plus className="w-4 h-4 mr-2" />
-                      Nouvelle Récompense
-                    </Button>
-                  </DialogTrigger>
                   <DialogContent>
                     <DialogHeader>
                       <DialogTitle>{editingReward ? 'Modifier la Récompense' : 'Nouvelle Récompense'}</DialogTitle>
@@ -350,6 +394,16 @@ export default function AdminLoyalty() {
                           onChange={(e) => setRewardForm({...rewardForm, points_required: e.target.value})}
                           placeholder="100"
                         />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <input
+                          id="reward-active"
+                          type="checkbox"
+                          className="h-4 w-4"
+                          checked={rewardForm.is_active}
+                          onChange={(e) => setRewardForm({ ...rewardForm, is_active: e.target.checked })}
+                        />
+                        <Label htmlFor="reward-active">Activer la récompense</Label>
                       </div>
                     </div>
                     <DialogFooter>
@@ -493,14 +547,15 @@ export default function AdminLoyalty() {
                   <CardTitle>Codes Promo</CardTitle>
                   <CardDescription>Gérez les codes promotionnels</CardDescription>
                 </div>
+                <Button
+                  onClick={() => { resetPromoForm(); setEditingPromo(null); setShowPromoDialog(true); }}
+                  className="bg-amber-500 hover:bg-amber-600 text-white"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Créer un code
+                </Button>
                 <Dialog open={showPromoDialog} onOpenChange={setShowPromoDialog}>
-                  <DialogTrigger asChild>
-                    <Button onClick={() => { resetPromoForm(); setEditingPromo(null); }}>
-                      <Plus className="w-4 h-4 mr-2" />
-                      Nouveau Code
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="max-w-md">
+                  <DialogContent className="w-[95vw] sm:max-w-2xl max-h-[85vh] overflow-auto">
                     <DialogHeader>
                       <DialogTitle>{editingPromo ? 'Modifier le Code Promo' : 'Nouveau Code Promo'}</DialogTitle>
                       <DialogDescription>
@@ -508,77 +563,98 @@ export default function AdminLoyalty() {
                       </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4">
-                      <div>
-                        <Label htmlFor="code">Code</Label>
-                        <Input
-                          id="code"
-                          value={promoForm.code}
-                          onChange={(e) => setPromoForm({...promoForm, code: e.target.value.toUpperCase()})}
-                          placeholder="WELCOME10"
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="promo-description">Description</Label>
-                        <Textarea
-                          id="promo-description"
-                          value={promoForm.description}
-                          onChange={(e) => setPromoForm({...promoForm, description: e.target.value})}
-                          placeholder="Description du code promo"
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="promo-type">Type</Label>
-                        <Select value={promoForm.type} onValueChange={(value) => setPromoForm({...promoForm, type: value})}>
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="percentage">Pourcentage (%)</SelectItem>
-                            <SelectItem value="fixed_amount">Montant fixe (€)</SelectItem>
-                            <SelectItem value="free_delivery">Livraison gratuite</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      {promoForm.type !== 'free_delivery' && (
-                        <div>
-                          <Label htmlFor="value">Valeur {promoForm.type === 'percentage' ? '(%)' : '(€)'}</Label>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="md:col-span-1">
+                          <Label htmlFor="code">Code</Label>
                           <Input
-                            id="value"
-                            type="number"
-                            value={promoForm.value}
-                            onChange={(e) => setPromoForm({...promoForm, value: e.target.value})}
-                            placeholder={promoForm.type === 'percentage' ? '10' : '5.00'}
+                            id="code"
+                            value={promoForm.code}
+                            onChange={(e) => setPromoForm({...promoForm, code: e.target.value.toUpperCase()})}
+                            placeholder="WELCOME10"
                           />
                         </div>
-                      )}
-                      <div>
-                        <Label htmlFor="min-order">Montant minimum (€)</Label>
-                        <Input
-                          id="min-order"
-                          type="number"
-                          value={promoForm.min_order_amount}
-                          onChange={(e) => setPromoForm({...promoForm, min_order_amount: e.target.value})}
-                          placeholder="15.00"
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="max-uses">Utilisations max</Label>
-                        <Input
-                          id="max-uses"
-                          type="number"
-                          value={promoForm.max_uses}
-                          onChange={(e) => setPromoForm({...promoForm, max_uses: e.target.value})}
-                          placeholder="100"
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="expires">Date d'expiration</Label>
-                        <Input
-                          id="expires"
-                          type="date"
-                          value={promoForm.expires_at}
-                          onChange={(e) => setPromoForm({...promoForm, expires_at: e.target.value})}
-                        />
+                        <div className="md:col-span-1">
+                          <Label htmlFor="promo-type">Type</Label>
+                          <Select
+                            value={promoForm.type}
+                            onValueChange={(value) =>
+                              setPromoForm({
+                                ...promoForm,
+                                type: value,
+                                value: value === 'free_delivery' ? 0 : promoForm.value
+                              })
+                            }
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="percentage">Pourcentage (%)</SelectItem>
+                              <SelectItem value="fixed_amount">Montant fixe (€)</SelectItem>
+                              <SelectItem value="free_delivery">Livraison gratuite</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        {promoForm.type !== 'free_delivery' && (
+                          <div className="md:col-span-1">
+                            <Label htmlFor="value">Valeur {promoForm.type === 'percentage' ? '(%)' : '(€)'}</Label>
+                            <Input
+                              id="value"
+                              type="number"
+                              value={promoForm.value}
+                              onChange={(e) => setPromoForm({...promoForm, value: e.target.value})}
+                              placeholder={promoForm.type === 'percentage' ? '10' : '5.00'}
+                            />
+                          </div>
+                        )}
+                        <div className="md:col-span-1">
+                          <Label htmlFor="min-order">Montant minimum (€)</Label>
+                          <Input
+                            id="min-order"
+                            type="number"
+                            value={promoForm.min_order_amount}
+                            onChange={(e) => setPromoForm({...promoForm, min_order_amount: e.target.value})}
+                            placeholder="15.00"
+                          />
+                        </div>
+                        <div className="md:col-span-1">
+                          <Label htmlFor="max-uses">Utilisations max</Label>
+                          <Input
+                            id="max-uses"
+                            type="number"
+                            value={promoForm.max_uses}
+                            onChange={(e) => setPromoForm({...promoForm, max_uses: e.target.value})}
+                            placeholder="100"
+                          />
+                        </div>
+                        <div className="md:col-span-1">
+                          <Label htmlFor="expires">Date d'expiration</Label>
+                          <Input
+                            id="expires"
+                            type="date"
+                            value={promoForm.expires_at}
+                            onChange={(e) => setPromoForm({...promoForm, expires_at: e.target.value})}
+                          />
+                        </div>
+                        <div className="md:col-span-2">
+                          <Label htmlFor="promo-description">Description</Label>
+                          <Textarea
+                            id="promo-description"
+                            value={promoForm.description}
+                            onChange={(e) => setPromoForm({...promoForm, description: e.target.value})}
+                            placeholder="Description du code promo"
+                          />
+                        </div>
+                        <div className="md:col-span-2 flex items-center gap-2">
+                          <input
+                            id="promo-active"
+                            type="checkbox"
+                            className="h-4 w-4"
+                            checked={promoForm.is_active}
+                            onChange={(e) => setPromoForm({ ...promoForm, is_active: e.target.checked })}
+                          />
+                          <Label htmlFor="promo-active">Activer le code</Label>
+                        </div>
                       </div>
                     </div>
                     <DialogFooter>
@@ -603,6 +679,7 @@ export default function AdminLoyalty() {
                     <TableHead>Valeur</TableHead>
                     <TableHead>Utilisations</TableHead>
                     <TableHead>Expiration</TableHead>
+                    <TableHead>Statut</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -623,13 +700,18 @@ export default function AdminLoyalty() {
                         ) : (
                           <span className="flex items-center">
                             <DollarSign className="w-3 h-3 mr-1" />
-                            {promo.value}€
+                            {(promo.value / 100).toFixed(2)}€
                           </span>
                         )}
                       </TableCell>
                       <TableCell>{promo.used_count}/{promo.max_uses || '∞'}</TableCell>
                       <TableCell>
                         {promo.expires_at ? new Date(promo.expires_at).toLocaleDateString('fr-FR') : 'Aucune'}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={promo.is_active ? 'default' : 'secondary'}>
+                          {promo.is_active ? 'Actif' : 'Inactif'}
+                        </Badge>
                       </TableCell>
                       <TableCell>
                         <div className="flex gap-2">

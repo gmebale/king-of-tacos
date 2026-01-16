@@ -44,6 +44,33 @@ class User {
     }
   }
 
+  static async update(id, userData) {
+    try {
+      const response = await api.put(`/users/${id}`, userData);
+      return response.data;
+    } catch (error) {
+      throw new Error(error.response?.data?.message || 'Erreur de mise à jour d\'utilisateur');
+    }
+  }
+
+  static async delete(id) {
+    try {
+      const response = await api.delete(`/users/${id}`);
+      return response.data;
+    } catch (error) {
+      throw new Error(error.response?.data?.message || 'Erreur de suppression d\'utilisateur');
+    }
+  }
+
+  static async toggleActive(id) {
+    try {
+      const response = await api.patch(`/users/${id}/toggle-active`);
+      return response.data;
+    } catch (error) {
+      throw new Error(error.response?.data?.message || 'Erreur de changement de statut');
+    }
+  }
+
   static isAuthenticated() {
     return authService.isAuthenticated();
   }

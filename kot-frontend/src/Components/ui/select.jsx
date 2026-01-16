@@ -4,6 +4,7 @@ const SelectContext = createContext();
 
 export function Select({ children, value, onValueChange, ...props }) {
   const [isOpen, setIsOpen] = useState(false);
+  const [selectedLabel, setSelectedLabel] = useState(null);
   const ref = useRef();
 
   useEffect(() => {
@@ -17,7 +18,7 @@ export function Select({ children, value, onValueChange, ...props }) {
   }, []);
 
   return (
-    <SelectContext.Provider value={{ isOpen, setIsOpen, value, onValueChange }}>
+    <SelectContext.Provider value={{ isOpen, setIsOpen, value, onValueChange, selectedLabel, setSelectedLabel }}>
       <div className="relative" ref={ref} {...props}>
         {children}
       </div>
@@ -43,7 +44,9 @@ export function SelectTrigger({ children, className = '', ...props }) {
 }
 
 export function SelectValue({ placeholder, displayValue, ...props }) {
-  return <span {...props}>{displayValue || placeholder}</span>;
+  const { selectedLabel, value } = useContext(SelectContext);
+  const safeValue = (typeof value === 'string' || typeof value === 'number') ? value : '';
+  return <span {...props}>{displayValue || selectedLabel || safeValue || placeholder}</span>;
 }
 
 export function SelectContent({ children, className = '', ...props }) {
@@ -52,7 +55,7 @@ export function SelectContent({ children, className = '', ...props }) {
 
   return (
     <div
-      className={`absolute top-full z-50 min-w-[8rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md ${className}`}
+      className={`absolute top-full z-50 min-w-[12rem] overflow-hidden rounded-md border border-gray-200 bg-white p-1 text-gray-900 shadow-lg ${className}`}
       {...props}
     >
       {children}
@@ -61,18 +64,37 @@ export function SelectContent({ children, className = '', ...props }) {
 }
 
 export function SelectItem({ children, value, ...props }) {
-  const { onValueChange, setIsOpen, value: selectedValue } = useContext(SelectContext);
+  const { onValueChange, setIsOpen, value: selectedValue, setSelectedLabel } = useContext(SelectContext);
   const isSelected = value === selectedValue;
+
+  const label =
+    typeof children === 'string' || typeof children === 'number'
+      ? children
+      : React.isValidElement(children) && typeof children.props?.children === 'string'
+        ? children.props.children
+        : typeof children === 'object'
+          ? children.label || children.name || children.displayName || children.id || ''
+          : '';
+
+  useEffect(() => {
+    if (isSelected && label) {
+      setSelectedLabel(label);
+    }
+  }, [isSelected, label, setSelectedLabel]);
+
+  const rendered = React.isValidElement(children) ? children : <span>{label}</span>;
+
   return (
     <div
       className={`relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none focus:bg-accent focus:text-accent-foreground hover:bg-accent hover:text-accent-foreground ${isSelected ? 'bg-accent text-accent-foreground' : ''}`}
       onClick={() => {
         onValueChange(value);
+        if (label) setSelectedLabel(label);
         setIsOpen(false);
       }}
       {...props}
     >
-      {children}
+      {rendered}
     </div>
   );
 }

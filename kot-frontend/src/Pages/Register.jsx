@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Button } from '../Components/ui/button';
@@ -8,7 +8,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '../Components/ui/card'
 import { AlertCircle, Eye, EyeOff, UserPlus } from 'lucide-react';
 import { createPageUrl } from '../utils';
 import { useAuthContext } from '../contexts/AuthContext';
-import authService from '../services/auth.service';
 
 export default function Register() {
   const navigate = useNavigate();
@@ -25,29 +24,11 @@ export default function Register() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  useEffect(() => {
-    // Check for Google OAuth token in URL parameters
-    const urlParams = new URLSearchParams(window.location.search);
-    const token = urlParams.get('token');
-
-    if (token) {
-      // Handle Google login
-      authService.googleLogin(token)
-        .then(() => {
-          // Clean up URL
-          navigate(createPageUrl('Register'), { replace: true });
-          // Redirect to menu
-          navigate(createPageUrl('Menu'), { replace: true });
-        })
-        .catch((error) => {
-          setError(error.message || 'Erreur de connexion Google');
-        });
-    }
-  }, [navigate]);
-
   const handleGoogleLogin = () => {
-    // Redirect to Google OAuth
-    window.location.href = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/auth/google`;
+    // Redirection vers OAuth Google, en supprimant un éventuel suffixe /api de REACT_APP_API_URL
+    const apiBase = (process.env.REACT_APP_API_URL || 'http://localhost:5000')
+      .replace(/\/api\/?$/, '');
+    window.location.href = `${apiBase}/api/auth/google`;
   };
 
   const handleSubmit = async (e) => {
@@ -247,6 +228,7 @@ export default function Register() {
                   </Button>
                 </div>
               </div>
+
             </form>
 
             <div className="mt-6 text-center">
