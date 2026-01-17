@@ -189,7 +189,22 @@ router.get('/:id', authenticateToken, async (req, res) => {
 // Create order (allows guest orders)
 router.post('/', async (req, res) => {
   try {
-    const { items, total_amount, customer_name, customer_phone, customer_email, order_type, delivery_address, pickup_time, notes, pay_on_delivery } = req.body;
+    const {
+      items,
+      total_amount,
+      customer_name,
+      customer_phone,
+      customer_email,
+      order_type,
+      delivery_address,
+      pickup_time,
+      notes,
+      pay_on_delivery,
+      payment_method,
+      mobile_money_provider,
+      mobile_money_phone,
+      mobile_money_message
+    } = req.body;
 
     console.log('Received order data:', { items, total_amount, customer_name });
 
@@ -221,6 +236,29 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ message: 'Le paiement à la livraison est disponible uniquement pour la livraison.' });
     }
 
+    if (pay_on_delivery && payment_method) {
+      return res.status(400).json({ message: 'Veuillez choisir un seul mode de paiement.' });
+    }
+
+    const mobileMoneyAllowedTypes = ['livraison', 'emporter', 'pickup'];
+    if (payment_method === 'mobile_money' && !mobileMoneyAllowedTypes.includes(order_type)) {
+      return res.status(400).json({ message: 'Le mobile money est disponible pour la livraison ou à emporter.' });
+    }
+
+    if (payment_method && payment_method !== 'mobile_money') {
+      return res.status(400).json({ message: 'Mode de paiement non supporté.' });
+    }
+
+    if (payment_method === 'mobile_money') {
+      const provider = String(mobile_money_provider || '').toLowerCase();
+      if (!['airtel', 'mobicash'].includes(provider)) {
+        return res.status(400).json({ message: 'Opérateur mobile money invalide.' });
+      }
+      if (!mobile_money_phone || !mobile_money_message) {
+        return res.status(400).json({ message: 'Veuillez fournir le numéro et le message de transaction.' });
+      }
+    }
+
     if (order_type === 'sur_place' && !['admin', 'staff'].includes(userRole)) {
       return res.status(403).json({ message: 'Le mode sur place est réservé au staff.' });
     }
@@ -229,6 +267,11 @@ router.post('/', async (req, res) => {
     const combinedNotes = [];
     if (notes) combinedNotes.push(notes);
     if (pay_on_delivery) combinedNotes.push('Paiement à la livraison');
+    if (payment_method === 'mobile_money') {
+      combinedNotes.push(
+        `Mobile money (${mobile_money_provider}) | Numéro: ${mobile_money_phone} | Message: ${mobile_money_message}`
+      );
+    }
     const finalNotes = combinedNotes.length > 0 ? combinedNotes.join(' | ') : null;
 
     const orderCode = await generateOrderCode();
@@ -246,7 +289,7 @@ router.post('/', async (req, res) => {
         pickup_time,
         notes: finalNotes,
         order_code: orderCode,
-        payment_method: pay_on_delivery ? 'cash' : null,
+        payment_method: payment_method === 'mobile_money' ? 'mobile_money' : pay_on_delivery ? 'cash' : null,
         payment_status: 'pending',
         items: {
           create: items.map(item => ({

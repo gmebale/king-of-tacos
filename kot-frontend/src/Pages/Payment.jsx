@@ -62,6 +62,9 @@ export default function Payment() {
   const [orderMode, setOrderMode] = useState(null);
   const [clientSecret, setClientSecret] = useState(null);
   const [errorMessage, setErrorMessage] = useState("");
+  const [mobileMoneyProvider, setMobileMoneyProvider] = useState("airtel");
+  const [mobileMoneyPhone, setMobileMoneyPhone] = useState("");
+  const [mobileMoneyMessage, setMobileMoneyMessage] = useState("");
 
   if (!cart || !total) {
     navigate(createPageUrl("Checkout"));
@@ -77,7 +80,7 @@ export default function Payment() {
     navigate(createPageUrl("OrderSuccess"));
   };
 
-  const createOrderIfNeeded = async (mode = "online") => {
+  const createOrderIfNeeded = async (mode = "online", paymentDetails = {}) => {
     setErrorMessage("");
     if (orderId && orderMode === mode) return orderId;
 
@@ -100,6 +103,10 @@ export default function Payment() {
       pickup_time: formData.pickup_time,
       notes: formData.notes,
       pay_on_delivery: mode === "cash_on_delivery",
+      payment_method: paymentDetails.payment_method,
+      mobile_money_provider: paymentDetails.mobile_money_provider,
+      mobile_money_phone: paymentDetails.mobile_money_phone,
+      mobile_money_message: paymentDetails.mobile_money_message
     };
 
     const created = await Order.create(payload);
@@ -157,6 +164,28 @@ export default function Payment() {
 
   const handleStripeSuccess = () => {
     clearCartAndRedirect();
+  };
+
+  const isMobileMoneyReady = mobileMoneyPhone.trim() && mobileMoneyMessage.trim();
+  const handleMobileMoneyPayment = async () => {
+    if (!isMobileMoneyReady) {
+      setErrorMessage("Veuillez renseigner le numéro et le message de la transaction.");
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      await createOrderIfNeeded("mobile_money", {
+        payment_method: "mobile_money",
+        mobile_money_provider: mobileMoneyProvider,
+        mobile_money_phone: mobileMoneyPhone,
+        mobile_money_message: mobileMoneyMessage
+      });
+      clearCartAndRedirect();
+    } catch (error) {
+      console.error("Error creating mobile money order:", error);
+      setErrorMessage(error.response?.data?.message || "Erreur lors de la création de la commande");
+    }
+    setIsSubmitting(false);
   };
 
   return (
@@ -253,6 +282,58 @@ export default function Payment() {
                     {isSubmitting ? "Redirection..." : "Payer avec PayPal"}
                     <Wallet className="w-5 h-5" />
                   </Button>
+
+                  <Card className="border-amber-200">
+                    <CardHeader>
+                      <CardTitle className="text-base">Payer par mobile money</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Opérateur
+                        </label>
+                        <select
+                          value={mobileMoneyProvider}
+                          onChange={(e) => setMobileMoneyProvider(e.target.value)}
+                          className="w-full rounded-md border border-amber-200 bg-white px-3 py-2"
+                        >
+                          <option value="airtel">AIRTEL Money</option>
+                          <option value="mobicash">Mobicash</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Numéro de l'expéditeur
+                        </label>
+                        <input
+                          type="tel"
+                          value={mobileMoneyPhone}
+                          onChange={(e) => setMobileMoneyPhone(e.target.value)}
+                          placeholder="Ex: 0770 00 00 00"
+                          className="w-full rounded-md border border-amber-200 bg-white px-3 py-2"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Message de transaction (preuve)
+                        </label>
+                        <textarea
+                          rows={3}
+                          value={mobileMoneyMessage}
+                          onChange={(e) => setMobileMoneyMessage(e.target.value)}
+                          placeholder="Collez ici le SMS de paiement"
+                          className="w-full rounded-md border border-amber-200 bg-white px-3 py-2"
+                        />
+                      </div>
+                      <Button
+                        onClick={handleMobileMoneyPayment}
+                        disabled={isSubmitting || !isMobileMoneyReady}
+                        className="w-full bg-amber-700 hover:bg-amber-800 text-white"
+                      >
+                        {isSubmitting ? "Traitement..." : "Confirmer le paiement mobile money"}
+                      </Button>
+                    </CardContent>
+                  </Card>
                 </>
               )}
 
