@@ -125,11 +125,46 @@ export default function AdminMobileMoney() {
                     </div>
                   </div>
 
-                  {order.notes && (
-                    <div className="bg-amber-50 border border-amber-200 rounded-md p-3 text-sm text-amber-900">
-                      {order.notes}
-                    </div>
-                  )}
+                  {order.notes && (() => {
+                    const notes = order.notes || '';
+                    const screenshotsMatch = notes.match(/Screenshots:\s*([^|]+)/);
+                    const screenshots = screenshotsMatch 
+                      ? screenshotsMatch[1].split(',').map(url => url.trim()).filter(Boolean)
+                      : [];
+                    const notesWithoutScreenshots = notes.replace(/\s*\|\s*Screenshots:[^|]*/, '');
+                    
+                    return (
+                      <>
+                        {notesWithoutScreenshots && (
+                          <div className="bg-amber-50 border border-amber-200 rounded-md p-3 text-sm text-amber-900">
+                            {notesWithoutScreenshots}
+                          </div>
+                        )}
+                        {screenshots.length > 0 && (
+                          <div className="mt-3">
+                            <p className="text-sm font-semibold text-gray-700 mb-2">Captures d'écran:</p>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                              {screenshots.map((url, idx) => (
+                                <a
+                                  key={idx}
+                                  href={url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="block"
+                                >
+                                  <img
+                                    src={url}
+                                    alt={`Capture ${idx + 1}`}
+                                    className="w-full h-32 object-cover rounded border border-gray-300 hover:border-amber-400 transition"
+                                  />
+                                </a>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
 
                   {order.payment_status === "requires_action" && (
                     <div className="flex flex-col md:flex-row gap-2">

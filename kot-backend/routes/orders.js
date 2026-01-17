@@ -223,7 +223,8 @@ router.post('/', async (req, res) => {
       payment_method,
       mobile_money_provider,
       mobile_money_phone,
-      mobile_money_message
+      mobile_money_message,
+      mobile_money_screenshots
     } = req.body;
 
     console.log('Received order data:', { items, total_amount, customer_name });
@@ -284,8 +285,8 @@ router.post('/', async (req, res) => {
       if (provider === 'mobicash' && !paymentSettings.mobile_money_mobicash_enabled) {
         return res.status(400).json({ message: 'Mobicash est désactivé pour le moment.' });
       }
-      if (!mobile_money_phone || !mobile_money_message) {
-        return res.status(400).json({ message: 'Veuillez fournir le numéro et le message de transaction.' });
+      if (!mobile_money_phone || (!mobile_money_message && (!mobile_money_screenshots || mobile_money_screenshots.length === 0))) {
+        return res.status(400).json({ message: 'Veuillez fournir le numéro et au moins le message ou une capture d\'écran.' });
       }
     }
 
@@ -298,9 +299,14 @@ router.post('/', async (req, res) => {
     if (notes) combinedNotes.push(notes);
     if (pay_on_delivery) combinedNotes.push('Paiement à la livraison');
     if (payment_method === 'mobile_money') {
-      combinedNotes.push(
-        `Mobile money (${mobile_money_provider}) | Numéro: ${mobile_money_phone} | Message: ${mobile_money_message}`
-      );
+      let mobileNote = `Mobile money (${mobile_money_provider}) | Numéro: ${mobile_money_phone}`;
+      if (mobile_money_message) {
+        mobileNote += ` | Message: ${mobile_money_message}`;
+      }
+      if (mobile_money_screenshots && mobile_money_screenshots.length > 0) {
+        mobileNote += ` | Screenshots: ${mobile_money_screenshots.join(', ')}`;
+      }
+      combinedNotes.push(mobileNote);
     }
     const finalNotes = combinedNotes.length > 0 ? combinedNotes.join(' | ') : null;
 

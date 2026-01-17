@@ -66,6 +66,8 @@ export default function Payment() {
   const [mobileMoneyProvider, setMobileMoneyProvider] = useState("airtel");
   const [mobileMoneyPhone, setMobileMoneyPhone] = useState("");
   const [mobileMoneyMessage, setMobileMoneyMessage] = useState("");
+  const [mobileMoneyScreenshots, setMobileMoneyScreenshots] = useState([]);
+  const [uploadingScreenshots, setUploadingScreenshots] = useState(false);
   const [paymentSettings, setPaymentSettings] = useState({
     mobile_money_enabled: true,
     mobile_money_airtel_enabled: true,
@@ -141,7 +143,8 @@ export default function Payment() {
       payment_method: paymentDetails.payment_method,
       mobile_money_provider: paymentDetails.mobile_money_provider,
       mobile_money_phone: paymentDetails.mobile_money_phone,
-      mobile_money_message: paymentDetails.mobile_money_message
+      mobile_money_message: paymentDetails.mobile_money_message,
+      mobile_money_screenshots: paymentDetails.mobile_money_screenshots
     };
 
     const created = await Order.create(payload);
@@ -217,7 +220,7 @@ export default function Payment() {
     setIsSubmitting(false);
   };
 
-  const isMobileMoneyReady = mobileMoneyPhone.trim() && mobileMoneyMessage.trim();
+  const isMobileMoneyReady = mobileMoneyPhone.trim() && (mobileMoneyMessage.trim() || mobileMoneyScreenshots.length > 0);
   const handleMobileMoneyPayment = async () => {
     if (!paymentSettings.mobile_money_enabled) {
       setErrorMessage("Le mobile money est désactivé pour le moment.");
@@ -228,7 +231,7 @@ export default function Payment() {
       return;
     }
     if (!isMobileMoneyReady) {
-      setErrorMessage("Veuillez renseigner le numéro et le message de la transaction.");
+      setErrorMessage("Veuillez renseigner le numéro et au moins le message ou une capture d'écran.");
       return;
     }
     setIsSubmitting(true);
@@ -237,7 +240,8 @@ export default function Payment() {
         payment_method: "mobile_money",
         mobile_money_provider: mobileMoneyProvider,
         mobile_money_phone: mobileMoneyPhone,
-        mobile_money_message: mobileMoneyMessage
+        mobile_money_message: mobileMoneyMessage,
+        mobile_money_screenshots: mobileMoneyScreenshots.length > 0 ? mobileMoneyScreenshots : undefined
       });
       clearCartAndRedirect();
     } catch (error) {
@@ -414,6 +418,57 @@ export default function Payment() {
                             placeholder="Collez ici le SMS de paiement"
                             className="w-full rounded-md border border-amber-200 bg-white px-3 py-2"
                           />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Capture d'écran (optionnel)
+                          </label>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            multiple
+                            onChange={async (e) => {
+                              const files = Array.from(e.target.files);
+                              if (files.length === 0) return;
+                              
+                              setUploadingScreenshots(true);
+                              try {
+                                const uploadPromises = files.map(async (file) => {
+                                  const formData = new FormData();
+                                  formData.append('file', file);
+                                  const response = await api.post('/upload', formData, {
+                                    headers: { 'Content-Type': 'multipart/form-data' }
+                                  });
+                                  return response.data.file_url;
+                                });
+                                const urls = await Promise.all(uploadPromises);
+                                setMobileMoneyScreenshots([...mobileMoneyScreenshots, ...urls]);
+                              } catch (error) {
+                                console.error('Upload error:', error);
+                                setErrorMessage('Erreur lors de l\'upload des captures d\'écran');
+                              } finally {
+                                setUploadingScreenshots(false);
+                              }
+                            }}
+                            className="w-full rounded-md border border-amber-200 bg-white px-3 py-2 text-sm"
+                            disabled={uploadingScreenshots}
+                          />
+                          {mobileMoneyScreenshots.length > 0 && (
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              {mobileMoneyScreenshots.map((url, idx) => (
+                                <div key={idx} className="relative">
+                                  <img src={url} alt={`Capture ${idx + 1}`} className="w-20 h-20 object-cover rounded border" />
+                                  <button
+                                    type="button"
+                                    onClick={() => setMobileMoneyScreenshots(mobileMoneyScreenshots.filter((_, i) => i !== idx))}
+                                    className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full text-xs"
+                                  >
+                                    ×
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
                         <Button
                           onClick={handleMobileMoneyPayment}
