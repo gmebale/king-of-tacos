@@ -56,7 +56,7 @@ function StripeCardForm({ clientSecret, amount, onSuccess, onError }) {
 export default function Payment() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { cart, formData, total } = location.state || {};
+  const { cart, formData, total, isStaff: isStaffFromState } = location.state || {};
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [orderId, setOrderId] = useState(null);
   const [orderMode, setOrderMode] = useState(null);
@@ -73,6 +73,8 @@ export default function Payment() {
 
   const filteredCart = cart.filter((item) => item.product);
   const isOnlineAllowed = ["livraison", "emporter", "pickup"].includes(formData?.order_type);
+  const isOnSite = formData?.order_type === "sur_place";
+  const isStaff = Boolean(isStaffFromState);
 
   const clearCartAndRedirect = () => {
     localStorage.removeItem("kingoftacos_cart");
@@ -164,6 +166,22 @@ export default function Payment() {
 
   const handleStripeSuccess = () => {
     clearCartAndRedirect();
+  };
+
+  const handleOnSiteValidation = async () => {
+    if (!isStaff) {
+      setErrorMessage("Le mode sur place est réservé au staff.");
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      await createOrderIfNeeded("on_site");
+      clearCartAndRedirect();
+    } catch (error) {
+      console.error("Error creating on-site order:", error);
+      setErrorMessage(error.response?.data?.message || "Erreur lors de la création de la commande");
+    }
+    setIsSubmitting(false);
   };
 
   const isMobileMoneyReady = mobileMoneyPhone.trim() && mobileMoneyMessage.trim();
@@ -260,6 +278,32 @@ export default function Payment() {
                 >
                   {isSubmitting ? "Traitement..." : "Payer à la livraison"}
                 </Button>
+              )}
+
+              {isOnSite && isStaff && (
+                <div className="p-4 rounded-md border border-amber-200 bg-amber-50 text-amber-800">
+                  Paiement sur place uniquement. Validez pour enregistrer la commande.
+                  <Button
+                    onClick={handleOnSiteValidation}
+                    disabled={isSubmitting}
+                    className="w-full mt-3 bg-amber-600 hover:bg-amber-700 text-white"
+                  >
+                    {isSubmitting ? "Traitement..." : "Valider (paiement sur place)"}
+                  </Button>
+                </div>
+              )}
+
+              {isOnSite && !isStaff && (
+                <div className="p-4 rounded-md border border-amber-200 bg-amber-50 text-amber-800">
+                  Le mode sur place est réservé au staff.
+                  <Button
+                    onClick={() => navigate(createPageUrl("Checkout"))}
+                    variant="outline"
+                    className="w-full mt-3"
+                  >
+                    Retour à la commande
+                  </Button>
+                </div>
               )}
 
               {isOnlineAllowed && (
