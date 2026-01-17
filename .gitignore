@@ -6,3 +6,6 @@ kot-frontend/node_modules/
 .cache/
 kot-frontend/.cache/
 kot-frontend/node_modules/.cache/
+
+# Deploy secrets
+.deploy.env
