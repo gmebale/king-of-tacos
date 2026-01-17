@@ -56,7 +56,7 @@ function StripeCardForm({ clientSecret, amount, onSuccess, onError }) {
 export default function Payment() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { cart, formData, total, isStaff: isStaffFromState } = location.state || {};
+  const { cart, formData, total } = location.state || {};
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [orderId, setOrderId] = useState(null);
   const [orderMode, setOrderMode] = useState(null);
@@ -70,9 +70,6 @@ export default function Payment() {
 
   const filteredCart = cart.filter((item) => item.product);
   const isOnlineAllowed = ["livraison", "emporter", "pickup"].includes(formData?.order_type);
-  const isOnSite = formData?.order_type === "sur_place";
-  const canPayCash = ["emporter", "pickup"].includes(formData?.order_type);
-  const isStaff = Boolean(isStaffFromState);
 
   const clearCartAndRedirect = () => {
     localStorage.removeItem("kingoftacos_cart");
@@ -102,7 +99,7 @@ export default function Payment() {
       delivery_address: formData.delivery_address,
       pickup_time: formData.pickup_time,
       notes: formData.notes,
-      pay_on_delivery: mode === "cash_on_delivery" || mode === "cash",
+      pay_on_delivery: mode === "cash_on_delivery",
     };
 
     const created = await Order.create(payload);
@@ -119,38 +116,6 @@ export default function Payment() {
     } catch (error) {
       console.error("Error creating pay-on-delivery order:", error);
       setErrorMessage(error.response?.data?.message || "Erreur lors de la création de la commande");
-    }
-    setIsSubmitting(false);
-  };
-
-  const handleOnSiteValidation = async () => {
-    if (!isStaff) {
-      setErrorMessage("Le paiement sur place est réservé au staff.");
-      return;
-    }
-    setIsSubmitting(true);
-    try {
-      await createOrderIfNeeded("on_site");
-      clearCartAndRedirect();
-    } catch (error) {
-      console.error("Error creating on-site order:", error);
-      setErrorMessage(error.response?.data?.message || "Erreur lors de la création de la commande");
-    }
-    setIsSubmitting(false);
-  };
-
-  const handleCashPayment = async () => {
-    if (!canPayCash) {
-      setErrorMessage("Le paiement en espèce est disponible uniquement pour la vente à emporter.");
-      return;
-    }
-    setIsSubmitting(true);
-    try {
-      await createOrderIfNeeded("cash");
-      clearCartAndRedirect();
-    } catch (error) {
-      console.error("Error creating cash order:", error);
-      setErrorMessage(error.response?.data?.message || "Erreur lors de la création de la commande en espèce");
     }
     setIsSubmitting(false);
   };
@@ -268,31 +233,6 @@ export default function Payment() {
                 </Button>
               )}
 
-              {isOnSite && isStaff && (
-                <div className="p-4 rounded-md border border-amber-200 bg-amber-50 text-amber-800">
-                  Paiement sur place uniquement. Validez pour enregistrer la commande.
-                  <Button
-                    onClick={handleOnSiteValidation}
-                    disabled={isSubmitting}
-                    className="w-full mt-3 bg-amber-600 hover:bg-amber-700 text-white"
-                  >
-                    {isSubmitting ? "Traitement..." : "Valider (paiement sur place)"}
-                  </Button>
-                </div>
-              )}
-              {isOnSite && !isStaff && (
-                <div className="p-4 rounded-md border border-amber-200 bg-amber-50 text-amber-800">
-                  Le mode sur place est réservé au staff.
-                  <Button
-                    onClick={() => navigate(createPageUrl("Checkout"))}
-                    variant="outline"
-                    className="w-full mt-3"
-                  >
-                    Retour à la commande
-                  </Button>
-                </div>
-              )}
-
               {isOnlineAllowed && (
                 <>
                   <Button
@@ -316,21 +256,10 @@ export default function Payment() {
                 </>
               )}
 
-              {!isOnlineAllowed && !isOnSite && (
+              {!isOnlineAllowed && (
                 <div className="p-4 rounded-md border border-amber-200 bg-amber-50 text-amber-800">
                   Les paiements en ligne sont disponibles uniquement pour la livraison ou le pickup.
                 </div>
-              )}
-
-              {canPayCash && (
-                <Button
-                  onClick={handleCashPayment}
-                  disabled={isSubmitting}
-                  variant="outline"
-                  className="w-full py-4 border-amber-300 hover:border-amber-400"
-                >
-                  {isSubmitting ? "Traitement..." : "Payer en espèce"}
-                </Button>
               )}
 
               {clientSecret && stripePromise && (

@@ -216,9 +216,9 @@ router.post('/', async (req, res) => {
     }
 
     // Validate cash/on-delivery only for allowed order types
-    const cashAllowedTypes = ['livraison', 'emporter', 'pickup'];
+    const cashAllowedTypes = ['livraison'];
     if (pay_on_delivery && !cashAllowedTypes.includes(order_type)) {
-      return res.status(400).json({ message: 'Le paiement en espèce est disponible pour livraison ou à emporter.' });
+      return res.status(400).json({ message: 'Le paiement à la livraison est disponible uniquement pour la livraison.' });
     }
 
     if (order_type === 'sur_place' && !['admin', 'staff'].includes(userRole)) {
