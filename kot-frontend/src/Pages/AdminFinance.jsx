@@ -23,6 +23,7 @@ import {
   BarChart,
   Bar
 } from "recharts";
+import api from "../services/api.service";
 import { Card, CardContent, CardHeader, CardTitle } from "../Components/ui/card";
 import { Button } from "../Components/ui/button";
 import { Input } from "../Components/ui/input";
@@ -53,32 +54,16 @@ export default function AdminFinance() {
   const loadFinanceData = async () => {
     setIsLoading(true);
     try {
+      const params = { start_date: startDate, end_date: endDate };
       const [revenueRes, productsRes, customersRes] = await Promise.all([
-        fetch(`/api/finance/revenue?start_date=${startDate}&end_date=${endDate}`, {
-          headers: { Authorization: `Bearer ${localStorage.getItem('auth_token')}` }
-        }),
-        fetch(`/api/finance/top-products?start_date=${startDate}&end_date=${endDate}`, {
-          headers: { Authorization: `Bearer ${localStorage.getItem('auth_token')}` }
-        }),
-        fetch(`/api/finance/top-customers?start_date=${startDate}&end_date=${endDate}`, {
-          headers: { Authorization: `Bearer ${localStorage.getItem('auth_token')}` }
-        })
+        api.get('/finance/revenue', { params }),
+        api.get('/finance/top-products', { params }),
+        api.get('/finance/top-customers', { params })
       ]);
 
-      if (revenueRes.ok) {
-        const revenue = await revenueRes.json();
-        setRevenueData(revenue);
-      }
-
-      if (productsRes.ok) {
-        const products = await productsRes.json();
-        setTopProducts(products);
-      }
-
-      if (customersRes.ok) {
-        const customers = await customersRes.json();
-        setTopCustomers(customers);
-      }
+      setRevenueData(revenueRes.data || []);
+      setTopProducts(productsRes.data || []);
+      setTopCustomers(customersRes.data || []);
     } catch (error) {
       console.error('Error loading finance data:', error);
     }
