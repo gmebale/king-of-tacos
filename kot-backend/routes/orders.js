@@ -197,6 +197,7 @@ router.post('/', async (req, res) => {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
     let userId = null;
+    let userRole = null;
 
     if (token) {
       try {
@@ -207,6 +208,7 @@ router.post('/', async (req, res) => {
         });
         if (user) {
           userId = user.id;
+          userRole = user.role;
         }
       } catch (error) {
         // Invalid token, treat as guest
@@ -214,9 +216,13 @@ router.post('/', async (req, res) => {
     }
 
     // Validate cash/on-delivery only for allowed order types
-    const cashAllowedTypes = ['livraison', 'emporter', 'pickup', 'sur_place'];
+    const cashAllowedTypes = ['livraison', 'emporter', 'pickup'];
     if (pay_on_delivery && !cashAllowedTypes.includes(order_type)) {
-      return res.status(400).json({ message: 'Le paiement en espèce est disponible pour livraison, pickup ou sur place.' });
+      return res.status(400).json({ message: 'Le paiement en espèce est disponible pour livraison ou à emporter.' });
+    }
+
+    if (order_type === 'sur_place' && !['admin', 'staff'].includes(userRole)) {
+      return res.status(403).json({ message: 'Le mode sur place est réservé au staff.' });
     }
 
     // Prepare notes with optional pay-on-delivery tag
