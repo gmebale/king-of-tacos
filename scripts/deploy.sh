@@ -8,6 +8,9 @@ if [ -f "$DEPLOY_ENV_FILE" ]; then
   set -a
   . "$DEPLOY_ENV_FILE"
   set +a
+  # Exporter explicitement les variables pour docker compose
+  export REACT_APP_API_URL
+  export REACT_APP_STRIPE_PUBLISHABLE_KEY
 fi
 
 send_telegram() {
@@ -33,8 +36,13 @@ git pull
 GIT_SHA="$(git rev-parse --short HEAD)"
 GIT_MSG="$(git log -1 --pretty=%s)"
 
+# Debug: afficher la valeur de REACT_APP_API_URL (sans exposer les secrets)
+echo "REACT_APP_API_URL=${REACT_APP_API_URL:-NOT SET}"
+
 docker compose up -d --build api proxy
-docker compose -f docker-compose.frontend.yml up -d --build
+# Rebuild sans cache pour forcer l'utilisation des nouvelles variables
+docker compose -f docker-compose.frontend.yml build --no-cache frontend
+docker compose -f docker-compose.frontend.yml up -d frontend
 
 send_telegram "Deploy finished on $(hostname) at $(date -u +'%Y-%m-%d %H:%M:%S UTC')%0ACommit: ${GIT_SHA} - ${GIT_MSG}"
 
