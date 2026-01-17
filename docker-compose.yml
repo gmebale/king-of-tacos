@@ -1,19 +1,15 @@
-version: "3.9"
-
 services:
   proxy:
     image: caddy:2
     restart: unless-stopped
     ports:
-      - "80:80"
-      - "443:443"
+      - "8080:80"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
     depends_on:
       - api
-      - web
 
   api:
     image: ${API_IMAGE:-kot-api:local}
@@ -27,21 +23,6 @@ services:
       - "5000"
     volumes:
       - uploads_data:/app/uploads
-
-  web:
-    image: ${WEB_IMAGE:-kot-web:local}
-    build:
-      context: ./kot-frontend
-      args:
-        REACT_APP_API_URL: ${REACT_APP_API_URL}
-        REACT_APP_STRIPE_PUBLISHABLE_KEY: ${REACT_APP_STRIPE_PUBLISHABLE_KEY}
-    environment:
-      - NODE_ENV=production
-    depends_on:
-      - api
-    restart: unless-stopped
-    expose:
-      - "80"
 
 volumes:
   caddy_data:

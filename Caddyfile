@@ -1,14 +1,9 @@
 {
-    email you@example.com
+    auto_https off
 }
 
-your-domain.com {
+:80 {
     encode gzip
-
-    handle_path /api/* {
-        reverse_proxy api:5000
-    }
-
-    reverse_proxy web:80
+    reverse_proxy api:5000
 }
 

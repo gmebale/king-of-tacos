@@ -1,62 +1,22 @@
-name: Docker Deploy
+name: Deploy
 
 on:
   push:
-    branches: [main]
-
-env:
-  REGISTRY: ghcr.io
-  IMAGE_API: ghcr.io/${{ github.repository_owner }}/kot-api:latest
-  IMAGE_WEB: ghcr.io/${{ github.repository_owner }}/kot-web:latest
+    branches:
+      - main
 
 jobs:
-  build-and-push:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GHCR_TOKEN }}
-
-      - name: Build & push API image
-        uses: docker/build-push-action@v5
-        with:
-          context: ./kot-backend
-          push: true
-          tags: ${{ env.IMAGE_API }}
-
-      - name: Build & push Web image
-        uses: docker/build-push-action@v5
-        with:
-          context: ./kot-frontend
-          push: true
-          tags: ${{ env.IMAGE_WEB }}
-          build-args: |
-            REACT_APP_API_URL=${{ secrets.REACT_APP_API_URL }}
-            REACT_APP_STRIPE_PUBLISHABLE_KEY=${{ secrets.REACT_APP_STRIPE_PUBLISHABLE_KEY }}
-
   deploy:
-    needs: build-and-push
     runs-on: ubuntu-latest
     steps:
-      - name: Deploy over SSH
-        uses: appleboy/ssh-action@v1.2.0
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          port: ${{ secrets.SSH_PORT }}
           script: |
-            cd /opt/kot
-            export API_IMAGE=${{ env.IMAGE_API }}
-            export WEB_IMAGE=${{ env.IMAGE_WEB }}
-            export REACT_APP_API_URL=${{ secrets.REACT_APP_API_URL }}
-            export REACT_APP_STRIPE_PUBLISHABLE_KEY=${{ secrets.REACT_APP_STRIPE_PUBLISHABLE_KEY }}
-            docker compose pull
-            docker compose up -d --remove-orphans
+            cd /opt/kot-project/king-of-tacos
+            bash scripts/deploy.sh
 
