@@ -25,6 +25,7 @@ export function createPageUrl(pageName) {
     KitchenMode: '/admin/kitchen',
     CashierMode: '/admin/cashier',
     AdminFinance: '/admin/finance',
+    AdminMobileMoney: '/admin/mobile-money',
     AdminStock: '/admin/stock',
     AdminStaff: '/admin/staff',
     AdminLoyalty: '/admin/loyalty',

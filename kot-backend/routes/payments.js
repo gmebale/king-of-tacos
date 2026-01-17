@@ -2,6 +2,7 @@ const express = require('express');
 const { PrismaClient } = require('@prisma/client');
 const fetch = require('node-fetch');
 const stripeSdk = require('stripe');
+const { authenticateToken, requireRole } = require('../middleware/auth');
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -268,6 +269,84 @@ router.post('/stripe/webhook', async (req, res) => {
   } catch (error) {
     console.error('Stripe webhook handling error', error);
     res.status(500).json({ message: 'Erreur webhook Stripe' });
+  }
+});
+
+// List mobile money payments (admin only)
+router.get('/mobile-money', authenticateToken, requireRole(['admin']), async (req, res) => {
+  try {
+    const { status } = req.query;
+    const where = { payment_method: 'mobile_money' };
+    if (status) {
+      where.payment_status = status;
+    }
+
+    const orders = await prisma.order.findMany({
+      where,
+      include: { items: true },
+      orderBy: { created_date: 'desc' }
+    });
+
+    res.json(orders);
+  } catch (error) {
+    console.error('List mobile money payments error', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// Approve mobile money payment (admin only)
+router.put('/mobile-money/:id/approve', authenticateToken, requireRole(['admin']), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const order = await prisma.order.findUnique({ where: { id } });
+    if (!order) {
+      return res.status(404).json({ message: 'Commande introuvable' });
+    }
+    if (order.payment_method !== 'mobile_money') {
+      return res.status(400).json({ message: 'Commande non mobile money' });
+    }
+
+    const updated = await prisma.order.update({
+      where: { id },
+      data: {
+        payment_status: 'paid',
+        status: order.status === 'en_attente' ? 'en_preparation' : order.status
+      }
+    });
+
+    res.json(updated);
+  } catch (error) {
+    console.error('Approve mobile money error', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// Reject mobile money payment (admin only)
+router.put('/mobile-money/:id/reject', authenticateToken, requireRole(['admin']), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const order = await prisma.order.findUnique({ where: { id } });
+    if (!order) {
+      return res.status(404).json({ message: 'Commande introuvable' });
+    }
+    if (order.payment_method !== 'mobile_money') {
+      return res.status(400).json({ message: 'Commande non mobile money' });
+    }
+
+    const notes = order.notes ? `${order.notes} | Mobile money rejeté` : 'Mobile money rejeté';
+    const updated = await prisma.order.update({
+      where: { id },
+      data: {
+        payment_status: 'failed',
+        status: 'annulee',
+        notes
+      }
+    });
+
+    res.json(updated);
+  } catch (error) {
+    console.error('Reject mobile money error', error);
+    res.status(500).json({ message: 'Internal server error' });
   }
 });
 

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Order } from "../Entities/Order";
 import { motion } from "framer-motion";
 import { Button } from "../Components/ui/button";
@@ -7,6 +7,7 @@ import { ArrowLeft, CreditCard, Wallet } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { createPageUrl } from "../utils";
 import { PaymentService } from "../services/payment.service";
+import api from "../services/api.service";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, CardElement, useElements, useStripe } from "@stripe/react-stripe-js";
 
@@ -65,6 +66,12 @@ export default function Payment() {
   const [mobileMoneyProvider, setMobileMoneyProvider] = useState("airtel");
   const [mobileMoneyPhone, setMobileMoneyPhone] = useState("");
   const [mobileMoneyMessage, setMobileMoneyMessage] = useState("");
+  const [paymentSettings, setPaymentSettings] = useState({
+    mobile_money_enabled: true,
+    mobile_money_airtel_enabled: true,
+    mobile_money_mobicash_enabled: true
+  });
+  const [loadingPaymentSettings, setLoadingPaymentSettings] = useState(true);
 
   if (!cart || !total) {
     navigate(createPageUrl("Checkout"));
@@ -73,6 +80,32 @@ export default function Payment() {
 
   const filteredCart = cart.filter((item) => item.product);
   const isOnlineAllowed = ["livraison", "emporter", "pickup"].includes(formData?.order_type);
+  const isMobileMoneyAllowedType = ["livraison", "emporter", "pickup"].includes(formData?.order_type);
+
+  useEffect(() => {
+    const loadPaymentSettings = async () => {
+      try {
+        const response = await api.get('/settings/payment');
+        setPaymentSettings(response.data);
+      } catch (error) {
+        console.error("Error loading payment settings:", error);
+      } finally {
+        setLoadingPaymentSettings(false);
+      }
+    };
+
+    loadPaymentSettings();
+  }, []);
+
+  useEffect(() => {
+    if (loadingPaymentSettings) return;
+    const enabledProviders = [];
+    if (paymentSettings.mobile_money_airtel_enabled) enabledProviders.push("airtel");
+    if (paymentSettings.mobile_money_mobicash_enabled) enabledProviders.push("mobicash");
+    if (!enabledProviders.includes(mobileMoneyProvider)) {
+      setMobileMoneyProvider(enabledProviders[0] || "");
+    }
+  }, [loadingPaymentSettings, paymentSettings, mobileMoneyProvider]);
   const isOnSite = formData?.order_type === "sur_place";
   const isStaff = Boolean(isStaffFromState);
 
@@ -186,6 +219,14 @@ export default function Payment() {
 
   const isMobileMoneyReady = mobileMoneyPhone.trim() && mobileMoneyMessage.trim();
   const handleMobileMoneyPayment = async () => {
+    if (!paymentSettings.mobile_money_enabled) {
+      setErrorMessage("Le mobile money est désactivé pour le moment.");
+      return;
+    }
+    if (!paymentSettings.mobile_money_airtel_enabled && !paymentSettings.mobile_money_mobicash_enabled) {
+      setErrorMessage("Aucun opérateur mobile money n'est disponible.");
+      return;
+    }
     if (!isMobileMoneyReady) {
       setErrorMessage("Veuillez renseigner le numéro et le message de la transaction.");
       return;
@@ -327,57 +368,63 @@ export default function Payment() {
                     <Wallet className="w-5 h-5" />
                   </Button>
 
-                  <Card className="border-amber-200">
-                    <CardHeader>
-                      <CardTitle className="text-base">Payer par mobile money</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Opérateur
-                        </label>
-                        <select
-                          value={mobileMoneyProvider}
-                          onChange={(e) => setMobileMoneyProvider(e.target.value)}
-                          className="w-full rounded-md border border-amber-200 bg-white px-3 py-2"
+                  {paymentSettings.mobile_money_enabled && isMobileMoneyAllowedType && (
+                    <Card className="border-amber-200">
+                      <CardHeader>
+                        <CardTitle className="text-base">Payer par mobile money</CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Opérateur
+                          </label>
+                          <select
+                            value={mobileMoneyProvider}
+                            onChange={(e) => setMobileMoneyProvider(e.target.value)}
+                            className="w-full rounded-md border border-amber-200 bg-white px-3 py-2"
+                          >
+                            {paymentSettings.mobile_money_airtel_enabled && (
+                              <option value="airtel">AIRTEL Money</option>
+                            )}
+                            {paymentSettings.mobile_money_mobicash_enabled && (
+                              <option value="mobicash">Mobicash</option>
+                            )}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Numéro de l'expéditeur
+                          </label>
+                          <input
+                            type="tel"
+                            value={mobileMoneyPhone}
+                            onChange={(e) => setMobileMoneyPhone(e.target.value)}
+                            placeholder="Ex: 0770 00 00 00"
+                            className="w-full rounded-md border border-amber-200 bg-white px-3 py-2"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Message de transaction (preuve)
+                          </label>
+                          <textarea
+                            rows={3}
+                            value={mobileMoneyMessage}
+                            onChange={(e) => setMobileMoneyMessage(e.target.value)}
+                            placeholder="Collez ici le SMS de paiement"
+                            className="w-full rounded-md border border-amber-200 bg-white px-3 py-2"
+                          />
+                        </div>
+                        <Button
+                          onClick={handleMobileMoneyPayment}
+                          disabled={isSubmitting || !isMobileMoneyReady || !mobileMoneyProvider}
+                          className="w-full bg-amber-700 hover:bg-amber-800 text-white"
                         >
-                          <option value="airtel">AIRTEL Money</option>
-                          <option value="mobicash">Mobicash</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Numéro de l'expéditeur
-                        </label>
-                        <input
-                          type="tel"
-                          value={mobileMoneyPhone}
-                          onChange={(e) => setMobileMoneyPhone(e.target.value)}
-                          placeholder="Ex: 0770 00 00 00"
-                          className="w-full rounded-md border border-amber-200 bg-white px-3 py-2"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Message de transaction (preuve)
-                        </label>
-                        <textarea
-                          rows={3}
-                          value={mobileMoneyMessage}
-                          onChange={(e) => setMobileMoneyMessage(e.target.value)}
-                          placeholder="Collez ici le SMS de paiement"
-                          className="w-full rounded-md border border-amber-200 bg-white px-3 py-2"
-                        />
-                      </div>
-                      <Button
-                        onClick={handleMobileMoneyPayment}
-                        disabled={isSubmitting || !isMobileMoneyReady}
-                        className="w-full bg-amber-700 hover:bg-amber-800 text-white"
-                      >
-                        {isSubmitting ? "Traitement..." : "Confirmer le paiement mobile money"}
-                      </Button>
-                    </CardContent>
-                  </Card>
+                          {isSubmitting ? "Traitement..." : "Confirmer le paiement mobile money"}
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  )}
                 </>
               )}
 

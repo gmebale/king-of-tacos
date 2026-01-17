@@ -19,7 +19,8 @@ import {
   Menu as MenuIcon,
   X,
   TrendingUp,
-  MessageSquare
+  MessageSquare,
+  Smartphone
 } from "lucide-react";
 import { Button } from "./Components/ui/button";
 import { motion } from "framer-motion";
@@ -68,6 +69,7 @@ export default function Layout({ children, currentPageName }) {
     { name: "Cuisine", path: "KitchenMode", icon: ChefHat },
     { name: "Caissier", path: "CashierMode", icon: Receipt },
     { name: "Finances", path: "AdminFinance", icon: TrendingUp },
+    { name: "Mobile Money", path: "AdminMobileMoney", icon: Smartphone },
     { name: "Stock", path: "AdminStock", icon: Package },
     { name: "Personnel", path: "AdminStaff", icon: Users },
     { name: "Fidélité", path: "AdminLoyalty", icon: Star },

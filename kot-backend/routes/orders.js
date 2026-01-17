@@ -6,6 +6,26 @@ const { format } = require('date-fns');
 const router = express.Router();
 const prisma = new PrismaClient();
 
+async function getPaymentSettings() {
+  const keys = ['mobile_money_enabled', 'mobile_money_airtel_enabled', 'mobile_money_mobicash_enabled'];
+  const rows = await prisma.settings.findMany({ where: { key: { in: keys } } });
+  const values = {};
+  rows.forEach((row) => {
+    values[row.key] = row.value;
+  });
+  const toBool = (value, fallback = true) => {
+    if (value === undefined || value === null) return fallback;
+    if (typeof value === 'boolean') return value;
+    if (typeof value === 'number') return value !== 0;
+    return String(value).toLowerCase() === 'true';
+  };
+  return {
+    mobile_money_enabled: toBool(values.mobile_money_enabled, true),
+    mobile_money_airtel_enabled: toBool(values.mobile_money_airtel_enabled, true),
+    mobile_money_mobicash_enabled: toBool(values.mobile_money_mobicash_enabled, true)
+  };
+}
+
 // Utility function to format customization details
 function formatCustomization(customization, productCustomization) {
   if (!customization || !productCustomization?.isConfigurable) {
@@ -250,9 +270,19 @@ router.post('/', async (req, res) => {
     }
 
     if (payment_method === 'mobile_money') {
+      const paymentSettings = await getPaymentSettings();
+      if (!paymentSettings.mobile_money_enabled) {
+        return res.status(400).json({ message: 'Le mobile money est désactivé pour le moment.' });
+      }
       const provider = String(mobile_money_provider || '').toLowerCase();
       if (!['airtel', 'mobicash'].includes(provider)) {
         return res.status(400).json({ message: 'Opérateur mobile money invalide.' });
+      }
+      if (provider === 'airtel' && !paymentSettings.mobile_money_airtel_enabled) {
+        return res.status(400).json({ message: 'AIRTEL Money est désactivé pour le moment.' });
+      }
+      if (provider === 'mobicash' && !paymentSettings.mobile_money_mobicash_enabled) {
+        return res.status(400).json({ message: 'Mobicash est désactivé pour le moment.' });
       }
       if (!mobile_money_phone || !mobile_money_message) {
         return res.status(400).json({ message: 'Veuillez fournir le numéro et le message de transaction.' });
@@ -290,7 +320,7 @@ router.post('/', async (req, res) => {
         notes: finalNotes,
         order_code: orderCode,
         payment_method: payment_method === 'mobile_money' ? 'mobile_money' : pay_on_delivery ? 'cash' : null,
-        payment_status: 'pending',
+        payment_status: payment_method === 'mobile_money' ? 'requires_action' : 'pending',
         items: {
           create: items.map(item => ({
             product_name: item.product_name,

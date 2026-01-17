@@ -4,6 +4,7 @@ import { Button } from '../Components/ui/button';
 import { Input } from '../Components/ui/input';
 import { Label } from '../Components/ui/label';
 import { Textarea } from '../Components/ui/textarea';
+import { Switch } from '../Components/ui/switch';
 import { toast } from 'react-hot-toast';
 import api from '../services/api.service';
 
@@ -17,8 +18,14 @@ const AdminSettings = () => {
     delivery_radius: '',
     minimum_order: ''
   });
+  const [paymentSettings, setPaymentSettings] = useState({
+    mobile_money_enabled: true,
+    mobile_money_airtel_enabled: true,
+    mobile_money_mobicash_enabled: true
+  });
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [savingPayments, setSavingPayments] = useState(false);
 
   useEffect(() => {
     loadSettings();
@@ -27,7 +34,10 @@ const AdminSettings = () => {
   const loadSettings = async () => {
     try {
       setLoading(true);
-      const response = await api.get('/settings/restaurant');
+      const [response, paymentResponse] = await Promise.all([
+        api.get('/settings/restaurant'),
+        api.get('/settings/payment')
+      ]);
       setSettings({
         name: response.data.name || '',
         address: response.data.address || '',
@@ -36,6 +46,11 @@ const AdminSettings = () => {
         opening_hours: response.data.opening_hours || '',
         delivery_radius: response.data.delivery_radius || '',
         minimum_order: response.data.minimum_order || ''
+      });
+      setPaymentSettings({
+        mobile_money_enabled: paymentResponse.data.mobile_money_enabled ?? true,
+        mobile_money_airtel_enabled: paymentResponse.data.mobile_money_airtel_enabled ?? true,
+        mobile_money_mobicash_enabled: paymentResponse.data.mobile_money_mobicash_enabled ?? true
       });
     } catch (error) {
       console.error('Error loading settings:', error);
@@ -52,6 +67,13 @@ const AdminSettings = () => {
     }));
   };
 
+  const handlePaymentToggle = (field) => {
+    setPaymentSettings(prev => ({
+      ...prev,
+      [field]: !prev[field]
+    }));
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
@@ -63,6 +85,19 @@ const AdminSettings = () => {
       toast.error('Erreur lors de la sauvegarde des paramètres');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handlePaymentSubmit = async () => {
+    try {
+      setSavingPayments(true);
+      await api.put('/settings/payment', paymentSettings);
+      toast.success('Paramètres de paiement sauvegardés');
+    } catch (error) {
+      console.error('Error saving payment settings:', error);
+      toast.error('Erreur lors de la sauvegarde des paiements');
+    } finally {
+      setSavingPayments(false);
     }
   };
 
@@ -81,7 +116,7 @@ const AdminSettings = () => {
         <p className="text-gray-600 mt-2">Gérez les informations générales de votre restaurant</p>
       </div>
 
-      <Card className="max-w-2xl">
+      <Card className="max-w-2xl mb-8">
         <CardHeader>
           <CardTitle>Informations du Restaurant</CardTitle>
         </CardHeader>
@@ -178,6 +213,49 @@ const AdminSettings = () => {
               </Button>
             </div>
           </form>
+        </CardContent>
+      </Card>
+
+      <Card className="max-w-2xl">
+        <CardHeader>
+          <CardTitle>Moyens de paiement</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <Label className="text-base">Mobile money</Label>
+              <p className="text-sm text-gray-500">Activer/désactiver le paiement mobile money</p>
+            </div>
+            <Switch
+              checked={paymentSettings.mobile_money_enabled}
+              onCheckedChange={() => handlePaymentToggle('mobile_money_enabled')}
+            />
+          </div>
+
+          <div className="space-y-4 pl-4 border-l border-gray-200">
+            <div className="flex items-center justify-between">
+              <Label className="text-base">AIRTEL Money</Label>
+              <Switch
+                checked={paymentSettings.mobile_money_airtel_enabled}
+                onCheckedChange={() => handlePaymentToggle('mobile_money_airtel_enabled')}
+                disabled={!paymentSettings.mobile_money_enabled}
+              />
+            </div>
+            <div className="flex items-center justify-between">
+              <Label className="text-base">Mobicash</Label>
+              <Switch
+                checked={paymentSettings.mobile_money_mobicash_enabled}
+                onCheckedChange={() => handlePaymentToggle('mobile_money_mobicash_enabled')}
+                disabled={!paymentSettings.mobile_money_enabled}
+              />
+            </div>
+          </div>
+
+          <div className="flex justify-end">
+            <Button onClick={handlePaymentSubmit} disabled={savingPayments}>
+              {savingPayments ? 'Sauvegarde...' : 'Sauvegarder'}
+            </Button>
+          </div>
         </CardContent>
       </Card>
     </div>
