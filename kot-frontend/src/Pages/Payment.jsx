@@ -75,15 +75,6 @@ export default function Payment() {
   });
   const [loadingPaymentSettings, setLoadingPaymentSettings] = useState(true);
 
-  if (!cart || !total) {
-    navigate(createPageUrl("Checkout"));
-    return null;
-  }
-
-  const filteredCart = cart.filter((item) => item.product);
-  const isOnlineAllowed = ["livraison", "emporter", "pickup"].includes(formData?.order_type);
-  const isMobileMoneyAllowedType = ["livraison", "emporter", "pickup"].includes(formData?.order_type);
-
   useEffect(() => {
     const loadPaymentSettings = async () => {
       try {
@@ -108,6 +99,15 @@ export default function Payment() {
       setMobileMoneyProvider(enabledProviders[0] || "");
     }
   }, [loadingPaymentSettings, paymentSettings, mobileMoneyProvider]);
+
+  if (!cart || !total) {
+    navigate(createPageUrl("Checkout"));
+    return null;
+  }
+
+  const filteredCart = cart.filter((item) => item.product);
+  const isOnlineAllowed = ["livraison", "emporter", "pickup"].includes(formData?.order_type);
+  const isMobileMoneyAllowedType = ["livraison", "emporter", "pickup"].includes(formData?.order_type);
   const isOnSite = formData?.order_type === "sur_place";
   const isStaff = Boolean(isStaffFromState);
 
