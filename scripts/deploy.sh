@@ -37,11 +37,24 @@ GIT_SHA="$(git rev-parse --short HEAD)"
 GIT_MSG="$(git log -1 --pretty=%s)"
 
 # Debug: afficher la valeur de REACT_APP_API_URL (sans exposer les secrets)
+echo "=========================================="
 echo "REACT_APP_API_URL=${REACT_APP_API_URL:-NOT SET}"
+echo "=========================================="
 
 docker compose up -d --build api proxy
+
+# Supprimer l'ancienne image pour forcer un rebuild complet
+echo "Suppression de l'ancienne image frontend..."
+docker rmi kot-frontend:latest 2>/dev/null || true
+
 # Rebuild sans cache pour forcer l'utilisation des nouvelles variables
-docker compose -f docker-compose.frontend.yml build --no-cache frontend
+echo "Rebuild du frontend sans cache..."
+docker compose -f docker-compose.frontend.yml build --no-cache --pull frontend
+
+# Vérifier que la variable est bien passée
+echo "Vérification des variables de build..."
+docker compose -f docker-compose.frontend.yml config | grep -A 5 "REACT_APP_API_URL" || echo "Variable non trouvée dans la config"
+
 docker compose -f docker-compose.frontend.yml up -d frontend
 
 send_telegram "Deploy finished on $(hostname) at $(date -u +'%Y-%m-%d %H:%M:%S UTC')%0ACommit: ${GIT_SHA} - ${GIT_MSG}"

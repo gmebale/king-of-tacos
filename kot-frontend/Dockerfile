@@ -9,6 +9,13 @@ COPY . .
 # Build-time variables for CRA
 ARG REACT_APP_API_URL
 ARG REACT_APP_STRIPE_PUBLISHABLE_KEY
+
+# Supprimer tous les fichiers .env pour éviter qu'ils écrasent les ARG
+RUN rm -f .env .env.local .env.production .env.production.local .env.development .env.development.local 2>/dev/null || true
+
+# Afficher la valeur pour debug (sans exposer les secrets complets)
+RUN echo "Building with REACT_APP_API_URL=${REACT_APP_API_URL}"
+
 ENV REACT_APP_API_URL=${REACT_APP_API_URL}
 ENV REACT_APP_STRIPE_PUBLISHABLE_KEY=${REACT_APP_STRIPE_PUBLISHABLE_KEY}
 

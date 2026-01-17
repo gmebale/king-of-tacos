@@ -3,6 +3,7 @@ services:
     build:
       context: ./kot-frontend
       args:
+        # Forcer l'utilisation de la variable d'environnement, avec fallback explicite
         REACT_APP_API_URL: ${REACT_APP_API_URL:-https://kingoftacos.co/api}
         REACT_APP_STRIPE_PUBLISHABLE_KEY: ${REACT_APP_STRIPE_PUBLISHABLE_KEY:-}
     image: kot-frontend:latest
