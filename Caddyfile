@@ -4,6 +4,12 @@
 
 :80 {
     encode gzip
-    reverse_proxy api:5000
-}
 
+    handle /api/* {
+        reverse_proxy api:5000
+    }
+
+    handle {
+        reverse_proxy frontend:80
+    }
+}
