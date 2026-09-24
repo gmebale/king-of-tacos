@@ -89,10 +89,11 @@ export default function OrdersPage() {
     }
   };
 
-  const submitReview = async (orderId) => {
+  const submitReview = async (orderId, productId) => {
     try {
-      await api.post('/reviews', {
-        orderId,
+      await api.post('/orders/review', {
+        order_id: orderId,
+        product_id: productId,
         rating: reviewRating,
         comment: reviewText
       });
@@ -349,7 +350,7 @@ export default function OrdersPage() {
             </div>
             <div className="flex gap-2">
               <Button
-                onClick={() => submitReview(selectedOrder.id)}
+                onClick={() => submitReview(selectedOrder.id, selectedOrder.items[0]?.product_id)}
                 className="flex-1"
               >
                 <MessageSquare className="w-4 h-4 mr-2" />
@@ -393,7 +394,6 @@ function OrderCard({
   showCancel
 }) {
   const total = order.items.reduce((sum, item) => sum + (item.quantity * item.price), 0);
-  const displayCode = order.order_code || `KOT-${order.id?.slice(-6) || ''}`;
 
   return (
     <motion.div
@@ -405,7 +405,7 @@ function OrderCard({
     >
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
-          <h3 className="font-semibold text-gray-900">#{displayCode}</h3>
+          <h3 className="font-semibold text-gray-900">#{order.id.slice(-6)}</h3>
           <Badge className={`${getStatusColor(order.status)} border flex items-center gap-1`}>
             {getStatusIcon(order.status)}
             {getStatusText(order.status)}

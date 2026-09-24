@@ -53,8 +53,6 @@ export default function OrderCard({ order, onUpdateStatus }) {
     return labels[currentStatus];
   };
 
-  const displayCode = order.order_code || `KOT-${order.id?.slice(-6) || ''}`;
-
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.95 }}
@@ -66,7 +64,7 @@ export default function OrderCard({ order, onUpdateStatus }) {
           <div className="flex justify-between items-start">
             <div>
               <h3 className="text-xl font-bold mb-1">
-                Commande #{displayCode}
+                Commande #{order.id.slice(-6)}
               </h3>
               <div className="flex items-center gap-2 text-sm text-gray-600">
                 <Clock className="w-4 h-4" />

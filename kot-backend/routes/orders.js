@@ -1,30 +1,9 @@
 const express = require('express');
 const { PrismaClient } = require('@prisma/client');
 const { authenticateToken, requireRole } = require('../middleware/auth');
-const { format } = require('date-fns');
 
 const router = express.Router();
 const prisma = new PrismaClient();
-
-async function getPaymentSettings() {
-  const keys = ['mobile_money_enabled', 'mobile_money_airtel_enabled', 'mobile_money_mobicash_enabled'];
-  const rows = await prisma.settings.findMany({ where: { key: { in: keys } } });
-  const values = {};
-  rows.forEach((row) => {
-    values[row.key] = row.value;
-  });
-  const toBool = (value, fallback = true) => {
-    if (value === undefined || value === null) return fallback;
-    if (typeof value === 'boolean') return value;
-    if (typeof value === 'number') return value !== 0;
-    return String(value).toLowerCase() === 'true';
-  };
-  return {
-    mobile_money_enabled: toBool(values.mobile_money_enabled, true),
-    mobile_money_airtel_enabled: toBool(values.mobile_money_airtel_enabled, true),
-    mobile_money_mobicash_enabled: toBool(values.mobile_money_mobicash_enabled, true)
-  };
-}
 
 // Utility function to format customization details
 function formatCustomization(customization, productCustomization) {
@@ -75,20 +54,6 @@ function formatCustomization(customization, productCustomization) {
     formattedText: formattedParts.join(' | '),
     details: details
   };
-}
-
-async function generateOrderCode() {
-  const today = new Date();
-  const datePart = format(today, 'yyMMdd');
-
-  const sequence = await prisma.orderCodeSequence.upsert({
-    where: { date: datePart },
-    update: { counter: { increment: 1 } },
-    create: { date: datePart, counter: 1 }
-  });
-
-  const paddedCounter = String(sequence.counter).padStart(4, '0');
-  return `KOT-${datePart}-${paddedCounter}`;
 }
 
 // Get all orders (admin/staff only)
@@ -209,23 +174,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
 // Create order (allows guest orders)
 router.post('/', async (req, res) => {
   try {
-    const {
-      items,
-      total_amount,
-      customer_name,
-      customer_phone,
-      customer_email,
-      order_type,
-      delivery_address,
-      pickup_time,
-      notes,
-      pay_on_delivery,
-      payment_method,
-      mobile_money_provider,
-      mobile_money_phone,
-      mobile_money_message,
-      mobile_money_screenshots
-    } = req.body;
+    const { items, total_amount, customer_name, customer_phone, customer_email, order_type, delivery_address, pickup_time, notes } = req.body;
 
     console.log('Received order data:', { items, total_amount, customer_name });
 
@@ -233,7 +182,6 @@ router.post('/', async (req, res) => {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
     let userId = null;
-    let userRole = null;
 
     if (token) {
       try {
@@ -244,73 +192,11 @@ router.post('/', async (req, res) => {
         });
         if (user) {
           userId = user.id;
-          userRole = user.role;
         }
       } catch (error) {
         // Invalid token, treat as guest
       }
     }
-
-    // Validate cash/on-delivery only for allowed order types
-    const cashAllowedTypes = ['livraison'];
-    if (pay_on_delivery && !cashAllowedTypes.includes(order_type)) {
-      return res.status(400).json({ message: 'Le paiement à la livraison est disponible uniquement pour la livraison.' });
-    }
-
-    if (pay_on_delivery && payment_method) {
-      return res.status(400).json({ message: 'Veuillez choisir un seul mode de paiement.' });
-    }
-
-    const mobileMoneyAllowedTypes = ['livraison', 'emporter', 'pickup'];
-    if (payment_method === 'mobile_money' && !mobileMoneyAllowedTypes.includes(order_type)) {
-      return res.status(400).json({ message: 'Le mobile money est disponible pour la livraison ou à emporter.' });
-    }
-
-    if (payment_method && payment_method !== 'mobile_money') {
-      return res.status(400).json({ message: 'Mode de paiement non supporté.' });
-    }
-
-    if (payment_method === 'mobile_money') {
-      const paymentSettings = await getPaymentSettings();
-      if (!paymentSettings.mobile_money_enabled) {
-        return res.status(400).json({ message: 'Le mobile money est désactivé pour le moment.' });
-      }
-      const provider = String(mobile_money_provider || '').toLowerCase();
-      if (!['airtel', 'mobicash'].includes(provider)) {
-        return res.status(400).json({ message: 'Opérateur mobile money invalide.' });
-      }
-      if (provider === 'airtel' && !paymentSettings.mobile_money_airtel_enabled) {
-        return res.status(400).json({ message: 'AIRTEL Money est désactivé pour le moment.' });
-      }
-      if (provider === 'mobicash' && !paymentSettings.mobile_money_mobicash_enabled) {
-        return res.status(400).json({ message: 'Mobicash est désactivé pour le moment.' });
-      }
-      if (!mobile_money_phone || (!mobile_money_message && (!mobile_money_screenshots || mobile_money_screenshots.length === 0))) {
-        return res.status(400).json({ message: 'Veuillez fournir le numéro et au moins le message ou une capture d\'écran.' });
-      }
-    }
-
-    if (order_type === 'sur_place' && !['admin', 'staff'].includes(userRole)) {
-      return res.status(403).json({ message: 'Le mode sur place est réservé au staff.' });
-    }
-
-    // Prepare notes with optional pay-on-delivery tag
-    const combinedNotes = [];
-    if (notes) combinedNotes.push(notes);
-    if (pay_on_delivery) combinedNotes.push('Paiement à la livraison');
-    if (payment_method === 'mobile_money') {
-      let mobileNote = `Mobile money (${mobile_money_provider}) | Numéro: ${mobile_money_phone}`;
-      if (mobile_money_message) {
-        mobileNote += ` | Message: ${mobile_money_message}`;
-      }
-      if (mobile_money_screenshots && mobile_money_screenshots.length > 0) {
-        mobileNote += ` | Screenshots: ${mobile_money_screenshots.join(', ')}`;
-      }
-      combinedNotes.push(mobileNote);
-    }
-    const finalNotes = combinedNotes.length > 0 ? combinedNotes.join(' | ') : null;
-
-    const orderCode = await generateOrderCode();
 
     // Create order
     const order = await prisma.order.create({
@@ -323,10 +209,7 @@ router.post('/', async (req, res) => {
         order_type,
         delivery_address,
         pickup_time,
-        notes: finalNotes,
-        order_code: orderCode,
-        payment_method: payment_method === 'mobile_money' ? 'mobile_money' : pay_on_delivery ? 'cash' : null,
-        payment_status: payment_method === 'mobile_money' ? 'requires_action' : 'pending',
+        notes,
         items: {
           create: items.map(item => ({
             product_name: item.product_name,

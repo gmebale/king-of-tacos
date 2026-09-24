@@ -1,0 +1,7 @@
+# Caddyfile Demo - King Of Tacos (plug & play)
+# docker compose -f docker-compose.demo.yml up -d
+# Accès: https://localhost | Adminer DB: http://localhost:8081
+
+:80, :443 {
+    # Serve frontend static (nginx conteneur)
+    reverse_proxy frontend:80

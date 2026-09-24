@@ -42,7 +42,24 @@ const requireRole = (roles) => {
   };
 };
 
+const requirePagePermission = (pageKey) => {
+  return (req, res, next) => {
+    if (!req.user) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+    if (req.user.role === 'admin') {
+      return next(); // Admin a tous les droits
+    }
+    const perms = req.user.pagePermissions || {};
+    if (!perms[pageKey]) {
+      return res.status(403).json({ message: 'Accès refusé à cette page' });
+    }
+    next();
+  };
+};
+
 module.exports = {
   authenticateToken,
-  requireRole
+  requireRole,
+  requirePagePermission
 };

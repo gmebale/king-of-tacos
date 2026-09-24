@@ -33,11 +33,16 @@ router.get('/', authenticateToken, requireRole(['admin']), async (req, res) => {
 // Create user (admin only)
 router.post('/', authenticateToken, requireRole(['admin']), async (req, res) => {
   try {
-    const { email, password, full_name, phone, role } = req.body;
+    const { email, password, full_name, phone, role, pagePermissions } = req.body;
 
     // Validation
+    const allowedRoles = ['client', 'staff', 'admin', 'serveur', 'caissier', 'cuisinier', 'bar', 'manager'];
     if (!email || !full_name) {
       return res.status(400).json({ message: 'Email et nom complet sont requis' });
+    }
+    if (role && !allowedRoles.includes(role)) {
+      return res.status(400).json({ message: 'Rôle utilisateur invalide' });
+    }
     }
 
     // Vérifier si l'email existe déjà
@@ -63,7 +68,8 @@ router.post('/', authenticateToken, requireRole(['admin']), async (req, res) => 
         full_name,
         phone: phone || null,
         role: role || 'client',
-        is_active: true
+        is_active: true,
+        pagePermissions: pagePermissions ? pagePermissions : undefined
       },
       select: {
         id: true,
@@ -121,7 +127,7 @@ router.get('/:id', authenticateToken, requireRole(['admin']), async (req, res) =
 router.put('/:id', authenticateToken, requireRole(['admin']), async (req, res) => {
   try {
     const { id } = req.params;
-    const { full_name, phone, role, is_active, password } = req.body;
+    const { full_name, phone, role, is_active, password, pagePermissions } = req.body;
 
     // Vérifier que l'utilisateur existe
     const existingUser = await prisma.user.findUnique({
@@ -130,6 +136,12 @@ router.put('/:id', authenticateToken, requireRole(['admin']), async (req, res) =
 
     if (!existingUser) {
       return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Validation du rôle
+    const allowedRoles = ['client', 'staff', 'admin', 'serveur', 'caissier', 'cuisinier', 'bar', 'manager'];
+    if (role && !allowedRoles.includes(role)) {
+      return res.status(400).json({ message: 'Rôle utilisateur invalide' });
     }
 
     // Empêcher qu'un utilisateur se désactive lui-même
@@ -157,6 +169,7 @@ router.put('/:id', authenticateToken, requireRole(['admin']), async (req, res) =
     if (phone !== undefined) updateData.phone = phone;
     if (role !== undefined) updateData.role = role;
     if (is_active !== undefined) updateData.is_active = is_active;
+    if (pagePermissions !== undefined) updateData.pagePermissions = pagePermissions;
     if (password) {
       updateData.password = await bcrypt.hash(password, 10);
     }

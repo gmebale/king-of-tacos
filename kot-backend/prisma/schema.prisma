@@ -15,6 +15,11 @@ enum Role {
   client
   staff
   admin
+  serveur
+  caissier
+  cuisinier
+  bar
+  manager
 }
 
 enum OrderStatus {
@@ -73,6 +78,7 @@ model User {
   role           Role    @default(client)
   loyalty_points Int     @default(0)
   is_active      Boolean @default(true)
+  pagePermissions Json?
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
@@ -266,6 +272,18 @@ model ProductOption {
   optionType      String // e.g. "size", "meat", "sauce", "extra", "side"
 
   @@map("product_options")
+}
+
+model Log {
+  id        Int      @id @default(autoincrement())
+  user_id   Int
+  user      User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  role      Role
+  action    String
+  details   String?
+  created_at DateTime @default(now())
+
+  @@map("logs")
 }
 
 model Settings {

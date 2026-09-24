@@ -1,0 +1,78 @@
+services:
+  mysql:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: rootdemo
+      MYSQL_DATABASE: king_of_tacos_demo
+      MYSQL_USER: demo
+      MYSQL_PASSWORD: demodemo123
+    ports:
+      - "3307:3306"  # Éviter conflit XAMPP
+    volumes:
+      - mysql_demo_data:/var/lib/mysql
+      - ./kot-backend/prisma:/docker-entrypoint-initdb.d  # Auto-migrate
+
+  adminer:
+    image: adminer:latest
+    restart: unless-stopped
+    ports:
+      - "8081:8080"
+    depends_on:
+      - mysql
+
+  api:
+    build: ./kot-backend
+    restart: unless-stopped
+    env_file: .env.demo
+    environment:
+      - NODE_ENV=demo
+      - DATABASE_URL=mysql://demo:demodemo123@mysql:3306/king_of_tacos_demo
+    ports:
+      - "5001:5000"
+    volumes:
+      - uploads_demo:/app/uploads
+      - ./kot-backend:/app  # Hot reload dev
+    depends_on:
+      mysql:
+        condition: service_healthy
+    command: sh -c "sleep 10 && npx prisma db push && node seed.js && npm run dev"
+
+  frontend:
+    build:
+      context: ./kot-frontend
+    image: kot-frontend:demo
+    restart: unless-stopped
+    ports:
+      - "3001:80"
+    environment:
+      - REACT_APP_API_URL=http://localhost:5001/api
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile.demo:/etc/caddy/Caddyfile:ro
+      - caddy_demo_data:/data
+      - caddy_demo_config:/config
+    depends_on:
+      - api
+      - frontend
+
+  # Ngrok pour lien public (optionnel)
+  ngrok:
+    image: ngrok/ngrok:latest
+    restart: unless-stopped
+    command: http 80
+    ports:
+      - "4040:4040"
+    env_file: .env.demo
+
+volumes:
+  mysql_demo_data:
+  uploads_demo:
+  caddy_demo_data:
+  caddy_demo_config:

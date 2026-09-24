@@ -78,22 +78,15 @@ router.get('/orders', authenticateToken, requireRole(['admin', 'staff']), async 
     for (const order of orders) {
       for (const item of order.items) {
         const product = await prisma.product.findFirst({
-          where: {
-            OR: [
-              { id: item.product_id || undefined },
-              { name: item.product_name }
-            ].filter(Boolean)
-          },
+          where: { name: item.product_name },
           select: { customization: true }
         });
         item.productCustomization = product?.customization || null;
-
-        // Preserve summary already stored on the item; only recompute when we have both sides
+        
+        // Generate customization summary
         if (item.customization && product?.customization) {
           const customizationInfo = formatCustomization(item.customization, product.customization);
           item.customizationSummary = customizationInfo.formattedText;
-        } else if (item.customizationSummary) {
-          item.customizationSummary = item.customizationSummary;
         } else {
           item.customizationSummary = '';
         }

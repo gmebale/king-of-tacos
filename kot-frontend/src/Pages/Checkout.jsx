@@ -27,7 +27,6 @@ export default function Checkout() {
     pickup_time: "",
     notes: ""
   });
-  const isStaff = ['admin', 'staff'].includes(user?.role);
 
   useEffect(() => {
     if (!isLoading && cart.length === 0) {
@@ -35,12 +34,6 @@ export default function Checkout() {
     }
     loadUser();
   }, [cart, navigate, isLoading]);
-
-  useEffect(() => {
-    if (!isStaff && formData.order_type === "sur_place") {
-      setFormData((prev) => ({ ...prev, order_type: "emporter" }));
-    }
-  }, [isStaff, formData.order_type]);
 
   const loadCart = () => {
     // Cart is now managed by useCart hook
@@ -75,8 +68,7 @@ export default function Checkout() {
       state: {
         cart,
         formData,
-        total: finalTotal,
-        isStaff
+        total: finalTotal
       }
     });
   };
@@ -180,18 +172,16 @@ export default function Checkout() {
                       </Label>
                     </div>
 
-                    {isStaff && (
-                      <div className="flex items-center space-x-2 p-4 border-2 rounded-xl hover:border-amber-400 cursor-pointer">
-                        <RadioGroupItem value="sur_place" id="sur_place" />
-                        <Label htmlFor="sur_place" className="flex items-center gap-2 cursor-pointer flex-1">
-                          <MapPin className="w-5 h-5 text-amber-600" />
-                          <div>
-                            <p className="font-semibold">Sur place</p>
-                            <p className="text-sm text-gray-500">Dégustez au restaurant</p>
-                          </div>
-                        </Label>
-                      </div>
-                    )}
+                    <div className="flex items-center space-x-2 p-4 border-2 rounded-xl hover:border-amber-400 cursor-pointer">
+                      <RadioGroupItem value="sur_place" id="sur_place" />
+                      <Label htmlFor="sur_place" className="flex items-center gap-2 cursor-pointer flex-1">
+                        <MapPin className="w-5 h-5 text-amber-600" />
+                        <div>
+                          <p className="font-semibold">Sur place</p>
+                          <p className="text-sm text-gray-500">Dégustez au restaurant</p>
+                        </div>
+                      </Label>
+                    </div>
 
                     <div className="flex items-center space-x-2 p-4 border-2 rounded-xl hover:border-amber-400 cursor-pointer">
                       <RadioGroupItem value="livraison" id="livraison" />

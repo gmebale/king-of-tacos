@@ -19,6 +19,6 @@ ENV NODE_ENV=production
 ENV PORT=5000
 EXPOSE 5000
 
-# Run migrations before starting the API
-CMD ["sh", "-c", "npx prisma migrate deploy && node server.js"]
+# Demo: Wait for MySQL + migrate + seed + dev server
+CMD ["sh", "-c", "apk add --no-cache netcat-openbsd >/dev/null 2>&1 && echo 'Waiting for MySQL...' && i=0; until nc -z mysql 3306; do i=$((i+1)); if [ \"$i\" -ge 60 ]; then echo 'MySQL not ready after 60s'; exit 1; fi; sleep 1; done && echo 'MySQL is up' && npx prisma db push && npx prisma generate && node seed.js && echo 'Demo ready! Admin: admin@test.com / password123' && npm run dev"]
 
