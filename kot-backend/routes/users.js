@@ -43,10 +43,10 @@ router.get('/', authenticateToken, requireRole(['admin']), async (req, res) => {
       orderBy: { created_at: 'desc' }
     });
     res.json(users);
-  } catch (error) 
+  } catch (error) {
     console.error('Get users error:', error);
     res.status(500).json({ message: 'Internal server error' });
-  
+  }
 });
 
 // Create user (admin only)
