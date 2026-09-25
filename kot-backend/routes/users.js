@@ -6,6 +6,25 @@ const { authenticateToken, requireRole } = require('../middleware/auth');
 const router = express.Router();
 const prisma = new PrismaClient();
 
+const getAllowedRoleValues = async () => {
+  const dbRoles = await prisma.role.findMany({
+    where: { is_active: true },
+    select: { slug: true }
+  });
+
+  return new Set([
+    'client',
+    'staff',
+    'admin',
+    'serveur',
+    'caissier',
+    'cuisinier',
+    'bar',
+    'manager',
+    ...dbRoles.map((role) => role.slug)
+  ]);
+};
+
 // Get all users (admin only)
 router.get('/', authenticateToken, requireRole(['admin']), async (req, res) => {
   try {
@@ -36,13 +55,12 @@ router.post('/', authenticateToken, requireRole(['admin']), async (req, res) => 
     const { email, password, full_name, phone, role, pagePermissions } = req.body;
 
     // Validation
-    const allowedRoles = ['client', 'staff', 'admin', 'serveur', 'caissier', 'cuisinier', 'bar', 'manager'];
+    const allowedRoles = await getAllowedRoleValues();
     if (!email || !full_name) {
       return res.status(400).json({ message: 'Email et nom complet sont requis' });
     }
-    if (role && !allowedRoles.includes(role)) {
+    if (role && !allowedRoles.has(role)) {
       return res.status(400).json({ message: 'Rôle utilisateur invalide' });
-    }
     }
 
     // Vérifier si l'email existe déjà
@@ -139,8 +157,8 @@ router.put('/:id', authenticateToken, requireRole(['admin']), async (req, res) =
     }
 
     // Validation du rôle
-    const allowedRoles = ['client', 'staff', 'admin', 'serveur', 'caissier', 'cuisinier', 'bar', 'manager'];
-    if (role && !allowedRoles.includes(role)) {
+    const allowedRoles = await getAllowedRoleValues();
+    if (role && !allowedRoles.has(role)) {
       return res.status(400).json({ message: 'Rôle utilisateur invalide' });
     }
 

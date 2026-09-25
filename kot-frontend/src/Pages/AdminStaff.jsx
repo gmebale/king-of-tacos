@@ -26,6 +26,43 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Switch } from "../Components/ui/switch";
 import toast from "react-hot-toast";
 
+const PAGE_PERMISSIONS = [
+  { key: "dashboard", label: "Dashboard" },
+  { key: "orders", label: "Commandes" },
+  { key: "kitchen", label: "Cuisine" },
+  { key: "cashier", label: "Caisse" },
+  { key: "stock", label: "Stock" },
+  { key: "finance", label: "Finance" },
+  { key: "settings", label: "Paramètres" },
+  { key: "staff", label: "Personnel" },
+  { key: "reviews", label: "Avis" },
+  { key: "customers", label: "Clients" }
+];
+
+const ROLE_OPTIONS = [
+  { value: "client", label: "Client" },
+  { value: "staff", label: "Staff" },
+  { value: "serveur", label: "Serveur" },
+  { value: "caissier", label: "Caissier" },
+  { value: "cuisinier", label: "Cuisinier" },
+  { value: "bar", label: "Bar" },
+  { value: "manager", label: "Manager" },
+  { value: "admin", label: "Administrateur" }
+];
+
+const createDefaultPermissions = () => ({
+  dashboard: true,
+  orders: false,
+  kitchen: false,
+  cashier: false,
+  stock: false,
+  finance: false,
+  settings: false,
+  staff: false,
+  reviews: false,
+  customers: false
+});
+
 export default function AdminStaff() {
   const [users, setUsers] = useState([]);
   const [filteredUsers, setFilteredUsers] = useState([]);
@@ -47,7 +84,8 @@ export default function AdminStaff() {
     password: "",
     full_name: "",
     phone: "",
-    role: "client"
+    role: "client",
+    pagePermissions: createDefaultPermissions()
   });
   
   const [isCreating, setIsCreating] = useState(false);
@@ -102,6 +140,16 @@ export default function AdminStaff() {
     switch (role) {
       case "admin":
         return "bg-purple-100 text-purple-800 border-purple-300";
+      case "manager":
+        return "bg-indigo-100 text-indigo-800 border-indigo-300";
+      case "serveur":
+        return "bg-cyan-100 text-cyan-800 border-cyan-300";
+      case "caissier":
+        return "bg-emerald-100 text-emerald-800 border-emerald-300";
+      case "cuisinier":
+        return "bg-orange-100 text-orange-800 border-orange-300";
+      case "bar":
+        return "bg-pink-100 text-pink-800 border-pink-300";
       case "staff":
         return "bg-green-100 text-green-800 border-green-300";
       default:
@@ -113,6 +161,16 @@ export default function AdminStaff() {
     switch (role) {
       case "admin":
         return "Administrateur";
+      case "manager":
+        return "Manager";
+      case "serveur":
+        return "Serveur";
+      case "caissier":
+        return "Caissier";
+      case "cuisinier":
+        return "Cuisinier";
+      case "bar":
+        return "Bar";
       case "staff":
         return "Staff";
       default:
@@ -138,7 +196,10 @@ export default function AdminStaff() {
 
     setIsCreating(true);
     try {
-      await User.create(newUser);
+      await User.create({
+        ...newUser,
+        pagePermissions: newUser.pagePermissions || createDefaultPermissions()
+      });
       toast.success("Utilisateur créé avec succès");
       setIsCreateDialogOpen(false);
       setNewUser({
@@ -146,7 +207,8 @@ export default function AdminStaff() {
         password: "",
         full_name: "",
         phone: "",
-        role: "client"
+        role: "client",
+        pagePermissions: createDefaultPermissions()
       });
       loadUsers();
     } catch (error) {
@@ -157,7 +219,14 @@ export default function AdminStaff() {
   };
 
   const handleEditUser = (user) => {
-    setEditingUser({ ...user });
+    const normalizedPermissions = {
+      ...createDefaultPermissions(),
+      ...(user.pagePermissions || {})
+    };
+    setEditingUser({
+      ...user,
+      pagePermissions: normalizedPermissions
+    });
     setIsEditDialogOpen(true);
   };
 
@@ -174,7 +243,8 @@ export default function AdminStaff() {
         phone: editingUser.phone,
         role: editingUser.role,
         is_active: editingUser.is_active,
-        password: editingUser.password || undefined
+        password: editingUser.password || undefined,
+        pagePermissions: editingUser.pagePermissions || createDefaultPermissions()
       });
       toast.success("Utilisateur mis à jour avec succès");
       setIsEditDialogOpen(false);
@@ -301,11 +371,36 @@ export default function AdminStaff() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="client">Client</SelectItem>
-                      <SelectItem value="staff">Staff</SelectItem>
-                      <SelectItem value="admin">Administrateur</SelectItem>
+                      {ROLE_OPTIONS.map((roleOption) => (
+                        <SelectItem key={roleOption.value} value={roleOption.value}>
+                          {roleOption.label}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
+                </div>
+
+                <div className="pt-2">
+                  <Label>Permissions d’accès</Label>
+                  <div className="grid grid-cols-2 gap-3 mt-2">
+                    {PAGE_PERMISSIONS.map((permission) => (
+                      <div key={permission.key} className="flex items-center justify-between rounded-lg border p-2">
+                        <span className="text-sm text-gray-700">{permission.label}</span>
+                        <Switch
+                          checked={!!newUser.pagePermissions?.[permission.key]}
+                          onCheckedChange={(checked) =>
+                            setNewUser((prev) => ({
+                              ...prev,
+                              pagePermissions: {
+                                ...(prev.pagePermissions || createDefaultPermissions()),
+                                [permission.key]: checked
+                              }
+                            }))
+                          }
+                        />
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
               <DialogFooter>
@@ -348,9 +443,11 @@ export default function AdminStaff() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Tous les rôles</SelectItem>
-                <SelectItem value="client">Client</SelectItem>
-                <SelectItem value="staff">Staff</SelectItem>
-                <SelectItem value="admin">Administrateur</SelectItem>
+                {ROLE_OPTIONS.map((roleOption) => (
+                  <SelectItem key={roleOption.value} value={roleOption.value}>
+                    {roleOption.label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -533,12 +630,38 @@ export default function AdminStaff() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="client">Client</SelectItem>
-                    <SelectItem value="staff">Staff</SelectItem>
-                    <SelectItem value="admin">Administrateur</SelectItem>
+                    {ROLE_OPTIONS.map((roleOption) => (
+                      <SelectItem key={roleOption.value} value={roleOption.value}>
+                        {roleOption.label}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
+
+              <div className="pt-2">
+                <Label>Permissions d’accès</Label>
+                <div className="grid grid-cols-2 gap-3 mt-2">
+                  {PAGE_PERMISSIONS.map((permission) => (
+                    <div key={permission.key} className="flex items-center justify-between rounded-lg border p-2">
+                      <span className="text-sm text-gray-700">{permission.label}</span>
+                      <Switch
+                        checked={!!editingUser.pagePermissions?.[permission.key]}
+                        onCheckedChange={(checked) =>
+                          setEditingUser((prev) => ({
+                            ...prev,
+                            pagePermissions: {
+                              ...(prev.pagePermissions || createDefaultPermissions()),
+                              [permission.key]: checked
+                            }
+                          }))
+                        }
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
               <div>
                 <Label htmlFor="edit-password">Nouveau mot de passe (laisser vide pour ne pas changer)</Label>
                 <Input

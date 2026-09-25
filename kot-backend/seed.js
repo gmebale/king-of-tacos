@@ -4,7 +4,28 @@ const bcrypt = require('bcryptjs');
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('Seeding test users...');
+  console.log('Seeding roles and test users...');
+
+  const defaultRoles = [
+    { name: 'Client', slug: 'client', description: 'Client standard' },
+    { name: 'Staff', slug: 'staff', description: 'Personnel général' },
+    { name: 'Serveur', slug: 'serveur', description: 'Serveur' },
+    { name: 'Caissier', slug: 'caissier', description: 'Caissier' },
+    { name: 'Cuisinier', slug: 'cuisinier', description: 'Cuisinier' },
+    { name: 'Bar', slug: 'bar', description: 'Bar' },
+    { name: 'Manager', slug: 'manager', description: 'Manager' },
+    { name: 'Administrateur', slug: 'admin', description: 'Administrateur système' }
+  ];
+
+  const roleMap = {};
+  for (const roleData of defaultRoles) {
+    const role = await prisma.role.upsert({
+      where: { slug: roleData.slug },
+      update: { name: roleData.name, description: roleData.description, is_active: true },
+      create: roleData
+    });
+    roleMap[role.slug] = role;
+  }
 
   // Hash password for test users
   const hashedPassword = await bcrypt.hash('password123', 10);
@@ -12,13 +33,17 @@ async function main() {
   // Create admin user
   const admin = await prisma.user.upsert({
     where: { email: 'admin@test.com' },
-    update: {},
+    update: {
+      role: 'admin',
+      role_id: roleMap.admin.id
+    },
     create: {
       email: 'admin@test.com',
       password: hashedPassword,
       full_name: 'Admin Test',
       phone: '0123456789',
-      role: 'admin'
+      role: 'admin',
+      role_id: roleMap.admin.id
     }
   });
 

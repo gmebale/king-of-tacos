@@ -3,6 +3,13 @@ const { PrismaClient } = require('@prisma/client');
 
 const prisma = new PrismaClient();
 
+const normalizeRole = (user) => {
+  if (!user) return 'client';
+  if (typeof user.role === 'string') return user.role;
+  if (user.role && typeof user.role === 'object' && user.role.slug) return user.role.slug;
+  return 'client';
+};
+
 const authenticateToken = async (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
@@ -14,14 +21,33 @@ const authenticateToken = async (req, res, next) => {
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const user = await prisma.user.findUnique({
-      where: { id: decoded.userId }
+      where: { id: decoded.userId },
+      include: {
+        roleRef: true,
+        userPermissions: { include: { permission: true } }
+      }
     });
 
     if (!user) {
       return res.status(401).json({ message: 'Invalid token' });
     }
 
-    req.user = user;
+    const roleValue = normalizeRole(user);
+    const permissionMap = {};
+    if (Array.isArray(user.userPermissions)) {
+      user.userPermissions.forEach((entry) => {
+        if (entry.permission && entry.permission.code) {
+          permissionMap[entry.permission.code] = entry.granted;
+        }
+      });
+    }
+
+    req.user = {
+      ...user,
+      role: roleValue,
+      permissions: permissionMap,
+      pagePermissions: user.pagePermissions || permissionMap
+    };
     next();
   } catch (error) {
     return res.status(403).json({ message: 'Invalid token' });
@@ -34,7 +60,7 @@ const requireRole = (roles) => {
       return res.status(401).json({ message: 'Authentication required' });
     }
 
-    if (!roles.includes(req.user.role)) {
+    if (!roles.includes(normalizeRole(req.user))) {
       return res.status(403).json({ message: 'Insufficient permissions' });
     }
 
@@ -47,19 +73,28 @@ const requirePagePermission = (pageKey) => {
     if (!req.user) {
       return res.status(401).json({ message: 'Authentication required' });
     }
-    if (req.user.role === 'admin') {
-      return next(); // Admin a tous les droits
+
+    const roleName = normalizeRole(req.user);
+    if (roleName === 'admin') {
+      return next();
     }
-    const perms = req.user.pagePermissions || {};
-    if (!perms[pageKey]) {
-      return res.status(403).json({ message: 'Accès refusé à cette page' });
+
+    const pagePermissions = req.user.pagePermissions || {};
+    if (pagePermissions[pageKey] === true) {
+      return next();
     }
-    next();
+
+    if (req.user.permissions && req.user.permissions[pageKey] === true) {
+      return next();
+    }
+
+    return res.status(403).json({ message: 'Accès refusé à cette page' });
   };
 };
 
 module.exports = {
   authenticateToken,
   requireRole,
-  requirePagePermission
+  requirePagePermission,
+  normalizeRole
 };

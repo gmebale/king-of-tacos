@@ -11,15 +11,60 @@ datasource db {
   relationMode = "prisma"
 }
 
-enum Role {
-  client
-  staff
-  admin
-  serveur
-  caissier
-  cuisinier
-  bar
-  manager
+model Role {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  slug        String   @unique
+  description String?
+  is_active   Boolean  @default(true)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  users           User[]
+  rolePermissions RolePermission[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id          Int      @id @default(autoincrement())
+  code        String   @unique
+  label       String
+  module      String
+  description String?
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  rolePermissions RolePermission[]
+  userPermissions UserPermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  id            Int        @id @default(autoincrement())
+  role_id       Int
+  permission_id Int
+  granted       Boolean    @default(true)
+
+  role       Role       @relation(fields: [role_id], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permission_id], references: [id], onDelete: Cascade)
+
+  @@unique([role_id, permission_id])
+  @@map("role_permissions")
+}
+
+model UserPermission {
+  id            Int        @id @default(autoincrement())
+  user_id       Int
+  permission_id Int
+  granted       Boolean    @default(true)
+
+  user       User       @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permission_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, permission_id])
+  @@map("user_permissions")
 }
 
 enum OrderStatus {
@@ -76,7 +121,9 @@ model User {
   apple_id       String? @unique
   full_name      String
   phone          String?
-  role           Role    @default(client)
+  role           String  @default("client")
+  role_id        Int?
+  roleRef        Role?   @relation(fields: [role_id], references: [id], onDelete: SetNull)
   loyalty_points Int     @default(0)
   is_active      Boolean @default(true)
   pagePermissions Json?
@@ -85,9 +132,12 @@ model User {
   updated_at DateTime @updatedAt
 
   orders             Order[]
+  validatedOrders    Order[] @relation("orderValidatedBy")
+  closedOrders       Order[] @relation("orderClosedBy")
   loyaltyRedemptions LoyaltyRedemption[]
   reviews            Review[]
   logs               Log[]
+  userPermissions    UserPermission[]
 
   @@map("users")
 }
@@ -288,7 +338,7 @@ model Log {
   id        Int      @id @default(autoincrement())
   user_id   Int
   user      User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  role      Role
+  role      String   @default("client")
   action    String
   details   String?
   created_at DateTime @default(now())
