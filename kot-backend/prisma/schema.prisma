@@ -86,6 +86,7 @@ model User {
   orders             Order[]
   loyaltyRedemptions LoyaltyRedemption[]
   reviews            Review[]
+  logs               Log[]
 
   @@map("users")
 }
