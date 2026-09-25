@@ -29,6 +29,7 @@ enum OrderStatus {
   en_livraison
   livree
   annulee
+  cloturee
 }
 
 enum PaymentMethod {
@@ -136,6 +137,14 @@ model Order {
   delivery_address String?
   pickup_time      String?
   notes            String?
+
+  validated_by Int?
+  validatedBy  User?  @relation("orderValidatedBy", fields: [validated_by], references: [id])
+  validated_at DateTime?
+
+  closed_by Int?
+  closedBy  User?  @relation("orderClosedBy", fields: [closed_by], references: [id])
+  closed_at DateTime?
 
   items   OrderItem[]
   reviews Review[]

@@ -238,7 +238,7 @@ router.post('/', async (req, res) => {
 router.put('/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { status, items, total_amount, customer_name, customer_phone, customer_email, order_type, delivery_address, pickup_time, notes } = req.body;
+    const { status, items, total_amount, customer_name, customer_phone, customer_email, order_type, delivery_address, pickup_time, notes, payment_method } = req.body;
 
     // Get the order first
     const order = await prisma.order.findUnique({
@@ -267,9 +267,12 @@ router.put('/:id', authenticateToken, async (req, res) => {
     let updateData = {};
 
     if (isAdminOrStaff) {
-      // Admins/staff can only update status
+      // Admins/staff can update status and payment method
       if (status) {
         updateData.status = status;
+      }
+      if (payment_method !== undefined) {
+        updateData.payment_method = payment_method;
       }
     } else {
       // Users can update everything if en_attente
@@ -311,6 +314,22 @@ router.put('/:id', authenticateToken, async (req, res) => {
       }
     });
 
+    // Log status change when admin/staff update status
+    if (isAdminOrStaff && status) {
+      try {
+        await prisma.log.create({
+          data: {
+            user_id: req.user.id,
+            role: req.user.role,
+            action: `update_status_${status}`,
+            details: `Order ${id} status changed to ${status} by user ${req.user.id}`
+          }
+        });
+      } catch (logErr) {
+        console.warn('Unable to create log for status update:', logErr);
+      }
+    }
+
     // Assign loyalty points if order is completed and user is authenticated
     if ((status === 'livree' || status === 'prete') && updatedOrder.user_id) {
       await prisma.user.update({
@@ -334,6 +353,100 @@ router.put('/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ message: 'Order not found' });
     }
     console.error('Update order error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// Validate order (serveurs only for on-site orders)
+router.post('/:id/validate', authenticateToken, requireRole(['serveur','admin','manager']), async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const order = await prisma.order.findUnique({ where: { id } });
+    if (!order) return res.status(404).json({ message: 'Order not found' });
+
+    // Only on-site orders should be validated by a server, admins/managers can override
+    if (order.order_type !== 'sur_place' && !['admin','manager'].includes(req.user.role)) {
+      return res.status(400).json({ message: 'Seules les commandes sur place peuvent être validées par un serveur' });
+    }
+
+    if (order.status === 'cloturee') {
+      return res.status(400).json({ message: 'Order already closed' });
+    }
+
+    const updated = await prisma.order.update({
+      where: { id },
+      data: {
+        validated_by: req.user.id,
+        validated_at: new Date(),
+        status: 'en_preparation'
+      }
+    });
+
+    // Log the validation
+    try {
+      await prisma.log.create({
+        data: {
+          user_id: req.user.id,
+          role: req.user.role,
+          action: 'validate_order',
+          details: `Order ${id} validated by user ${req.user.id}`
+        }
+      });
+    } catch (logErr) {
+      console.warn('Unable to create log for order validation:', logErr);
+    }
+
+    res.json(updated);
+  } catch (error) {
+    console.error('Validate order error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// Close order (caissier closes in cash register)
+router.post('/:id/close', authenticateToken, requireRole(['caissier','admin','manager']), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { payment_method, payment_provider_id, payment_receipt_url } = req.body;
+
+    const order = await prisma.order.findUnique({ where: { id } });
+    if (!order) return res.status(404).json({ message: 'Order not found' });
+
+    if (order.status === 'cloturee') {
+      return res.status(400).json({ message: 'Order already closed' });
+    }
+
+    const updated = await prisma.order.update({
+      where: { id },
+      data: {
+        closed_by: req.user.id,
+        closed_at: new Date(),
+        status: 'cloturee',
+        payment_method: payment_method || order.payment_method,
+        payment_provider_id: payment_provider_id || order.payment_provider_id,
+        payment_receipt_url: payment_receipt_url || order.payment_receipt_url,
+        payment_status: payment_method ? 'paid' : order.payment_status
+      }
+    });
+
+    // Log the closure
+    try {
+      await prisma.log.create({
+        data: {
+          user_id: req.user.id,
+          role: req.user.role,
+          action: 'close_order',
+          details: `Order ${id} closed by user ${req.user.id}`
+        }
+      });
+    } catch (logErr) {
+      console.warn('Unable to create log for order closure:', logErr);
+    }
+
+    res.json(updated);
+  } catch (error) {
+    console.error('Close order error:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 });
