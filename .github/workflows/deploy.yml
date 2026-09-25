@@ -17,6 +17,5 @@ jobs:
           key: ${{ secrets.SSH_KEY }}
           port: ${{ secrets.SSH_PORT }}
           script: |
-            cd /var/www/kotapp/king-of-tacos
+            cd /opt/kot-project/king-of-tacos
             bash scripts/deploy.sh
-
