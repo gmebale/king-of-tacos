@@ -11,6 +11,26 @@ const normalizeRole = (user) => {
   return 'client';
 };
 
+const PAGE_PERMISSION_KEYS = [
+  'dashboard', 'orders', 'kitchen', 'cashier', 'stock',
+  'finance', 'settings', 'staff', 'reviews', 'customers', 'loyalty'
+];
+
+const addPermission = (map, permission, granted) => {
+  if (!permission?.code) return;
+
+  const code = permission.code.toLowerCase();
+  const module = permission.module?.toLowerCase();
+  map[permission.code] = granted;
+
+  for (const pageKey of PAGE_PERMISSION_KEYS) {
+    const tokens = code.split(/[._:-]/);
+    if (module === pageKey || tokens.includes(pageKey)) {
+      map[pageKey] = granted;
+    }
+  }
+};
+
 const authenticateToken = async (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
@@ -24,7 +44,11 @@ const authenticateToken = async (req, res, next) => {
     const user = await prisma.user.findUnique({
       where: { id: decoded.userId },
       include: {
-        roleRef: true,
+        roleRef: {
+          include: {
+            rolePermissions: { include: { permission: true } }
+          }
+        },
         userPermissions: { include: { permission: true } }
       }
     });
@@ -35,19 +59,27 @@ const authenticateToken = async (req, res, next) => {
 
     const roleValue = normalizeRole(user);
     const permissionMap = {};
-    if (Array.isArray(user.userPermissions)) {
-      user.userPermissions.forEach((entry) => {
-        if (entry.permission && entry.permission.code) {
-          permissionMap[entry.permission.code] = entry.granted;
-        }
+    if (Array.isArray(user.roleRef?.rolePermissions)) {
+      user.roleRef.rolePermissions.forEach((entry) => {
+        addPermission(permissionMap, entry.permission, entry.granted);
       });
     }
+    if (Array.isArray(user.userPermissions)) {
+      user.userPermissions.forEach((entry) => {
+        addPermission(permissionMap, entry.permission, entry.granted);
+      });
+    }
+
+    const pagePermissions = {
+      ...permissionMap,
+      ...(user.pagePermissions && typeof user.pagePermissions === 'object' ? user.pagePermissions : {})
+    };
 
     req.user = {
       ...user,
       role: roleValue,
       permissions: permissionMap,
-      pagePermissions: user.pagePermissions || permissionMap
+      pagePermissions
     };
     next();
   } catch (error) {

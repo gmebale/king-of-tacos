@@ -241,7 +241,12 @@ router.get('/me', authenticateToken, async (req, res) => {
       }
     });
 
-    res.json({ ...user, role: req.user.role, roleName: req.user.roleRef?.name || req.user.role });
+    res.json({
+      ...user,
+      role: req.user.role,
+      roleName: req.user.roleRef?.name || req.user.role,
+      pagePermissions: req.user.pagePermissions
+    });
   } catch (error) {
     console.error('Me error:', error);
     res.status(500).json({ message: 'Internal server error' });
@@ -266,7 +271,12 @@ router.put('/profile', authenticateToken, async (req, res) => {
       }
     });
 
-    res.json({ ...user, role: req.user.role, roleName: req.user.roleRef?.name || req.user.role });
+    res.json({
+      ...user,
+      role: req.user.role,
+      roleName: req.user.roleRef?.name || req.user.role,
+      pagePermissions: req.user.pagePermissions
+    });
   } catch (error) {
     console.error('Update profile error:', error);
     res.status(500).json({ message: 'Internal server error' });
