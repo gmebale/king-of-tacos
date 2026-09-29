@@ -18,6 +18,7 @@ export default function Checkout() {
   const { cart, getTotal, isLoading } = useCart();
 
   const [user, setUser] = useState(null);
+  const isStaffOrder = user?.role === 'serveur' && sessionStorage.getItem('kot_staff_order_mode') === 'true';
   const [formData, setFormData] = useState({
     customer_name: "",
     customer_phone: "",
@@ -25,6 +26,8 @@ export default function Checkout() {
     order_type: "emporter",
     delivery_address: "",
     pickup_time: "",
+    table_number: "",
+    payment_method: "cash",
     notes: ""
   });
 
@@ -49,7 +52,10 @@ export default function Checkout() {
           customer_name: currentUser.full_name || "",
           customer_email: currentUser.email || "",
           customer_phone: currentUser.phone || "",
-          delivery_address: currentUser.address || ""
+          delivery_address: currentUser.address || "",
+          order_type: currentUser.role === 'serveur' && sessionStorage.getItem('kot_staff_order_mode') === 'true'
+            ? 'sur_place'
+            : prev.order_type
         }));
       }
     } catch (error) {
@@ -109,22 +115,24 @@ export default function Checkout() {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div>
-                    <Label htmlFor="name">Nom complet *</Label>
+                    <Label htmlFor="name">
+                      {isStaffOrder && formData.order_type === 'sur_place' ? 'Nom du client (facultatif)' : isStaffOrder ? 'Nom ou numéro de retrait *' : 'Nom complet *'}
+                    </Label>
                     <Input
                       id="name"
-                      required
+                      required={!isStaffOrder || formData.order_type === 'emporter'}
                       value={formData.customer_name}
                       onChange={(e) => setFormData({...formData, customer_name: e.target.value})}
                       className="rounded-xl border-2 focus:border-amber-400"
-                      placeholder="Votre nom"
+                      placeholder={isStaffOrder && formData.order_type === 'emporter' ? 'Nom du client ou numéro de retrait' : 'Votre nom'}
                     />
                   </div>
 
                   <div>
-                    <Label htmlFor="phone">Téléphone *</Label>
+                    <Label htmlFor="phone">Téléphone{isStaffOrder ? ' (facultatif)' : ' *'}</Label>
                     <Input
                       id="phone"
-                      required
+                      required={!isStaffOrder}
                       type="tel"
                       value={formData.customer_phone}
                       onChange={(e) => setFormData({...formData, customer_phone: e.target.value})}
@@ -172,18 +180,20 @@ export default function Checkout() {
                       </Label>
                     </div>
 
-                    <div className="flex items-center space-x-2 p-4 border-2 rounded-xl hover:border-amber-400 cursor-pointer">
-                      <RadioGroupItem value="sur_place" id="sur_place" />
-                      <Label htmlFor="sur_place" className="flex items-center gap-2 cursor-pointer flex-1">
-                        <MapPin className="w-5 h-5 text-amber-600" />
-                        <div>
-                          <p className="font-semibold">Sur place</p>
-                          <p className="text-sm text-gray-500">Dégustez au restaurant</p>
-                        </div>
-                      </Label>
-                    </div>
+                    {isStaffOrder && (
+                      <div className="flex items-center space-x-2 p-4 border-2 rounded-xl hover:border-amber-400 cursor-pointer">
+                        <RadioGroupItem value="sur_place" id="sur_place" />
+                        <Label htmlFor="sur_place" className="flex items-center gap-2 cursor-pointer flex-1">
+                          <MapPin className="w-5 h-5 text-amber-600" />
+                          <div>
+                            <p className="font-semibold">Sur place</p>
+                            <p className="text-sm text-gray-500">Dégustation au restaurant</p>
+                          </div>
+                        </Label>
+                      </div>
+                    )}
 
-                    <div className="flex items-center space-x-2 p-4 border-2 rounded-xl hover:border-amber-400 cursor-pointer">
+                    {!isStaffOrder && <div className="flex items-center space-x-2 p-4 border-2 rounded-xl hover:border-amber-400 cursor-pointer">
                       <RadioGroupItem value="livraison" id="livraison" />
                       <Label htmlFor="livraison" className="flex items-center gap-2 cursor-pointer flex-1">
                         <Truck className="w-5 h-5 text-amber-600" />
@@ -192,8 +202,26 @@ export default function Checkout() {
                           <p className="text-sm text-gray-500">Livré chez vous (+2000 FCFA)</p>
                         </div>
                       </Label>
-                    </div>
+                    </div>}
                   </RadioGroup>
+
+                  {isStaffOrder && formData.order_type === 'sur_place' && (
+                    <div className="mt-4">
+                      <Label htmlFor="table-number">Numéro de table *</Label>
+                      <Input id="table-number" required value={formData.table_number} onChange={(e) => setFormData({ ...formData, table_number: e.target.value })} />
+                    </div>
+                  )}
+
+                  {isStaffOrder && (
+                    <div className="mt-4">
+                      <Label htmlFor="payment-method">Moyen de paiement prévu *</Label>
+                      <select id="payment-method" required value={formData.payment_method} onChange={(e) => setFormData({ ...formData, payment_method: e.target.value })} className="mt-1 h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
+                        <option value="cash">Espèces</option>
+                        <option value="card">Carte bancaire</option>
+                        <option value="mobile_money">Mobile money</option>
+                      </select>
+                    </div>
+                  )}
 
                   {formData.order_type === "livraison" && (
                     <div className="mt-4">
@@ -239,7 +267,7 @@ export default function Checkout() {
                 type="submit"
                 className="w-full bg-gradient-to-r from-yellow-400 to-amber-600 hover:from-yellow-500 hover:to-amber-700 text-white py-6 rounded-2xl text-lg font-semibold shadow-lg"
               >
-                Procéder au paiement
+                {isStaffOrder ? "Continuer vers la confirmation" : "Procéder au paiement"}
                 <Check className="ml-2 w-5 h-5" />
               </Button>
             </form>

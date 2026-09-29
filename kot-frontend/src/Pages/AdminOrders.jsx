@@ -45,12 +45,14 @@ export default function AdminOrders() {
     let filtered = orders;
 
     if (statusFilter !== "all") {
-      filtered = filtered.filter(o => o.status === statusFilter);
+      filtered = statusFilter === "cloturees"
+        ? filtered.filter(o => Boolean(o.closed_at))
+        : filtered.filter(o => o.status === statusFilter);
     }
 
     if (searchQuery) {
       filtered = filtered.filter(o =>
-        o.customer_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (o.customer_name || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
         o.id.includes(searchQuery)
       );
     }
@@ -69,7 +71,11 @@ export default function AdminOrders() {
     en_preparation: orders.filter(o => o.status === "en_preparation").length,
     prete: orders.filter(o => o.status === "prete").length,
     en_livraison: orders.filter(o => o.status === "en_livraison").length, // Added new status
-    livree: orders.filter(o => o.status === "livree").length
+    livree: orders.filter(o => o.status === "livree").length,
+    servie: orders.filter(o => o.status === "servie").length,
+    recuperee: orders.filter(o => o.status === "recuperee").length,
+    annulee: orders.filter(o => o.status === "annulee").length,
+    cloturees: orders.filter(o => Boolean(o.closed_at)).length
   };
 
   return (
@@ -137,6 +143,10 @@ export default function AdminOrders() {
             >
               Livrées ({statusCounts.livree})
             </TabsTrigger>
+            <TabsTrigger value="servie">Servies ({statusCounts.servie})</TabsTrigger>
+            <TabsTrigger value="recuperee">Récupérées ({statusCounts.recuperee})</TabsTrigger>
+            <TabsTrigger value="annulee">Annulées ({statusCounts.annulee})</TabsTrigger>
+            <TabsTrigger value="cloturees">Clôturées ({statusCounts.cloturees})</TabsTrigger>
           </TabsList>
         </Tabs>
       </div>

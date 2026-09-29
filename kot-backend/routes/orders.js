@@ -1,5 +1,6 @@
 const express = require('express');
 const { PrismaClient } = require('@prisma/client');
+const bcrypt = require('bcryptjs');
 const { authenticateToken, requireRole, requirePagePermission } = require('../middleware/auth');
 
 const router = express.Router();
@@ -64,6 +65,8 @@ router.get('/', authenticateToken, requirePagePermission('orders', 'dashboard'),
         user: {
           select: { id: true, full_name: true, email: true }
         },
+        validatedBy: { select: { id: true, full_name: true, role: true } },
+        closedBy: { select: { id: true, full_name: true, role: true } },
         items: true
       },
       orderBy: { created_date: 'desc' }
@@ -142,6 +145,8 @@ router.get('/:id', authenticateToken, async (req, res) => {
         user: {
           select: { id: true, full_name: true, email: true }
         },
+        validatedBy: { select: { id: true, full_name: true, role: true } },
+        closedBy: { select: { id: true, full_name: true, role: true } },
         items: true
       }
     });
@@ -172,9 +177,83 @@ router.get('/:id', authenticateToken, async (req, res) => {
 });
 
 // Create order (allows guest orders)
+router.post('/staff', authenticateToken, requireRole(['serveur']), async (req, res) => {
+  try {
+    const {
+      items, total_amount, customer_name, customer_phone, customer_email,
+      order_type, table_number, delivery_address, pickup_time, notes,
+      payment_method, server_code
+    } = req.body;
+
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ message: 'La commande doit contenir au moins un produit' });
+    }
+    if (!['sur_place', 'emporter'].includes(order_type)) {
+      return res.status(400).json({ message: 'Type de commande du personnel invalide' });
+    }
+    if (order_type === 'sur_place' && !table_number) {
+      return res.status(400).json({ message: 'Le numéro de table est requis pour une commande sur place' });
+    }
+    if (order_type === 'emporter' && !customer_name) {
+      return res.status(400).json({ message: 'Le nom ou numéro de retrait est requis pour une commande à emporter' });
+    }
+    if (!Number.isFinite(Number(total_amount)) || Number(total_amount) < 0) {
+      return res.status(400).json({ message: 'Montant total invalide' });
+    }
+    if (!['cash', 'card', 'mobile_money'].includes(payment_method)) {
+      return res.status(400).json({ message: 'Moyen de paiement invalide' });
+    }
+    if (!/^[a-z0-9]{6}$/i.test(server_code || '') || !req.user.server_pin_hash) {
+      return res.status(401).json({ message: 'Code serveur invalide ou non configuré' });
+    }
+
+    const codeMatches = await bcrypt.compare(server_code.toUpperCase(), req.user.server_pin_hash);
+    if (!codeMatches) {
+      return res.status(401).json({ message: 'Code serveur incorrect' });
+    }
+
+    const order = await prisma.order.create({
+      data: {
+        total_amount: parseInt(total_amount, 10),
+        customer_name,
+        customer_phone,
+        customer_email: customer_email || null,
+        order_type,
+        table_number: order_type === 'sur_place' ? table_number : null,
+        delivery_address: delivery_address || null,
+        pickup_time: pickup_time || null,
+        notes: notes || null,
+        payment_method,
+        validated_by: req.user.id,
+        validated_at: new Date(),
+        status: 'en_preparation',
+        items: {
+          create: items.map((item) => ({
+            product_name: item.product_name,
+            quantity: parseInt(item.quantity, 10),
+            price: parseInt(item.price, 10),
+            customization: item.customization || null,
+            customizationSummary: item.customizationSummary || null
+          }))
+        }
+      },
+      include: { items: true }
+    });
+
+    res.status(201).json(order);
+  } catch (error) {
+    console.error('Create staff order error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
 router.post('/', async (req, res) => {
   try {
     const { items, total_amount, customer_name, customer_phone, customer_email, order_type, delivery_address, pickup_time, notes } = req.body;
+
+    if (order_type === 'sur_place') {
+      return res.status(403).json({ message: 'Les commandes sur place doivent être saisies par un serveur' });
+    }
 
     console.log('Received order data:', { items, total_amount, customer_name });
 
@@ -248,6 +327,26 @@ router.put('/:id', authenticateToken, async (req, res) => {
 
     if (!order) {
       return res.status(404).json({ message: 'Order not found' });
+    }
+
+    if (order.closed_at) {
+      return res.status(400).json({ message: 'Une commande clôturée ne peut plus être modifiée' });
+    }
+
+    if (status === 'cloturee') {
+      return res.status(400).json({ message: 'Utilisez la procédure de clôture de caisse pour clôturer une commande' });
+    }
+
+    if (status && status !== order.status) {
+      const allowedTransitions = {
+        en_attente: ['en_preparation', 'annulee'],
+        en_preparation: ['prete', 'en_livraison', 'annulee'],
+        prete: ['servie', 'recuperee', 'annulee'],
+        en_livraison: ['livree', 'annulee']
+      };
+      if (!allowedTransitions[order.status]?.includes(status)) {
+        return res.status(400).json({ message: `Transition de commande invalide : ${order.status} → ${status}` });
+      }
     }
 
     // Check permissions
@@ -331,7 +430,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
     }
 
     // Assign loyalty points if order is completed and user is authenticated
-    if ((status === 'livree' || status === 'prete') && updatedOrder.user_id) {
+    if (status !== order.status && ['livree', 'servie', 'recuperee'].includes(status) && updatedOrder.user_id) {
       await prisma.user.update({
         where: { id: updatedOrder.user_id },
         data: {
@@ -370,7 +469,7 @@ router.post('/:id/validate', authenticateToken, requireRole(['serveur','admin','
       return res.status(400).json({ message: 'Seules les commandes sur place peuvent être validées par un serveur' });
     }
 
-    if (order.status === 'cloturee') {
+    if (order.closed_at) {
       return res.status(400).json({ message: 'Order already closed' });
     }
 
@@ -405,28 +504,31 @@ router.post('/:id/validate', authenticateToken, requireRole(['serveur','admin','
 });
 
 // Close order (caissier closes in cash register)
-router.post('/:id/close', authenticateToken, requireRole(['caissier','admin','manager']), async (req, res) => {
+router.post('/:id/close', authenticateToken, requireRole(['caissier','admin']), async (req, res) => {
   try {
     const { id } = req.params;
-    const { payment_method, payment_provider_id, payment_receipt_url } = req.body;
-
     const order = await prisma.order.findUnique({ where: { id } });
     if (!order) return res.status(404).json({ message: 'Order not found' });
 
-    if (order.status === 'cloturee') {
+    if (order.closed_at) {
       return res.status(400).json({ message: 'Order already closed' });
+    }
+
+    if (order.status === 'annulee') {
+      if (order.payment_status === 'paid') {
+        return res.status(400).json({ message: 'Une commande annulée déjà payée doit être remboursée avant clôture' });
+      }
+    } else {
+      if (!['servie', 'recuperee', 'livree'].includes(order.status)) {
+        return res.status(400).json({ message: 'La commande doit être servie, récupérée ou livrée avant clôture' });
+      }
     }
 
     const updated = await prisma.order.update({
       where: { id },
       data: {
         closed_by: req.user.id,
-        closed_at: new Date(),
-        status: 'cloturee',
-        payment_method: payment_method || order.payment_method,
-        payment_provider_id: payment_provider_id || order.payment_provider_id,
-        payment_receipt_url: payment_receipt_url || order.payment_receipt_url,
-        payment_status: payment_method ? 'paid' : order.payment_status
+        closed_at: new Date()
       }
     });
 
@@ -455,6 +557,10 @@ router.post('/:id/close', authenticateToken, requireRole(['caissier','admin','ma
 router.delete('/:id', authenticateToken, requireRole(['admin']), async (req, res) => {
   try {
     const { id } = req.params;
+
+    const order = await prisma.order.findUnique({ where: { id } });
+    if (!order) return res.status(404).json({ message: 'Order not found' });
+    if (order.closed_at) return res.status(400).json({ message: 'Une commande clôturée ne peut pas être supprimée' });
 
     await prisma.order.delete({
       where: { id }
@@ -501,6 +607,8 @@ router.get('/filter', authenticateToken, requirePagePermission('orders', 'dashbo
         user: {
           select: { id: true, full_name: true, email: true }
         },
+        validatedBy: { select: { id: true, full_name: true, role: true } },
+        closedBy: { select: { id: true, full_name: true, role: true } },
         items: true
       },
       orderBy: { created_date: 'desc' }

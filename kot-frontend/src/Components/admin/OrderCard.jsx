@@ -15,7 +15,10 @@ export default function OrderCard({ order, onUpdateStatus }) {
       en_preparation: "bg-blue-100 text-blue-800 border-blue-300",
       prete: "bg-green-100 text-green-800 border-green-300",
       en_livraison: "bg-purple-100 text-purple-800 border-purple-300", // New status color
+      servie: "bg-teal-100 text-teal-800 border-teal-300",
+      recuperee: "bg-cyan-100 text-cyan-800 border-cyan-300",
       livree: "bg-gray-100 text-gray-800 border-gray-300",
+      cloturee: "bg-gray-100 text-gray-800 border-gray-300",
       annulee: "bg-red-100 text-red-800 border-red-300"
     };
     return colors[status] || colors.en_attente;
@@ -27,7 +30,10 @@ export default function OrderCard({ order, onUpdateStatus }) {
       en_preparation: "En préparation",
       prete: "Prête",
       en_livraison: "En livraison", // New status label
+      servie: "Servie à table",
+      recuperee: "Récupérée",
       livree: "Livrée",
+      cloturee: "Clôturée",
       annulee: "Annulée"
     };
     return labels[status] || status;
@@ -38,7 +44,7 @@ export default function OrderCard({ order, onUpdateStatus }) {
       en_attente: "en_preparation",
       en_preparation: order.order_type === "livraison" ? "en_livraison" : "prete", // Conditional next status
       en_livraison: "livree", // New status flow
-      prete: "livree"
+      prete: order.order_type === "sur_place" ? "servie" : "recuperee"
     };
     return flow[currentStatus];
   };
@@ -48,7 +54,7 @@ export default function OrderCard({ order, onUpdateStatus }) {
       en_attente: "Commencer",
       en_preparation: order.order_type === "livraison" ? "Mettre en livraison" : "Marquer prête", // Conditional next status label
       en_livraison: "Marquer livrée", // New status label
-      prete: "Marquer livrée"
+      prete: order.order_type === "sur_place" ? "Marquer servie à table" : "Marquer récupérée"
     };
     return labels[currentStatus];
   };
@@ -74,6 +80,7 @@ export default function OrderCard({ order, onUpdateStatus }) {
             <Badge className={`border ${getStatusColor(order.status)}`}>
               {getStatusLabel(order.status)}
             </Badge>
+            {order.closed_at && <Badge className="bg-slate-800 text-white">Clôturée</Badge>}
           </div>
         </CardHeader>
 
@@ -94,6 +101,13 @@ export default function OrderCard({ order, onUpdateStatus }) {
                 {order.order_type === "sur_place" && "Sur place"}
                 {order.order_type === "livraison" && "Livraison"} {/* Updated for delivery type */}
               </Badge>
+            </div>
+
+            <div className="rounded-lg bg-gray-50 p-3 text-sm text-gray-700 space-y-1">
+              <p>Moyen de paiement : {order.payment_method || "Non renseigné"}</p>
+              <p>État du paiement : {order.payment_status === "paid" ? "Payé" : order.payment_status === "refunded" ? "Remboursé" : order.payment_status || "En attente"}</p>
+              <p>Validé par : {order.validatedBy?.full_name || "Client en ligne"}</p>
+              {order.closedBy && <p>Clôturé par : {order.closedBy.full_name}</p>}
             </div>
 
             {order.order_type === "livraison" && order.delivery_address && (
@@ -152,7 +166,7 @@ export default function OrderCard({ order, onUpdateStatus }) {
             </span>
           </div>
 
-          {order.status !== "livree" && order.status !== "annulee" && (
+          {!["livree", "servie", "recuperee", "annulee"].includes(order.status) && !order.closed_at && (
             <div className="space-y-2">
               <Button
                 onClick={() => onUpdateStatus(order.id, getNextStatus(order.status))}

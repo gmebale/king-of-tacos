@@ -177,13 +177,15 @@ async function buildSalesReport(period) {
         gte: startDate,
         lte: endDate
       },
-      status: {
-        in: ['livree', 'en_livraison', 'prete']
-      }
+      closed_at: { not: null },
+      payment_status: 'paid',
+      status: { in: ['livree', 'servie', 'recuperee'] }
     },
     include: {
       items: true,
-      user: true
+      user: true,
+      validatedBy: { select: { id: true, full_name: true } },
+      closedBy: { select: { id: true, full_name: true } }
     }
   });
 
@@ -338,7 +340,19 @@ async function buildSalesReport(period) {
     paymentBreakdown,
     topProducts,
     categoryReport,
-    userReport
+    userReport,
+    orders: orders.map(order => ({
+      id: order.id,
+      order_code: order.order_code,
+      status: order.status,
+      order_type: order.order_type,
+      total_amount: order.total_amount,
+      payment_method: order.payment_method,
+      payment_status: order.payment_status,
+      validated_by: order.validatedBy?.full_name || null,
+      closed_by: order.closedBy?.full_name || null,
+      closed_at: order.closed_at
+    }))
   };
 }
 
@@ -452,9 +466,8 @@ router.post('/session/close', authenticateToken, requirePagePermission('cashier'
         created_date: {
           gte: session.opened_at
         },
-        status: {
-          in: ['livree', 'prete']
-        }
+        payment_status: 'paid',
+        status: { not: 'annulee' }
       },
       include: { items: true }
     });
@@ -499,9 +512,9 @@ router.post('/session/close', authenticateToken, requirePagePermission('cashier'
       summary: {
         totalRevenue: totalRevenueCents / 100,
         paymentMethods,
-        expectedBalance: (session.opening_balance + totalRevenueCents) / 100,
+        expectedBalance: (session.opening_balance + paymentMethods.cash) / 100,
         actualBalance: closing_balance,
-        difference: closing_balance - (session.opening_balance + totalRevenueCents)
+        difference: closing_balance - (session.opening_balance + paymentMethods.cash)
       }
     });
   } catch (error) {
@@ -515,14 +528,15 @@ router.get('/orders', authenticateToken, requirePagePermission('cashier'), async
   try {
     const orders = await prisma.order.findMany({
       where: {
-        status: {
-          not: 'en_attente' // Exclude only pending orders, show all initiated
-        }
+        status: { not: 'en_attente' },
+        closed_at: null
       },
       include: {
         user: {
           select: { id: true, full_name: true, email: true, phone: true }
         },
+        validatedBy: { select: { id: true, full_name: true, role: true } },
+        closedBy: { select: { id: true, full_name: true, role: true } },
         items: true
       },
       orderBy: { created_date: 'desc' }
@@ -572,6 +586,8 @@ router.get('/invoice/:orderId', authenticateToken, requirePagePermission('cashie
         user: {
           select: { id: true, full_name: true, email: true, phone: true }
         },
+        validatedBy: { select: { full_name: true } },
+        closedBy: { select: { full_name: true } },
         items: true
       }
     });
@@ -615,13 +631,17 @@ router.get('/invoice/:orderId', authenticateToken, requirePagePermission('cashie
     doc.fontSize(12);
     doc.text(`Numéro de commande: ${displayCode}`);
     doc.text(`Date: ${new Date(order.created_date).toLocaleDateString('fr-FR')}`);
+    doc.text(`Type: ${order.order_type || '—'}${order.table_number ? ` · Table ${order.table_number}` : ''}`);
+    doc.text(`Moyen de paiement: ${order.payment_method || 'Non renseigné'} · Paiement: ${order.payment_status}`);
+    doc.text(`Validé par: ${order.validatedBy?.full_name || 'Client en ligne'}`);
+    doc.text(`Clôturé par: ${order.closedBy?.full_name || 'Non clôturée'}`);
     doc.moveDown();
 
     // Customer details
     doc.text('Client:');
     doc.text(order.customer_name);
     if (order.customer_phone) doc.text(`Téléphone: ${order.customer_phone}`);
-    if (order.customer_address) doc.text(`Adresse: ${order.customer_address}`);
+    if (order.delivery_address) doc.text(`Adresse: ${order.delivery_address}`);
     doc.moveDown();
 
     // Items table header
@@ -804,6 +824,20 @@ router.get('/reports/:period/pdf', authenticateToken, requirePagePermission('cas
       doc.moveDown(0.8);
     });
 
+    sectionTitle(doc, 'Traçabilité des commandes clôturées');
+    if (!report.orders.length) {
+      doc.fontSize(9).fillColor(palette.muted).text('Aucune commande clôturée sur la période.');
+    } else {
+      report.orders.forEach(order => {
+        const code = order.order_code || order.id.slice(-8);
+        doc.fontSize(9).fillColor(palette.text)
+          .text(`Commande #${code} — ${order.order_type || '—'} — ${order.status} — ${formatAmount(order.total_amount)}`);
+        doc.fontSize(8).fillColor(palette.muted)
+          .text(`Paiement : ${order.payment_method || '—'} (${order.payment_status}) | Validé par : ${order.validated_by || 'Client en ligne'} | Clôturé par : ${order.closed_by || '—'}`);
+        doc.moveDown(0.4);
+      });
+    }
+
     doc.end();
   } catch (error) {
     console.error('Generate sales report PDF error:', error);
@@ -821,6 +855,10 @@ router.put('/orders/:id/pay', authenticateToken, requirePagePermission('cashier'
     const { id } = req.params;
     const { payment_method } = req.body;
 
+    if (!['cash', 'card', 'mobile_money'].includes(payment_method)) {
+      return res.status(400).json({ message: 'Moyen de paiement invalide' });
+    }
+
     const order = await prisma.order.findUnique({
       where: { id },
       include: { items: true }
@@ -833,38 +871,77 @@ router.put('/orders/:id/pay', authenticateToken, requirePagePermission('cashier'
     if (order.status === 'annulee') {
       return res.status(400).json({ message: 'Cannot pay cancelled order' });
     }
+    if (order.closed_at) return res.status(400).json({ message: 'La commande est déjà clôturée' });
+    if (order.payment_status === 'paid') {
+      return res.status(400).json({ message: 'La commande est déjà payée' });
+    }
 
-    // Update order payment method
     const updatedOrder = await prisma.order.update({
       where: { id },
-      data: { 
-        payment_method: payment_method || 'cash',
-        status: order.status === 'en_attente' ? 'en_preparation' : order.status
-      },
+      data: { payment_method, payment_status: 'paid' },
       include: { items: true }
     });
 
-    // Update cash register balance if payment method is cash
-    if (payment_method === 'cash' || !payment_method) {
-      const session = await prisma.cashRegisterSession.findFirst({
-        where: { closed_at: null }
-      });
-
-      if (session) {
+    const session = await prisma.cashRegisterSession.findFirst({ where: { closed_at: null } });
+    if (session) {
+      const methodField = { cash: 'cash_payments', card: 'card_payments', mobile_money: 'mobile_payments' }[payment_method];
+      const sessionUpdate = {
+        total_revenue: (session.total_revenue || 0) + order.total_amount
+      };
+      if (payment_method === 'cash') sessionUpdate.current_balance = session.current_balance + order.total_amount;
+      if (methodField && methodField in session) {
+        sessionUpdate[methodField] = (session[methodField] || 0) + order.total_amount;
+      }
         await prisma.cashRegisterSession.update({
           where: { id: session.id },
-          data: {
-            current_balance: session.current_balance + order.total_amount,
-            total_revenue: (session.total_revenue || 0) + order.total_amount,
-            cash_payments: (session.cash_payments || 0) + order.total_amount
-          }
+          data: sessionUpdate
         });
-      }
     }
 
     res.json(updatedOrder);
   } catch (error) {
     console.error('Pay order error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+router.put('/orders/:id/refund', authenticateToken, requirePagePermission('cashier'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const order = await prisma.order.findUnique({ where: { id } });
+    if (!order) return res.status(404).json({ message: 'Order not found' });
+    if (order.closed_at) return res.status(400).json({ message: 'La commande est déjà clôturée' });
+    if (order.status !== 'annulee' || order.payment_status !== 'paid') {
+      return res.status(400).json({ message: 'Seule une commande annulée et payée peut être remboursée' });
+    }
+
+    const updatedOrder = await prisma.order.update({
+      where: { id },
+      data: { payment_status: 'refunded' }
+    });
+    const session = await prisma.cashRegisterSession.findFirst({ where: { closed_at: null } });
+    if (session) {
+      const refundAmount = order.total_amount;
+      const methodField = { cash: 'cash_payments', card: 'card_payments', mobile_money: 'mobile_payments', loyalty_points: 'loyalty_payments' }[order.payment_method];
+      const sessionUpdate = {
+        total_revenue: (session.total_revenue || 0) - refundAmount
+      };
+      if (order.payment_method === 'cash') sessionUpdate.current_balance = session.current_balance - refundAmount;
+      if (methodField && methodField in session) sessionUpdate[methodField] = (session[methodField] || 0) - refundAmount;
+      await prisma.cashRegisterSession.update({ where: { id: session.id }, data: sessionUpdate });
+    }
+    await prisma.log.create({
+      data: {
+        user_id: req.user.id,
+        role: req.user.role,
+        action: 'record_order_refund',
+        details: `Refund recorded for order ${id} by user ${req.user.id}`
+      }
+    }).catch(error => console.warn('Unable to log order refund:', error));
+
+    res.json(updatedOrder);
+  } catch (error) {
+    console.error('Record order refund error:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 });
@@ -882,34 +959,10 @@ router.put('/orders/:id/deliver', authenticateToken, requirePagePermission('cash
       return res.status(404).json({ message: 'Order not found' });
     }
 
-    // If order is not already marked as paid, mark it as paid with cash and update cash register
-    let paymentUpdated = false;
-    if (!order.payment_method) {
-      // Mark as paid with cash
-      await prisma.order.update({
-        where: { id },
-        data: { payment_method: 'cash' }
-      });
+    if (order.closed_at) return res.status(400).json({ message: 'La commande est déjà clôturée' });
+    if (order.order_type !== 'livraison') return res.status(400).json({ message: 'Cette commande n’est pas une livraison' });
+    if (order.status !== 'en_livraison') return res.status(400).json({ message: 'La commande doit être en livraison' });
 
-      // Update cash register balance
-      const session = await prisma.cashRegisterSession.findFirst({
-        where: { closed_at: null }
-      });
-
-      if (session) {
-        await prisma.cashRegisterSession.update({
-          where: { id: session.id },
-          data: {
-            current_balance: session.current_balance + order.total_amount,
-            total_revenue: (session.total_revenue || 0) + order.total_amount,
-            cash_payments: (session.cash_payments || 0) + order.total_amount
-          }
-        });
-      }
-      paymentUpdated = true;
-    }
-
-    // Update order status to delivered
     const updatedOrder = await prisma.order.update({
       where: { id },
       data: { status: 'livree' },
@@ -921,7 +974,6 @@ router.put('/orders/:id/deliver', authenticateToken, requirePagePermission('cash
       }
     });
 
-    // If order is marked as ready and user exists, add loyalty points
     if (updatedOrder.user_id) {
       await prisma.user.update({
         where: { id: updatedOrder.user_id },
@@ -980,10 +1032,15 @@ router.get('/session/close-report', authenticateToken, requirePagePermission('ca
           lte: reportEndDate
         },
         status: {
-          in: ['livree', 'prete']
-        }
+          not: 'annulee'
+        },
+        payment_status: 'paid'
       },
-      include: { items: true }
+      include: {
+        items: true,
+        validatedBy: { select: { full_name: true } },
+        closedBy: { select: { full_name: true } }
+      }
     });
 
     // Compute payment breakdown from orders (centimes)
@@ -1051,6 +1108,7 @@ router.get('/session/close-report', authenticateToken, requirePagePermission('ca
       doc.fontSize(10).text(
         `${index + 1}. Commande #${displayCode} - ${(order.total_amount / 100).toFixed(2)} FCFA - ${order.payment_method || 'cash'}`
       );
+      doc.fontSize(8).text(`Validé par : ${order.validatedBy?.full_name || 'Client en ligne'} | Clôturé par : ${order.closedBy?.full_name || 'Non clôturée'}`);
       order.items.forEach(item => {
         doc.text(`   - ${item.quantity}x ${item.product_name}`, { indent: 20 });
       });

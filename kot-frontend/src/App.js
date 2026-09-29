@@ -24,6 +24,7 @@ import CashierMode from './Pages/CashierMode';
 import AdminLoyalty from './Pages/AdminLoyalty';
 import AdminReviews from './Pages/AdminReviews';
 import AdminMobileMoney from './Pages/AdminMobileMoney';
+import StaffOrderStart from './Pages/StaffOrderStart';
 
 function App() {
   return (
@@ -40,6 +41,7 @@ function App() {
           <Route path="/profile" element={<Layout currentPageName="Profile"><Profile /></Layout>} />
           <Route path="/admin/dashboard" element={<ProtectedRoute requiredPermission="dashboard"><Layout currentPageName="AdminDashboard"><AdminDashboard /></Layout></ProtectedRoute>} />
           <Route path="/admin/orders" element={<ProtectedRoute requiredPermission="orders"><Layout currentPageName="AdminOrders"><AdminOrders /></Layout></ProtectedRoute>} />
+          <Route path="/admin/new-order" element={<ProtectedRoute requiredRoles={['serveur']}><Layout currentPageName="NewRestaurantOrder"><StaffOrderStart /></Layout></ProtectedRoute>} />
           <Route path="/admin/kitchen" element={<ProtectedRoute requiredPermission="kitchen"><Layout currentPageName="KitchenMode"><KitchenMode /></Layout></ProtectedRoute>} />
           <Route path="/admin/cashier" element={<ProtectedRoute requiredPermission="cashier"><Layout currentPageName="CashierMode"><CashierMode /></Layout></ProtectedRoute>} />
           <Route path="/admin/finance" element={<ProtectedRoute requiredPermission="finance"><Layout currentPageName="AdminFinance"><AdminFinance /></Layout></ProtectedRoute>} />

@@ -15,6 +15,11 @@ class Order {
     return response.data;
   }
 
+  static async createStaff(data) {
+    const response = await api.post('/orders/staff', data);
+    return response.data;
+  }
+
   static async update(id, data) {
     const response = await api.put(`/orders/${id}`, data);
     return response.data;

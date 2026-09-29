@@ -66,6 +66,7 @@ export default function Layout({ children, currentPageName }) {
 
   const adminNavItems = [
     { name: "Dashboard", path: "AdminDashboard", permission: "dashboard", icon: LayoutDashboard },
+    { name: "Prendre une commande", path: "NewRestaurantOrder", permission: "orders", serverOnly: true, icon: ShoppingCart },
     { name: "Commandes", path: "AdminOrders", permission: "orders", icon: ShoppingCart },
     { name: "Cuisine", path: "KitchenMode", permission: "kitchen", icon: ChefHat },
     { name: "Caissier", path: "CashierMode", permission: "cashier", icon: Receipt },
@@ -104,7 +105,7 @@ export default function Layout({ children, currentPageName }) {
           </div>
 
           <nav className="flex-1 overflow-y-auto p-4 space-y-1">
-            {adminNavItems.filter((item) => hasPagePermission(item.permission) && (item.path !== "AdminStaff" || user?.role === "admin")).map((item) => {
+            {adminNavItems.filter((item) => (item.serverOnly ? user?.role === "serveur" : hasPagePermission(item.permission)) && (item.path !== "AdminStaff" || user?.role === "admin")).map((item) => {
               const isActive = location.pathname === createPageUrl(item.path);
               return (
                 <Link

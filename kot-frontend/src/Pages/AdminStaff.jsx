@@ -86,6 +86,7 @@ export default function AdminStaff() {
     full_name: "",
     phone: "",
     role: "client",
+    server_code: "",
     pagePermissions: createDefaultPermissions()
   });
   
@@ -212,6 +213,7 @@ export default function AdminStaff() {
         full_name: "",
         phone: "",
         role: "client",
+        server_code: "",
         pagePermissions: createDefaultPermissions()
       });
       loadUsers();
@@ -229,6 +231,7 @@ export default function AdminStaff() {
     };
     setEditingUser({
       ...user,
+      server_code: "",
       pagePermissions: normalizedPermissions
     });
     setIsEditDialogOpen(true);
@@ -246,6 +249,7 @@ export default function AdminStaff() {
         full_name: editingUser.full_name,
         phone: editingUser.phone,
         role: editingUser.role,
+        server_code: editingUser.server_code || undefined,
         is_active: editingUser.is_active,
         password: editingUser.password || undefined,
         pagePermissions: editingUser.pagePermissions || createDefaultPermissions()
@@ -383,6 +387,13 @@ export default function AdminStaff() {
                     </SelectContent>
                   </Select>
                 </div>
+
+                {newUser.role === "serveur" && (
+                  <div>
+                    <Label htmlFor="server-code">Code serveur (6 lettres ou chiffres) *</Label>
+                    <Input id="server-code" required minLength={6} maxLength={6} autoComplete="off" value={newUser.server_code} onChange={(e) => setNewUser({ ...newUser, server_code: e.target.value.toUpperCase() })} className="mt-1 uppercase" />
+                  </div>
+                )}
 
                 <div className="pt-2">
                   <Label>Permissions d’accès</Label>
@@ -642,6 +653,13 @@ export default function AdminStaff() {
                   </SelectContent>
                 </Select>
               </div>
+
+              {editingUser.role === "serveur" && (
+                <div>
+                  <Label htmlFor="edit-server-code">Nouveau code serveur (6 lettres ou chiffres)</Label>
+                  <Input id="edit-server-code" minLength={6} maxLength={6} autoComplete="off" placeholder="Laisser vide pour conserver le code actuel" value={editingUser.server_code || ""} onChange={(e) => setEditingUser({ ...editingUser, server_code: e.target.value.toUpperCase() })} className="mt-1 uppercase" />
+                </div>
+              )}
 
               <div className="pt-2">
                 <Label>Permissions d’accès</Label>

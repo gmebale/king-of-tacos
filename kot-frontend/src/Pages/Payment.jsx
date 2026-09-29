@@ -7,12 +7,20 @@ import { ArrowLeft, CreditCard } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { createPageUrl } from "../utils";
 import { formatCustomization } from "../utils/customization";
+import { useAuthContext } from "../contexts/AuthContext";
+import { Input } from "../Components/ui/input";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "../Components/ui/dialog";
 
 export default function Payment() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { user } = useAuthContext();
   const { cart, formData, total } = location.state || {};
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [serverCode, setServerCode] = useState("");
+  const [serverCodeError, setServerCodeError] = useState("");
+  const [isCodeDialogOpen, setIsCodeDialogOpen] = useState(false);
+  const isStaffOrder = user?.role === "serveur" && sessionStorage.getItem("kot_staff_order_mode") === "true";
 
   if (!cart || !total) {
     navigate(createPageUrl("Checkout"));
@@ -20,6 +28,15 @@ export default function Payment() {
   }
 
   const handlePayment = async () => {
+    if (isStaffOrder && !isCodeDialogOpen) {
+      setIsCodeDialogOpen(true);
+      return;
+    }
+    if (isStaffOrder && !/^[a-z0-9]{6}$/i.test(serverCode)) {
+      setServerCodeError("Saisissez le code serveur de 6 caractères.");
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -33,7 +50,7 @@ export default function Payment() {
       }));
       console.log('Order items to send:', orderItems);
 
-      await Order.create({
+      const orderData = {
         items: orderItems,
         total_amount: total,
         customer_name: formData.customer_name,
@@ -41,15 +58,28 @@ export default function Payment() {
         customer_email: formData.customer_email,
         order_type: formData.order_type,
         delivery_address: formData.delivery_address,
+        table_number: formData.table_number,
         pickup_time: formData.pickup_time,
         notes: formData.notes
-      });
+      };
+
+      if (isStaffOrder) {
+        await Order.createStaff({
+          ...orderData,
+          payment_method: formData.payment_method,
+          server_code: serverCode
+        });
+        sessionStorage.removeItem("kot_staff_order_mode");
+      } else {
+        await Order.create(orderData);
+      }
 
       localStorage.removeItem('kingoftacos_cart');
       window.dispatchEvent(new Event('storage'));
       navigate(createPageUrl("OrderSuccess"));
     } catch (error) {
       console.error("Error creating order:", error);
+      if (isStaffOrder) setServerCodeError(error.response?.data?.message || "Impossible de valider le code serveur.");
     }
 
     setIsSubmitting(false);
@@ -72,9 +102,9 @@ export default function Payment() {
             Retour à la commande
           </Button>
           <h1 className="text-4xl font-bold mb-2 bg-gradient-to-r from-amber-600 to-yellow-500 bg-clip-text text-transparent">
-            Paiement
+            {isStaffOrder ? "Confirmer la commande" : "Paiement"}
           </h1>
-          <p className="text-gray-600">Vérifiez votre commande et procédez au paiement</p>
+          <p className="text-gray-600">{isStaffOrder ? "Vérifiez la commande avant son envoi en cuisine" : "Vérifiez votre commande et procédez au paiement"}</p>
         </motion.div>
 
         <div className="grid lg:grid-cols-3 gap-8">
@@ -116,7 +146,7 @@ export default function Payment() {
               disabled={isSubmitting}
               className="w-full mt-6 bg-gradient-to-r from-yellow-400 to-amber-600 hover:from-yellow-500 hover:to-amber-700 text-white py-6 rounded-2xl text-lg font-semibold shadow-lg"
             >
-              {isSubmitting ? "Traitement..." : "Payer maintenant"}
+              {isSubmitting ? "Traitement..." : isStaffOrder ? "Confirmer la commande" : "Payer maintenant"}
               <CreditCard className="ml-2 w-5 h-5" />
             </Button>
           </div>
@@ -124,18 +154,48 @@ export default function Payment() {
           <div>
             <Card className="bg-gradient-to-br from-amber-50 to-yellow-50 border-2 border-amber-200">
               <CardHeader>
-                <CardTitle>Informations de livraison</CardTitle>
+                <CardTitle>Informations de commande</CardTitle>
               </CardHeader>
               <CardContent>
                 <p><strong>Nom:</strong> {formData.customer_name}</p>
                 <p><strong>Téléphone:</strong> {formData.customer_phone}</p>
-                <p><strong>Type:</strong> {formData.order_type === "livraison" ? "Livraison" : "À emporter"}</p>
+                <p><strong>Type:</strong> {formData.order_type === "livraison" ? "Livraison" : formData.order_type === "sur_place" ? "Sur place" : "À emporter"}</p>
+                {formData.table_number && <p><strong>Table:</strong> {formData.table_number}</p>}
+                {isStaffOrder && <p><strong>Paiement prévu:</strong> {formData.payment_method}</p>}
                 {formData.order_type === "livraison" && <p><strong>Adresse:</strong> {formData.delivery_address}</p>}
               </CardContent>
             </Card>
           </div>
         </div>
       </div>
+
+      <Dialog open={isCodeDialogOpen} onOpenChange={(open) => {
+        setIsCodeDialogOpen(open);
+        if (!open) { setServerCode(""); setServerCodeError(""); }
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirmer la prise de commande</DialogTitle>
+            <DialogDescription>Saisissez votre code serveur avant l’envoi en cuisine.</DialogDescription>
+          </DialogHeader>
+          <Input
+            autoFocus
+            autoComplete="off"
+            maxLength={6}
+            value={serverCode}
+            onChange={(event) => { setServerCode(event.target.value.toUpperCase()); setServerCodeError(""); }}
+            className="text-center text-xl tracking-[0.3em] uppercase"
+            aria-label="Code serveur à 6 caractères"
+          />
+          {serverCodeError && <p className="text-sm text-red-600" role="alert">{serverCodeError}</p>}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsCodeDialogOpen(false)}>Annuler</Button>
+            <Button onClick={handlePayment} disabled={isSubmitting || serverCode.length !== 6} className="bg-amber-500 hover:bg-amber-600">
+              {isSubmitting ? "Vérification..." : "Valider et envoyer"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

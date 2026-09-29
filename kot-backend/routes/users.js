@@ -54,6 +54,7 @@ router.get('/', authenticateToken, requireRole(['admin']), async (req, res) => {
 router.post('/', authenticateToken, requireRole(['admin']), async (req, res) => {
   try {
     const { email, password, full_name, phone, role, pagePermissions } = req.body;
+    const { server_code } = req.body;
 
     // Validation
     const allowedRoles = await getAllowedRoleValues();
@@ -62,6 +63,9 @@ router.post('/', authenticateToken, requireRole(['admin']), async (req, res) => 
     }
     if (role && !allowedRoles.has(role)) {
       return res.status(400).json({ message: 'Rôle utilisateur invalide' });
+    }
+    if (role === 'serveur' && !/^[a-z0-9]{6}$/i.test(server_code || '')) {
+      return res.status(400).json({ message: 'Le code serveur doit contenir exactement 6 lettres ou chiffres' });
     }
 
     // Vérifier si l'email existe déjà
@@ -89,6 +93,7 @@ router.post('/', authenticateToken, requireRole(['admin']), async (req, res) => 
         phone: phone || null,
         role: role || 'client',
         role_id: roleRecord?.id,
+        server_pin_hash: role === 'serveur' ? await bcrypt.hash(server_code.toUpperCase(), 10) : null,
         is_active: true,
         pagePermissions: pagePermissions ? pagePermissions : undefined
       },
@@ -165,6 +170,7 @@ router.put('/:id', authenticateToken, requireRole(['admin']), async (req, res) =
   try {
     const { id } = req.params;
     const { full_name, phone, role, is_active, password, pagePermissions } = req.body;
+    const { server_code } = req.body;
 
     // Vérifier que l'utilisateur existe
     const existingUser = await prisma.user.findUnique({
@@ -179,6 +185,13 @@ router.put('/:id', authenticateToken, requireRole(['admin']), async (req, res) =
     const allowedRoles = await getAllowedRoleValues();
     if (role && !allowedRoles.has(role)) {
       return res.status(400).json({ message: 'Rôle utilisateur invalide' });
+    }
+    const targetRole = role !== undefined ? role : existingUser.role;
+    if (server_code && !/^[a-z0-9]{6}$/i.test(server_code)) {
+      return res.status(400).json({ message: 'Le code serveur doit contenir exactement 6 lettres ou chiffres' });
+    }
+    if (targetRole === 'serveur' && !existingUser.server_pin_hash && !server_code) {
+      return res.status(400).json({ message: 'Un code serveur doit être défini pour ce compte' });
     }
 
     // Empêcher qu'un utilisateur se désactive lui-même
@@ -208,7 +221,9 @@ router.put('/:id', authenticateToken, requireRole(['admin']), async (req, res) =
       updateData.role = role;
       const roleRecord = await prisma.role.findUnique({ where: { slug: role } });
       updateData.role_id = roleRecord?.id || null;
+      if (role !== 'serveur') updateData.server_pin_hash = null;
     }
+    if (server_code) updateData.server_pin_hash = await bcrypt.hash(server_code.toUpperCase(), 10);
     if (is_active !== undefined) updateData.is_active = is_active;
     if (pagePermissions !== undefined) updateData.pagePermissions = pagePermissions;
     if (password) {

@@ -111,13 +111,39 @@ export default function CashierMode() {
 
   const markAsDelivered = async (orderId) => {
     try {
-      // Use backend deliver endpoint
       await api.put(`/cashier/orders/${orderId}/deliver`);
-      await loadOrders(); // Reload orders to reflect the change
-      // Refresh cash register to show updated balance after cash collection
-      await loadCashRegisterSession();
+      await loadOrders();
     } catch (error) {
       console.error('Error marking order as delivered:', error);
+      alert(error.response?.data?.message || 'Impossible de mettre à jour la livraison.');
+    }
+  };
+
+  const markAsPaid = async (orderId, payment_method) => {
+    try {
+      await api.put(`/cashier/orders/${orderId}/pay`, { payment_method });
+      await Promise.all([loadOrders(), loadCashRegisterSession()]);
+    } catch (error) {
+      alert(error.response?.data?.message || 'Impossible de confirmer le paiement.');
+    }
+  };
+
+  const closeOrder = async (orderId) => {
+    try {
+      await api.post(`/orders/${orderId}/close`);
+      await loadOrders();
+    } catch (error) {
+      alert(error.response?.data?.message || 'Impossible de clôturer la commande.');
+    }
+  };
+
+  const recordRefund = async (orderId) => {
+    if (!window.confirm('Confirmer que le remboursement a bien été effectué ? Cette action l’enregistre dans la commande.')) return;
+    try {
+      await api.put(`/cashier/orders/${orderId}/refund`);
+      await loadOrders();
+    } catch (error) {
+      alert(error.response?.data?.message || 'Impossible d’enregistrer le remboursement.');
     }
   };
 
@@ -196,18 +222,28 @@ export default function CashierMode() {
 
   const getStatusColor = (status) => {
     switch (status) {
+      case 'en_attente': return 'bg-gray-100 text-gray-800 border-gray-200';
+      case 'en_preparation': return 'bg-blue-100 text-blue-800 border-blue-200';
       case 'prete': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
       case 'en_livraison': return 'bg-blue-100 text-blue-800 border-blue-200';
+      case 'servie': return 'bg-teal-100 text-teal-800 border-teal-200';
+      case 'recuperee': return 'bg-cyan-100 text-cyan-800 border-cyan-200';
       case 'livree': return 'bg-green-100 text-green-800 border-green-200';
+      case 'annulee': return 'bg-red-100 text-red-800 border-red-200';
       default: return 'bg-gray-100 text-gray-800 border-gray-200';
     }
   };
 
   const getStatusText = (status) => {
     switch (status) {
+      case 'en_attente': return 'En attente';
+      case 'en_preparation': return 'En préparation';
       case 'prete': return 'Prête';
       case 'en_livraison': return 'En livraison';
+      case 'servie': return 'Servie à table';
+      case 'recuperee': return 'Récupérée';
       case 'livree': return 'Livrée';
+      case 'annulee': return 'Annulée';
       default: return status;
     }
   };
@@ -368,6 +404,9 @@ export default function CashierMode() {
                       order={order}
                       onGenerateInvoice={generateInvoice}
                       onMarkDelivered={markAsDelivered}
+                      onMarkPaid={markAsPaid}
+                      onClose={closeOrder}
+                      onRefund={recordRefund}
                       getStatusColor={getStatusColor}
                       getStatusText={getStatusText}
                     />
@@ -500,6 +539,27 @@ export default function CashierMode() {
               </div>
             </CardContent>
           </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>Traçabilité des commandes clôturées</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {currentReport.orders?.map(order => (
+                  <div key={order.id} className="rounded-lg border p-3 text-sm">
+                    <div className="flex flex-wrap justify-between gap-2 font-medium">
+                      <span>#{order.order_code || order.id.slice(-8)} · {order.status}</span>
+                      <span>{order.total_amount.toLocaleString()} FCFA · {order.payment_method || 'Paiement non renseigné'}</span>
+                    </div>
+                    <p className="mt-1 text-gray-600">
+                      Validé par : {order.validated_by || 'Client en ligne'} · Clôturé par : {order.closed_by || '—'}
+                    </p>
+                  </div>
+                ))}
+                {!currentReport.orders?.length && <p className="text-sm text-gray-500">Aucune commande clôturée pour cette période.</p>}
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
     </div>
@@ -507,9 +567,13 @@ export default function CashierMode() {
 }
 
 // Order Card Component
-function OrderCard({ order, onGenerateInvoice, onMarkDelivered, getStatusColor, getStatusText }) {
+function OrderCard({ order, onGenerateInvoice, onMarkDelivered, onMarkPaid, onClose, onRefund, getStatusColor, getStatusText }) {
   const total = order.total_amount; 
   const displayCode = order.order_code || `KOT-${order.id?.slice(-6) || ''}`;
+  const [paymentMethod, setPaymentMethod] = useState(order.payment_method || 'cash');
+  const canClose = order.status === 'annulee'
+    ? order.payment_status !== 'paid'
+    : ['servie', 'recuperee', 'livree'].includes(order.status);
 
   return (
     <motion.div
@@ -525,6 +589,8 @@ function OrderCard({ order, onGenerateInvoice, onMarkDelivered, getStatusColor, 
           <Badge className={`${getStatusColor(order.status)} border`}>
             {getStatusText(order.status)}
           </Badge>
+          {order.payment_status === 'paid' && <Badge className="bg-green-100 text-green-800">Payée</Badge>}
+          {order.payment_status === 'refunded' && <Badge className="bg-blue-100 text-blue-800">Remboursée</Badge>}
         </div>
         <p className="text-sm text-gray-600">
           {format(new Date(order.created_date), 'HH:mm dd/MM', { locale: fr })}
@@ -534,7 +600,11 @@ function OrderCard({ order, onGenerateInvoice, onMarkDelivered, getStatusColor, 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
         <div>
           <p className="font-medium text-gray-900">{order.customer_name}</p>
+          {order.table_number && <p className="text-sm text-gray-600">Table {order.table_number}</p>}
           <p className="text-sm text-gray-600">{order.customer_phone}</p>
+          <p className="text-sm text-gray-600">Paiement : {order.payment_method || 'Non renseigné'} ({order.payment_status})</p>
+          <p className="text-sm text-gray-600">Validé par : {order.validatedBy?.full_name || 'Client en ligne'}</p>
+          {order.closedBy && <p className="text-sm text-gray-600">Clôturé par : {order.closedBy.full_name}</p>}
           {order.customer_address && (
             <p className="text-sm text-gray-600">{order.customer_address}</p>
           )}
@@ -576,15 +646,31 @@ function OrderCard({ order, onGenerateInvoice, onMarkDelivered, getStatusColor, 
           Facture PDF
         </Button>
 
-        {order.status !== 'livree' && (
+        {order.status === 'en_livraison' && (
           <Button
             onClick={() => onMarkDelivered(order.id)}
             size="sm"
             className="flex items-center gap-2 bg-green-600 hover:bg-green-700"
           >
             <CheckCircle className="w-4 h-4" />
-            Marquer livrée
+            Confirmer livraison
           </Button>
+        )}
+        {order.payment_status !== 'paid' && order.status !== 'annulee' && (
+          <>
+            <select className="h-9 rounded-md border px-2 text-sm" value={paymentMethod} onChange={event => setPaymentMethod(event.target.value)}>
+              <option value="cash">Espèces</option>
+              <option value="card">Carte</option>
+              <option value="mobile_money">Mobile money</option>
+            </select>
+            <Button size="sm" onClick={() => onMarkPaid(order.id, paymentMethod)}>Confirmer paiement</Button>
+          </>
+        )}
+        {order.status === 'annulee' && order.payment_status === 'paid' && (
+          <Button size="sm" variant="outline" onClick={() => onRefund(order.id)}>Enregistrer le remboursement</Button>
+        )}
+        {canClose && (
+          <Button size="sm" variant="outline" onClick={() => onClose(order.id)}>Clôturer</Button>
         )}
       </div>
     </motion.div>

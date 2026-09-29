@@ -22,6 +22,7 @@ export function createPageUrl(pageName) {
     Register: '/register',
     AdminDashboard: '/admin/dashboard',
     AdminOrders: '/admin/orders',
+    NewRestaurantOrder: '/admin/new-order',
     KitchenMode: '/admin/kitchen',
     CashierMode: '/admin/cashier',
     AdminFinance: '/admin/finance',
