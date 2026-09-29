@@ -46,7 +46,7 @@ class AuthService {
         localStorage.setItem('auth_token', token);
       }
 
-      return user;
+      return token ? await this.me() : user;
     } catch (error) {
       throw new Error(error.response?.data?.message || 'Erreur de connexion');
     }

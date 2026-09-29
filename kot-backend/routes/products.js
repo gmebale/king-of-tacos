@@ -1,6 +1,6 @@
 const express = require('express');
 const { PrismaClient } = require('@prisma/client');
-const { authenticateToken, requireRole } = require('../middleware/auth');
+const { authenticateToken, requirePagePermission } = require('../middleware/auth');
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -123,7 +123,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // Create product (admin only)
-router.post('/', authenticateToken, requireRole(['admin']), async (req, res) => {
+router.post('/', authenticateToken, requirePagePermission('stock'), async (req, res) => {
   try {
     const { name, description, price, discount_percentage, category, available, image, stock, stock_alert_threshold, customization } = req.body;
 
@@ -174,7 +174,7 @@ router.post('/', authenticateToken, requireRole(['admin']), async (req, res) => 
 });
 
 // Update product (admin only)
-router.put('/:id', authenticateToken, requireRole(['admin']), async (req, res) => {
+router.put('/:id', authenticateToken, requirePagePermission('stock'), async (req, res) => {
   try {
     const { id } = req.params;
     const { name, description, price, discount_percentage, category, available, image, stock, stock_alert_threshold, customization } = req.body;
@@ -230,7 +230,7 @@ router.put('/:id', authenticateToken, requireRole(['admin']), async (req, res) =
 });
 
 // Delete product (admin only)
-router.delete('/:id', authenticateToken, requireRole(['admin']), async (req, res) => {
+router.delete('/:id', authenticateToken, requirePagePermission('stock'), async (req, res) => {
   try {
     const { id } = req.params;
     const productId = parseInt(id);

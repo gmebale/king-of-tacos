@@ -102,10 +102,10 @@ router.get('/history', authenticateToken, async (req, res) => {
 });
 
 // Admin routes for loyalty rewards management
-const { requireRole } = require('../middleware/auth');
+const { requirePagePermission } = require('../middleware/auth');
 
 // Get all loyalty rewards (admin only)
-router.get('/admin/rewards', authenticateToken, requireRole(['admin']), async (req, res) => {
+router.get('/admin/rewards', authenticateToken, requirePagePermission('loyalty'), async (req, res) => {
   try {
     const rewards = await prisma.loyaltyReward.findMany({
       orderBy: { created_at: 'desc' }
@@ -119,7 +119,7 @@ router.get('/admin/rewards', authenticateToken, requireRole(['admin']), async (r
 });
 
 // Create a new loyalty reward (admin only)
-router.post('/admin/rewards', authenticateToken, requireRole(['admin']), async (req, res) => {
+router.post('/admin/rewards', authenticateToken, requirePagePermission('loyalty'), async (req, res) => {
   try {
     const { name, description, type, points_required } = req.body;
 
@@ -144,7 +144,7 @@ router.post('/admin/rewards', authenticateToken, requireRole(['admin']), async (
 });
 
 // Update a loyalty reward (admin only)
-router.put('/admin/rewards/:id', authenticateToken, requireRole(['admin']), async (req, res) => {
+router.put('/admin/rewards/:id', authenticateToken, requirePagePermission('loyalty'), async (req, res) => {
   try {
     const { id } = req.params;
     const { name, description, type, points_required, is_active } = req.body;
@@ -171,7 +171,7 @@ router.put('/admin/rewards/:id', authenticateToken, requireRole(['admin']), asyn
 });
 
 // Delete a loyalty reward (admin only)
-router.delete('/admin/rewards/:id', authenticateToken, requireRole(['admin']), async (req, res) => {
+router.delete('/admin/rewards/:id', authenticateToken, requirePagePermission('loyalty'), async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -190,7 +190,7 @@ router.delete('/admin/rewards/:id', authenticateToken, requireRole(['admin']), a
 });
 
 // Grant reward to user (admin only)
-router.post('/admin/grant/:userId/:rewardId', authenticateToken, requireRole(['admin']), async (req, res) => {
+router.post('/admin/grant/:userId/:rewardId', authenticateToken, requirePagePermission('loyalty'), async (req, res) => {
   try {
     const { userId, rewardId } = req.params;
 
@@ -238,7 +238,7 @@ router.post('/admin/grant/:userId/:rewardId', authenticateToken, requireRole(['a
 });
 
 // Get all users with loyalty points (admin only)
-router.get('/admin/users', authenticateToken, requireRole(['admin']), async (req, res) => {
+router.get('/admin/users', authenticateToken, requirePagePermission('loyalty'), async (req, res) => {
   try {
     const users = await prisma.user.findMany({
       select: {
@@ -259,7 +259,7 @@ router.get('/admin/users', authenticateToken, requireRole(['admin']), async (req
 });
 
 // Get all redemptions (admin only)
-router.get('/admin/redemptions', authenticateToken, requireRole(['admin']), async (req, res) => {
+router.get('/admin/redemptions', authenticateToken, requirePagePermission('loyalty'), async (req, res) => {
   try {
     const redemptions = await prisma.loyaltyRedemption.findMany({
       include: {
@@ -290,7 +290,7 @@ const toCents = (value) => {
 };
 
 // Get all promo codes (admin only)
-router.get('/admin/promos', authenticateToken, requireRole(['admin']), async (req, res) => {
+router.get('/admin/promos', authenticateToken, requirePagePermission('loyalty'), async (req, res) => {
   try {
     const promos = await prisma.PromoCode.findMany({
       orderBy: { created_at: 'desc' }
@@ -304,7 +304,7 @@ router.get('/admin/promos', authenticateToken, requireRole(['admin']), async (re
 });
 
 // Create a new promo code (admin only)
-router.post('/admin/promos', authenticateToken, requireRole(['admin']), async (req, res) => {
+router.post('/admin/promos', authenticateToken, requirePagePermission('loyalty'), async (req, res) => {
   try {
     const { code, description, type, value, min_order_amount, max_uses, expires_at } = req.body;
 
@@ -349,7 +349,7 @@ router.post('/admin/promos', authenticateToken, requireRole(['admin']), async (r
 });
 
 // Update a promo code (admin only)
-router.put('/admin/promos/:id', authenticateToken, requireRole(['admin']), async (req, res) => {
+router.put('/admin/promos/:id', authenticateToken, requirePagePermission('loyalty'), async (req, res) => {
   try {
     const { id } = req.params;
     const { code, description, type, value, min_order_amount, max_uses, is_active, expires_at } = req.body;
@@ -394,7 +394,7 @@ router.put('/admin/promos/:id', authenticateToken, requireRole(['admin']), async
 });
 
 // Delete a promo code (admin only)
-router.delete('/admin/promos/:id', authenticateToken, requireRole(['admin']), async (req, res) => {
+router.delete('/admin/promos/:id', authenticateToken, requirePagePermission('loyalty'), async (req, res) => {
   try {
     const { id } = req.params;
 

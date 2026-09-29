@@ -1,6 +1,6 @@
 const express = require('express');
 const { PrismaClient } = require('@prisma/client');
-const { authenticateToken, requireRole } = require('../middleware/auth');
+const { authenticateToken, requirePagePermission } = require('../middleware/auth');
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -57,7 +57,7 @@ function formatCustomization(customization, productCustomization) {
 }
 
 // Get orders for kitchen view (staff and admin only)
-router.get('/orders', authenticateToken, requireRole(['admin', 'staff']), async (req, res) => {
+router.get('/orders', authenticateToken, requirePagePermission('kitchen'), async (req, res) => {
   try {
     const orders = await prisma.order.findMany({
       where: {
@@ -101,7 +101,7 @@ router.get('/orders', authenticateToken, requireRole(['admin', 'staff']), async 
 });
 
 // Update order status (kitchen mode)
-router.put('/orders/:id/status', authenticateToken, requireRole(['admin', 'staff']), async (req, res) => {
+router.put('/orders/:id/status', authenticateToken, requirePagePermission('kitchen'), async (req, res) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
@@ -166,7 +166,7 @@ router.put('/orders/:id/status', authenticateToken, requireRole(['admin', 'staff
 });
 
 // Get order details for kitchen (with preparation notes)
-router.get('/orders/:id', authenticateToken, requireRole(['admin', 'staff']), async (req, res) => {
+router.get('/orders/:id', authenticateToken, requirePagePermission('kitchen'), async (req, res) => {
   try {
     const { id } = req.params;
     const order = await prisma.order.findUnique({

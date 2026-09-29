@@ -2,7 +2,7 @@ const express = require('express');
 const { PrismaClient } = require('@prisma/client');
 const fetch = require('node-fetch');
 const stripeSdk = require('stripe');
-const { authenticateToken, requireRole } = require('../middleware/auth');
+const { authenticateToken, requirePagePermission } = require('../middleware/auth');
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -273,7 +273,7 @@ router.post('/stripe/webhook', async (req, res) => {
 });
 
 // List mobile money payments (admin only)
-router.get('/mobile-money', authenticateToken, requireRole(['admin']), async (req, res) => {
+router.get('/mobile-money', authenticateToken, requirePagePermission('cashier'), async (req, res) => {
   try {
     const { status } = req.query;
     const where = { payment_method: 'mobile_money' };
@@ -295,7 +295,7 @@ router.get('/mobile-money', authenticateToken, requireRole(['admin']), async (re
 });
 
 // Approve mobile money payment (admin only)
-router.put('/mobile-money/:id/approve', authenticateToken, requireRole(['admin']), async (req, res) => {
+router.put('/mobile-money/:id/approve', authenticateToken, requirePagePermission('cashier'), async (req, res) => {
   try {
     const { id } = req.params;
     const order = await prisma.order.findUnique({ where: { id } });
@@ -322,7 +322,7 @@ router.put('/mobile-money/:id/approve', authenticateToken, requireRole(['admin']
 });
 
 // Reject mobile money payment (admin only)
-router.put('/mobile-money/:id/reject', authenticateToken, requireRole(['admin']), async (req, res) => {
+router.put('/mobile-money/:id/reject', authenticateToken, requirePagePermission('cashier'), async (req, res) => {
   try {
     const { id } = req.params;
     const order = await prisma.order.findUnique({ where: { id } });

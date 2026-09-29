@@ -236,11 +236,12 @@ router.get('/me', authenticateToken, async (req, res) => {
         full_name: true,
         phone: true,
         role: true,
+        pagePermissions: true,
         created_at: true
       }
     });
 
-    res.json(user);
+    res.json({ ...user, role: req.user.role, roleName: req.user.roleRef?.name || req.user.role });
   } catch (error) {
     console.error('Me error:', error);
     res.status(500).json({ message: 'Internal server error' });
@@ -260,11 +261,12 @@ router.put('/profile', authenticateToken, async (req, res) => {
         email: true,
         full_name: true,
         phone: true,
-        role: true
+        role: true,
+        pagePermissions: true
       }
     });
 
-    res.json(user);
+    res.json({ ...user, role: req.user.role, roleName: req.user.roleRef?.name || req.user.role });
   } catch (error) {
     console.error('Update profile error:', error);
     res.status(500).json({ message: 'Internal server error' });

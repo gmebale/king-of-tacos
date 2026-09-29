@@ -1,6 +1,6 @@
 const express = require('express');
 const { PrismaClient } = require('@prisma/client');
-const { authenticateToken, requireRole } = require('../middleware/auth');
+const { authenticateToken, requirePagePermission } = require('../middleware/auth');
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -27,7 +27,7 @@ function toBoolean(value, fallback = false) {
 }
 
 // Get restaurant settings
-router.get('/restaurant', authenticateToken, requireRole(['admin']), async (req, res) => {
+router.get('/restaurant', authenticateToken, requirePagePermission('settings'), async (req, res) => {
   try {
     const settings = await prisma.settings.findMany();
     res.json(mapSettings(settings));
@@ -38,7 +38,7 @@ router.get('/restaurant', authenticateToken, requireRole(['admin']), async (req,
 });
 
 // Update restaurant settings
-router.put('/restaurant', authenticateToken, requireRole(['admin']), async (req, res) => {
+router.put('/restaurant', authenticateToken, requirePagePermission('settings'), async (req, res) => {
   try {
     const { name, address, phone, email, opening_hours, delivery_radius, minimum_order } = req.body;
 
@@ -97,7 +97,7 @@ router.get('/payment', async (req, res) => {
 });
 
 // Update payment settings (admin)
-router.put('/payment', authenticateToken, requireRole(['admin']), async (req, res) => {
+router.put('/payment', authenticateToken, requirePagePermission('settings'), async (req, res) => {
   try {
     const {
       mobile_money_enabled,

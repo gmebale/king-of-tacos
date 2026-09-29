@@ -1,6 +1,6 @@
 const express = require('express');
 const { PrismaClient } = require('@prisma/client');
-const { authenticateToken, requireRole } = require('../middleware/auth');
+const { authenticateToken, requireRole, requirePagePermission } = require('../middleware/auth');
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -57,7 +57,7 @@ function formatCustomization(customization, productCustomization) {
 }
 
 // Get all orders (admin/staff only)
-router.get('/', authenticateToken, requireRole(['admin', 'staff']), async (req, res) => {
+router.get('/', authenticateToken, requirePagePermission('orders', 'dashboard'), async (req, res) => {
   try {
     const orders = await prisma.order.findMany({
       include: {
@@ -151,7 +151,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
     }
 
     // Check if user owns the order or is admin/staff
-    if (order.user_id !== req.user.id && !['admin', 'staff'].includes(req.user.role)) {
+    if (order.user_id !== req.user.id && !['admin', 'staff'].includes(req.user.role) && req.user.pagePermissions?.orders !== true) {
       return res.status(403).json({ message: 'Access denied' });
     }
 
@@ -252,7 +252,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
 
     // Check permissions
     const isOwner = order.user_id === req.user.id;
-    const isAdminOrStaff = ['admin', 'staff'].includes(req.user.role);
+    const isAdminOrStaff = ['admin', 'staff'].includes(req.user.role) || req.user.pagePermissions?.orders === true;
 
     if (!isOwner && !isAdminOrStaff) {
       return res.status(403).json({ message: 'Access denied' });
@@ -471,7 +471,7 @@ router.delete('/:id', authenticateToken, requireRole(['admin']), async (req, res
 });
 
 // Filter orders (admin/staff only)
-router.get('/filter', authenticateToken, requireRole(['admin', 'staff']), async (req, res) => {
+router.get('/filter', authenticateToken, requirePagePermission('orders', 'dashboard'), async (req, res) => {
   try {
     const { status, user_id, date_from, date_to } = req.query;
 

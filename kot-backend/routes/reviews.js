@@ -1,6 +1,6 @@
 const express = require('express');
 const { PrismaClient, ReviewStatus } = require('@prisma/client');
-const { authenticateToken, requireRole } = require('../middleware/auth');
+const { authenticateToken, requirePagePermission } = require('../middleware/auth');
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -65,7 +65,7 @@ router.post('/', authenticateToken, async (req, res) => {
 });
 
 // List reviews (admin only) with filters/pagination
-router.get('/', authenticateToken, requireRole(['admin']), async (req, res) => {
+router.get('/', authenticateToken, requirePagePermission('reviews'), async (req, res) => {
   try {
     const { status, rating, search, page = 1, pageSize = 20 } = req.query;
     const take = Math.min(Number(pageSize) || 20, 100);
@@ -112,7 +112,7 @@ router.get('/', authenticateToken, requireRole(['admin']), async (req, res) => {
 });
 
 // Update status (publish/hide/pending)
-router.patch('/:id/status', authenticateToken, requireRole(['admin']), async (req, res) => {
+router.patch('/:id/status', authenticateToken, requirePagePermission('reviews'), async (req, res) => {
   try {
     const { status } = req.body;
     const allowed = Object.values(ReviewStatus);

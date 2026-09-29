@@ -11,6 +11,15 @@ class User {
     }
   }
 
+  static async listRoles() {
+    try {
+      const response = await api.get('/users/roles');
+      return response.data;
+    } catch (error) {
+      throw new Error(error.response?.data?.message || 'Erreur de récupération des rôles');
+    }
+  }
+
   static async me() {
     try {
       return await authService.me();

@@ -35,6 +35,7 @@ router.get('/', authenticateToken, requireRole(['admin']), async (req, res) => {
         full_name: true,
         phone: true,
         role: true,
+        pagePermissions: true,
         loyalty_points: true,
         is_active: true,
         created_at: true,
@@ -79,6 +80,7 @@ router.post('/', authenticateToken, requireRole(['admin']), async (req, res) => 
     }
 
     // Créer l'utilisateur
+    const roleRecord = role ? await prisma.role.findUnique({ where: { slug: role } }) : null;
     const user = await prisma.user.create({
       data: {
         email,
@@ -86,6 +88,7 @@ router.post('/', authenticateToken, requireRole(['admin']), async (req, res) => 
         full_name,
         phone: phone || null,
         role: role || 'client',
+        role_id: roleRecord?.id,
         is_active: true,
         pagePermissions: pagePermissions ? pagePermissions : undefined
       },
@@ -95,6 +98,7 @@ router.post('/', authenticateToken, requireRole(['admin']), async (req, res) => 
         full_name: true,
         phone: true,
         role: true,
+        pagePermissions: true,
         loyalty_points: true,
         is_active: true,
         created_at: true
@@ -107,6 +111,21 @@ router.post('/', authenticateToken, requireRole(['admin']), async (req, res) => 
       return res.status(400).json({ message: 'Cet email est déjà utilisé' });
     }
     console.error('Create user error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// Get active roles for the staff editor (admin only)
+router.get('/roles', authenticateToken, requireRole(['admin']), async (req, res) => {
+  try {
+    const roles = await prisma.role.findMany({
+      where: { is_active: true },
+      select: { name: true, slug: true },
+      orderBy: { name: 'asc' }
+    });
+    res.json(roles);
+  } catch (error) {
+    console.error('Get roles error:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 });
@@ -185,7 +204,11 @@ router.put('/:id', authenticateToken, requireRole(['admin']), async (req, res) =
     const updateData = {};
     if (full_name !== undefined) updateData.full_name = full_name;
     if (phone !== undefined) updateData.phone = phone;
-    if (role !== undefined) updateData.role = role;
+    if (role !== undefined) {
+      updateData.role = role;
+      const roleRecord = await prisma.role.findUnique({ where: { slug: role } });
+      updateData.role_id = roleRecord?.id || null;
+    }
     if (is_active !== undefined) updateData.is_active = is_active;
     if (pagePermissions !== undefined) updateData.pagePermissions = pagePermissions;
     if (password) {
@@ -201,6 +224,7 @@ router.put('/:id', authenticateToken, requireRole(['admin']), async (req, res) =
         full_name: true,
         phone: true,
         role: true,
+        pagePermissions: true,
         loyalty_points: true,
         is_active: true,
         created_at: true,

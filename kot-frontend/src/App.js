@@ -38,18 +38,17 @@ function App() {
           <Route path="/orders-page" element={<Layout currentPageName ="OrdersPage"><OrdersPage /></Layout>} />
           <Route path="/order-success" element={<Layout currentPageName="OrderSuccess"><OrderSuccess /></Layout>} />
           <Route path="/profile" element={<Layout currentPageName="Profile"><Profile /></Layout>} />
-          <Route path="/admin/dashboard" element={<ProtectedRoute requiredRoles={['admin']}><Layout currentPageName="AdminDashboard"><AdminDashboard /></Layout></ProtectedRoute>} />
-          <Route path="/admin/orders" element={<ProtectedRoute requiredRoles={['admin', 'staff']}><Layout currentPageName="AdminOrders"><AdminOrders /></Layout></ProtectedRoute>} />
-          <Route path="/admin/kitchen" element={<ProtectedRoute requiredRoles={['admin', 'staff']}><Layout currentPageName="KitchenMode"><KitchenMode /></Layout></ProtectedRoute>} />
-          <Route path="/admin/cashier" element={<ProtectedRoute requiredRoles={['admin']}><Layout currentPageName="CashierMode"><CashierMode /></Layout></ProtectedRoute>} />
-          <Route path="/admin/finance" element={<ProtectedRoute requiredRoles={['admin']}><Layout currentPageName="AdminFinance"><AdminFinance /></Layout></ProtectedRoute>} />
-          <Route path="/admin/mobile-money" element={<ProtectedRoute requiredRoles={['admin']}><Layout currentPageName="AdminMobileMoney"><AdminMobileMoney /></Layout></ProtectedRoute>} />
-          <Route path="/admin/stock" element={<ProtectedRoute requiredRoles={['admin']}><Layout currentPageName="AdminStock"><AdminStock /></Layout></ProtectedRoute>} />
-          <Route path="/admin/staff" element={<ProtectedRoute requiredRoles= {['admin']}><Layout currentPageName="AdminStaff"><AdminStaff /></Layout></ProtectedRoute>} />
-          <Route path="/admin/cashier" element={<ProtectedRoute requiredRoles={['admin']}><Layout currentPageName="CashierMode"><CashierMode /></Layout></ProtectedRoute>} />
-          <Route path="/admin/loyalty" element={<ProtectedRoute requiredRoles={['admin']}><Layout currentPageName="AdminLoyalty"><AdminLoyalty /></Layout></ProtectedRoute>} />
-          <Route path="/admin/settings" element={<ProtectedRoute requiredRoles={['admin']}><Layout currentPageName="AdminSettings"><AdminSettings /></Layout></ProtectedRoute>} />
-          <Route path="/admin/reviews" element={<ProtectedRoute requiredRoles={['admin']}><Layout currentPageName="AdminReviews"><AdminReviews /></Layout></ProtectedRoute>} />
+          <Route path="/admin/dashboard" element={<ProtectedRoute requiredPermission="dashboard"><Layout currentPageName="AdminDashboard"><AdminDashboard /></Layout></ProtectedRoute>} />
+          <Route path="/admin/orders" element={<ProtectedRoute requiredPermission="orders"><Layout currentPageName="AdminOrders"><AdminOrders /></Layout></ProtectedRoute>} />
+          <Route path="/admin/kitchen" element={<ProtectedRoute requiredPermission="kitchen"><Layout currentPageName="KitchenMode"><KitchenMode /></Layout></ProtectedRoute>} />
+          <Route path="/admin/cashier" element={<ProtectedRoute requiredPermission="cashier"><Layout currentPageName="CashierMode"><CashierMode /></Layout></ProtectedRoute>} />
+          <Route path="/admin/finance" element={<ProtectedRoute requiredPermission="finance"><Layout currentPageName="AdminFinance"><AdminFinance /></Layout></ProtectedRoute>} />
+          <Route path="/admin/mobile-money" element={<ProtectedRoute requiredPermission="cashier"><Layout currentPageName="AdminMobileMoney"><AdminMobileMoney /></Layout></ProtectedRoute>} />
+          <Route path="/admin/stock" element={<ProtectedRoute requiredPermission="stock"><Layout currentPageName="AdminStock"><AdminStock /></Layout></ProtectedRoute>} />
+          <Route path="/admin/staff" element={<ProtectedRoute requiredRoles={['admin']}><Layout currentPageName="AdminStaff"><AdminStaff /></Layout></ProtectedRoute>} />
+          <Route path="/admin/loyalty" element={<ProtectedRoute requiredPermission="loyalty"><Layout currentPageName="AdminLoyalty"><AdminLoyalty /></Layout></ProtectedRoute>} />
+          <Route path="/admin/settings" element={<ProtectedRoute requiredPermission="settings"><Layout currentPageName="AdminSettings"><AdminSettings /></Layout></ProtectedRoute>} />
+          <Route path="/admin/reviews" element={<ProtectedRoute requiredPermission="reviews"><Layout currentPageName="AdminReviews"><AdminReviews /></Layout></ProtectedRoute>} />
           <Route path="/login" element={<Layout currentPageName="Auth"><Login /></Layout>} />
           <Route path="/register" element={<Layout currentPageName="Auth"><Register /></Layout>} />
         </Routes>

@@ -1,6 +1,6 @@
 const express = require('express');
 const { PrismaClient } = require('@prisma/client');
-const { authenticateToken, requireRole } = require('../middleware/auth');
+const { authenticateToken, requirePagePermission } = require('../middleware/auth');
 const PDFDocument = require('pdfkit');
 const ExcelJS = require('exceljs');
 const { format } = require('date-fns');
@@ -343,7 +343,7 @@ async function buildSalesReport(period) {
 }
 
 // Get current cash register session
-router.get('/session', authenticateToken, requireRole(['admin']), async (req, res) => {
+router.get('/session', authenticateToken, requirePagePermission('cashier'), async (req, res) => {
   try {
     const session = await prisma.cashRegisterSession.findFirst({
       where: { closed_at: null },
@@ -370,7 +370,7 @@ router.get('/session', authenticateToken, requireRole(['admin']), async (req, re
 });
 
 // Open cash register
-router.post('/session/open', authenticateToken, requireRole(['admin']), async (req, res) => {
+router.post('/session/open', authenticateToken, requirePagePermission('cashier'), async (req, res) => {
   try {
     const { opening_balance } = req.body;
 
@@ -429,7 +429,7 @@ router.post('/session/open', authenticateToken, requireRole(['admin']), async (r
 });
 
 // Close cash register
-router.post('/session/close', authenticateToken, requireRole(['admin']), async (req, res) => {
+router.post('/session/close', authenticateToken, requirePagePermission('cashier'), async (req, res) => {
   try {
     const { closing_balance, notes } = req.body;
 
@@ -511,7 +511,7 @@ router.post('/session/close', authenticateToken, requireRole(['admin']), async (
 });
 
 // Get orders for cashier view (admin only) - all initiated orders
-router.get('/orders', authenticateToken, requireRole(['admin']), async (req, res) => {
+router.get('/orders', authenticateToken, requirePagePermission('cashier'), async (req, res) => {
   try {
     const orders = await prisma.order.findMany({
       where: {
@@ -562,7 +562,7 @@ router.get('/orders', authenticateToken, requireRole(['admin']), async (req, res
 });
 
 // Generate invoice PDF for an order
-router.get('/invoice/:orderId', authenticateToken, requireRole(['admin']), async (req, res) => {
+router.get('/invoice/:orderId', authenticateToken, requirePagePermission('cashier'), async (req, res) => {
   try {
     const { orderId } = req.params;
 
@@ -688,7 +688,7 @@ router.get('/invoice/:orderId', authenticateToken, requireRole(['admin']), async
 });
 
 // Get sales reports
-router.get('/reports/:period', authenticateToken, requireRole(['admin']), async (req, res) => {
+router.get('/reports/:period', authenticateToken, requirePagePermission('cashier'), async (req, res) => {
   try {
     const { period } = req.params; // 'day', 'week', 'month', 'year'
     const report = await buildSalesReport(period);
@@ -703,7 +703,7 @@ router.get('/reports/:period', authenticateToken, requireRole(['admin']), async 
 });
 
 // Generate detailed sales report PDF
-router.get('/reports/:period/pdf', authenticateToken, requireRole(['admin']), async (req, res) => {
+router.get('/reports/:period/pdf', authenticateToken, requirePagePermission('cashier'), async (req, res) => {
   try {
     const { period } = req.params;
     const report = await buildSalesReport(period);
@@ -816,7 +816,7 @@ router.get('/reports/:period/pdf', authenticateToken, requireRole(['admin']), as
 
 // Mark order as paid/delivered
 // Mark order as paid and update cash register balance
-router.put('/orders/:id/pay', authenticateToken, requireRole(['admin']), async (req, res) => {
+router.put('/orders/:id/pay', authenticateToken, requirePagePermission('cashier'), async (req, res) => {
   try {
     const { id } = req.params;
     const { payment_method } = req.body;
@@ -869,7 +869,7 @@ router.put('/orders/:id/pay', authenticateToken, requireRole(['admin']), async (
   }
 });
 
-router.put('/orders/:id/deliver', authenticateToken, requireRole(['admin']), async (req, res) => {
+router.put('/orders/:id/deliver', authenticateToken, requirePagePermission('cashier'), async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -949,7 +949,7 @@ router.put('/orders/:id/deliver', authenticateToken, requireRole(['admin']), asy
 });
 
 // Generate cash register closing report PDF
-router.get('/session/close-report', authenticateToken, requireRole(['admin']), async (req, res) => {
+router.get('/session/close-report', authenticateToken, requirePagePermission('cashier'), async (req, res) => {
   try {
     const { sessionId } = req.query;
 

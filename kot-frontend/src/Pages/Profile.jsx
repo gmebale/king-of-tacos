@@ -169,16 +169,20 @@ export default function Profile() {
                   <div className="flex justify-between">
                     <span className="text-gray-600">Rôle</span>
                     <Badge className="bg-amber-100 text-amber-800 border-amber-300">
-                      {user?.role === "admin" ? "Administrateur" : "Client"}
+                      {user?.roleName || { admin: "Administrateur", manager: "Manager", serveur: "Serveur", caissier: "Caissier", cuisinier: "Cuisinier", bar: "Bar", staff: "Staff", client: "Client" }[user?.role] || user?.role || "Client"}
                     </Badge>
                   </div>
                 </div>
               )}
 
               <div className="mt-6 pt-6 border-t space-y-3">
-                {user?.role === "admin" && (
+                {(user?.role === "admin" || ["dashboard", "orders", "kitchen", "cashier", "finance", "stock", "loyalty", "settings", "reviews"].some((key) => user?.pagePermissions?.[key] === true)) && (
                   <Button
-                    onClick={() => navigate(createPageUrl("AdminDashboard"))}
+                    onClick={() => {
+                      const entries = { dashboard: "AdminDashboard", orders: "AdminOrders", kitchen: "KitchenMode", cashier: "CashierMode", finance: "AdminFinance", stock: "AdminStock", staff: "AdminStaff", loyalty: "AdminLoyalty", settings: "AdminSettings", reviews: "AdminReviews" };
+                      const page = user?.role === "admin" ? "AdminDashboard" : entries[Object.keys(entries).find((key) => user?.pagePermissions?.[key])];
+                      if (page) navigate(createPageUrl(page));
+                    }}
                     variant="outline"
                     className="w-full border-2 border-amber-400 text-amber-600 hover:bg-amber-50 rounded-xl"
                   >

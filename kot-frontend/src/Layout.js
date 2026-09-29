@@ -30,6 +30,7 @@ export default function Layout({ children, currentPageName }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuthContext();
+  const hasPagePermission = (key) => user?.role === 'admin' || user?.pagePermissions?.[key] === true;
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [cartCount, setCartCount] = useState(0);
 
@@ -64,17 +65,17 @@ export default function Layout({ children, currentPageName }) {
   ];
 
   const adminNavItems = [
-    { name: "Dashboard", path: "AdminDashboard", icon: LayoutDashboard },
-    { name: "Commandes", path: "AdminOrders", icon: ShoppingCart },
-    { name: "Cuisine", path: "KitchenMode", icon: ChefHat },
-    { name: "Caissier", path: "CashierMode", icon: Receipt },
-    { name: "Finances", path: "AdminFinance", icon: TrendingUp },
-    { name: "Mobile Money", path: "AdminMobileMoney", icon: Smartphone },
-    { name: "Stock", path: "AdminStock", icon: Package },
-    { name: "Personnel", path: "AdminStaff", icon: Users },
-    { name: "Fidélité", path: "AdminLoyalty", icon: Star },
-    { name: "Avis", path: "AdminReviews", icon: MessageSquare },
-    { name: "Paramètres", path: "AdminSettings", icon: Settings }
+    { name: "Dashboard", path: "AdminDashboard", permission: "dashboard", icon: LayoutDashboard },
+    { name: "Commandes", path: "AdminOrders", permission: "orders", icon: ShoppingCart },
+    { name: "Cuisine", path: "KitchenMode", permission: "kitchen", icon: ChefHat },
+    { name: "Caissier", path: "CashierMode", permission: "cashier", icon: Receipt },
+    { name: "Finances", path: "AdminFinance", permission: "finance", icon: TrendingUp },
+    { name: "Mobile Money", path: "AdminMobileMoney", permission: "cashier", icon: Smartphone },
+    { name: "Stock", path: "AdminStock", permission: "stock", icon: Package },
+    { name: "Personnel", path: "AdminStaff", permission: "staff", icon: Users },
+    { name: "Fidélité", path: "AdminLoyalty", permission: "loyalty", icon: Star },
+    { name: "Avis", path: "AdminReviews", permission: "reviews", icon: MessageSquare },
+    { name: "Paramètres", path: "AdminSettings", permission: "settings", icon: Settings }
   ];
 
   if (isAdminPage) {
@@ -103,7 +104,7 @@ export default function Layout({ children, currentPageName }) {
           </div>
 
           <nav className="flex-1 overflow-y-auto p-4 space-y-1">
-            {adminNavItems.map((item) => {
+            {adminNavItems.filter((item) => hasPagePermission(item.permission) && (item.path !== "AdminStaff" || user?.role === "admin")).map((item) => {
               const isActive = location.pathname === createPageUrl(item.path);
               return (
                 <Link

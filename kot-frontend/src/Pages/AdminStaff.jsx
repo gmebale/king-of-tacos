@@ -51,7 +51,7 @@ const ROLE_OPTIONS = [
 ];
 
 const createDefaultPermissions = () => ({
-  dashboard: true,
+  dashboard: false,
   orders: false,
   kitchen: false,
   cashier: false,
@@ -65,6 +65,7 @@ const createDefaultPermissions = () => ({
 
 export default function AdminStaff() {
   const [users, setUsers] = useState([]);
+  const [roleOptions, setRoleOptions] = useState(ROLE_OPTIONS);
   const [filteredUsers, setFilteredUsers] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
@@ -104,8 +105,11 @@ export default function AdminStaff() {
   const loadUsers = async () => {
     setIsLoading(true);
     try {
-      const data = await User.list();
+      const [data, roles] = await Promise.all([User.list(), User.listRoles()]);
       setUsers(data);
+      if (roles.length) {
+        setRoleOptions(roles.map((role) => ({ value: role.slug, label: role.name })));
+      }
     } catch (error) {
       toast.error("Erreur lors du chargement des utilisateurs");
     } finally {
@@ -174,7 +178,7 @@ export default function AdminStaff() {
       case "staff":
         return "Staff";
       default:
-        return "Client";
+        return roleOptions.find((option) => option.value === role)?.label || role || "Client";
     }
   };
 
@@ -371,7 +375,7 @@ export default function AdminStaff() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {ROLE_OPTIONS.map((roleOption) => (
+                      {roleOptions.map((roleOption) => (
                         <SelectItem key={roleOption.value} value={roleOption.value}>
                           {roleOption.label}
                         </SelectItem>
@@ -443,7 +447,7 @@ export default function AdminStaff() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Tous les rôles</SelectItem>
-                {ROLE_OPTIONS.map((roleOption) => (
+                {roleOptions.map((roleOption) => (
                   <SelectItem key={roleOption.value} value={roleOption.value}>
                     {roleOption.label}
                   </SelectItem>
@@ -630,7 +634,7 @@ export default function AdminStaff() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {ROLE_OPTIONS.map((roleOption) => (
+                    {roleOptions.map((roleOption) => (
                       <SelectItem key={roleOption.value} value={roleOption.value}>
                         {roleOption.label}
                       </SelectItem>

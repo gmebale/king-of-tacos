@@ -5,6 +5,7 @@ const prisma = new PrismaClient();
 
 const normalizeRole = (user) => {
   if (!user) return 'client';
+  if (user.roleRef && user.roleRef.slug) return user.roleRef.slug;
   if (typeof user.role === 'string') return user.role;
   if (user.role && typeof user.role === 'object' && user.role.slug) return user.role.slug;
   return 'client';
@@ -68,7 +69,7 @@ const requireRole = (roles) => {
   };
 };
 
-const requirePagePermission = (pageKey) => {
+const requirePagePermission = (...pageKeys) => {
   return (req, res, next) => {
     if (!req.user) {
       return res.status(401).json({ message: 'Authentication required' });
@@ -80,11 +81,11 @@ const requirePagePermission = (pageKey) => {
     }
 
     const pagePermissions = req.user.pagePermissions || {};
-    if (pagePermissions[pageKey] === true) {
+    if (pageKeys.some((pageKey) => pagePermissions[pageKey] === true)) {
       return next();
     }
 
-    if (req.user.permissions && req.user.permissions[pageKey] === true) {
+    if (req.user.permissions && pageKeys.some((pageKey) => req.user.permissions[pageKey] === true)) {
       return next();
     }
 

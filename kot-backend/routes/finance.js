@@ -1,12 +1,12 @@
 const express = require('express');
 const { PrismaClient } = require('@prisma/client');
-const { authenticateToken, requireRole } = require('../middleware/auth');
+const { authenticateToken, requirePagePermission } = require('../middleware/auth');
 
 const router = express.Router();
 const prisma = new PrismaClient();
 
 // Get revenue data aggregated by date (admin only)
-router.get('/revenue', authenticateToken, requireRole(['admin']), async (req, res) => {
+router.get('/revenue', authenticateToken, requirePagePermission('finance', 'dashboard'), async (req, res) => {
   try {
     const { start_date, end_date } = req.query;
 
@@ -57,7 +57,7 @@ router.get('/revenue', authenticateToken, requireRole(['admin']), async (req, re
 });
 
 // Get top-selling products (admin only)
-router.get('/top-products', authenticateToken, requireRole(['admin']), async (req, res) => {
+router.get('/top-products', authenticateToken, requirePagePermission('finance', 'dashboard'), async (req, res) => {
   try {
     const { start_date, end_date, limit = 10 } = req.query;
 
@@ -122,7 +122,7 @@ router.get('/top-products', authenticateToken, requireRole(['admin']), async (re
 });
 
 // Get top customers (admin only)
-router.get('/top-customers', authenticateToken, requireRole(['admin']), async (req, res) => {
+router.get('/top-customers', authenticateToken, requirePagePermission('finance', 'dashboard'), async (req, res) => {
   try {
     const { start_date, end_date, limit = 10 } = req.query;
 
