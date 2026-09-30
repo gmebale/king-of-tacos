@@ -375,7 +375,7 @@ export default function AdminLoyalty() {
                   Nouvelle Récompense
                 </Button>
                 <Dialog open={showRewardDialog} onOpenChange={setShowRewardDialog}>
-                  <DialogContent>
+                  <DialogContent className="max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
                       <DialogTitle>{editingReward ? 'Modifier la Récompense' : 'Nouvelle Récompense'}</DialogTitle>
                       <DialogDescription>

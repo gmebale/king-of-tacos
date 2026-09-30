@@ -22,6 +22,7 @@ export default function Checkout() {
   const [user, setUser] = useState(null);
   const [serviceLocations, setServiceLocations] = useState([]);
   const [linkedCustomer, setLinkedCustomer] = useState(null);
+  const [searchingLoyaltyCustomer, setSearchingLoyaltyCustomer] = useState(false);
   const [promoInput, setPromoInput] = useState('');
   const [activePromo, setActivePromo] = useState(null);
   const [giftRedemption, setGiftRedemption] = useState(null);
@@ -134,17 +135,32 @@ export default function Checkout() {
   };
 
   const lookupLoyaltyCustomer = async () => {
-    const contact = formData.customer_email.trim() || formData.customer_phone.trim();
-    if (!contact) return toast.error('Saisissez le courriel ou le téléphone du client.');
+    const contacts = [...new Set([formData.customer_email.trim(), formData.customer_phone.trim()].filter(Boolean))];
+    if (!contacts.length) return toast.error('Saisissez le courriel ou le téléphone du client.');
+    setSearchingLoyaltyCustomer(true);
+    let lastError;
     try {
-      const response = await api.get('/loyalty/staff/customer', { params: { contact } });
-      setLinkedCustomer(response.data);
-      setFormData(current => ({ ...current, loyalty_customer_id: response.data.id }));
-      toast.success(`Compte fidélité associé : ${response.data.full_name}`);
+      for (const contact of contacts) {
+        try {
+          const response = await api.get('/loyalty/staff/customer', { params: { contact } });
+          setLinkedCustomer(response.data);
+          setFormData(current => ({ ...current, loyalty_customer_id: response.data.id }));
+          toast.success(`Compte fidélité associé : ${response.data.full_name}`);
+          return;
+        } catch (error) {
+          lastError = error;
+          if (![404, 409].includes(error.response?.status)) throw error;
+        }
+      }
+      setLinkedCustomer(null);
+      setFormData(current => ({ ...current, loyalty_customer_id: '' }));
+      toast.error(lastError?.response?.data?.message || 'Compte fidélité introuvable.');
     } catch (error) {
       setLinkedCustomer(null);
       setFormData(current => ({ ...current, loyalty_customer_id: '' }));
-      toast.error(error.response?.data?.message || 'Compte fidélité introuvable.');
+      toast.error(error.response?.data?.message || 'Impossible de rechercher le compte fidélité.');
+    } finally {
+      setSearchingLoyaltyCustomer(false);
     }
   };
 
@@ -240,7 +256,9 @@ export default function Checkout() {
                   </div>
                   {isStaffOrder && <div className="rounded-lg border bg-amber-50 p-3">
                     <p className="text-sm text-gray-700">Pour créditer les points après paiement et clôture, associez cette commande au compte du client inscrit.</p>
-                    <Button type="button" variant="outline" className="mt-2" onClick={lookupLoyaltyCustomer}>Rechercher le compte fidélité</Button>
+                    <Button type="button" variant="outline" className="mt-2" onClick={lookupLoyaltyCustomer} disabled={searchingLoyaltyCustomer}>
+                      {searchingLoyaltyCustomer ? 'Recherche en cours…' : 'Rechercher le compte fidélité'}
+                    </Button>
                     {linkedCustomer && <p className="mt-2 text-sm font-medium text-green-700">{linkedCustomer.full_name} · {linkedCustomer.loyalty_points} points</p>}
                   </div>}
                 </CardContent>
