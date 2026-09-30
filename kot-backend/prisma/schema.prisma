@@ -150,6 +150,9 @@ model User {
   validatedOrders    Order[] @relation("orderValidatedBy")
   closedOrders       Order[] @relation("orderClosedBy")
   loyaltyRedemptions LoyaltyRedemption[]
+  loyaltyPointEntries LoyaltyPointEntry[] @relation("loyaltyPointOwner")
+  loyaltyPointActions LoyaltyPointEntry[] @relation("loyaltyPointActor")
+  promoCodes PromoCode[]
   reviews            Review[]
   logs               Log[]
   userPermissions    UserPermission[]
@@ -171,6 +174,7 @@ model Product {
   stock                 Int            @default(0) // Quantité en stock
   stock_alert_threshold Int            @default(10) // Seuil d'alerte stock
   average_purchase_cost Int?
+  loyalty_points        Int            @default(0)
   type                  String? // Type du produit (main, size, meat, sauce, extra, side)
   customization         Json? // Configuration des options de personnalisation
   created_at            DateTime       @default(now())
@@ -182,6 +186,7 @@ model Product {
   taxRates ProductTax[]
   orderItems OrderItem[]
   expenseItems ExpenseItem[]
+  giftedRewards LoyaltyReward[] @relation("giftedRewardProduct")
 
   @@map("products")
 }
@@ -210,6 +215,11 @@ model Order {
   delivery_address String?
   pickup_time      String?
   notes            String?
+  promo_code_id    String?
+  discount_amount  Int @default(0)
+  promoCode        PromoCode? @relation(fields: [promo_code_id], references: [id], onDelete: SetNull)
+  loyalty_redemption_id String? @unique
+  loyaltyRedemption LoyaltyRedemption? @relation(fields: [loyalty_redemption_id], references: [id], onDelete: SetNull)
 
   validated_by Int?
   validatedBy  User?  @relation("orderValidatedBy", fields: [validated_by], references: [id])
@@ -221,6 +231,9 @@ model Order {
 
   items   OrderItem[]
   reviews Review[]
+  loyaltyPointEntries LoyaltyPointEntry[]
+
+  @@index([promo_code_id])
 
   @@map("orders")
 }
@@ -253,6 +266,8 @@ model OrderItem {
   tax_breakdown Json?
   unit_cost_snapshot Int?
   stock_deducted Boolean @default(false)
+  unit_loyalty_points Int @default(0)
+  free_quantity Int @default(0)
 
   @@map("order_items")
 }
@@ -264,6 +279,19 @@ enum RewardType {
   custom
 }
 
+enum LoyaltyRedemptionStatus {
+  claimed
+  used
+  expired
+}
+
+enum LoyaltyPointEntryType {
+  earned
+  manual_adjustment
+  redemption
+  refund_reversal
+}
+
 model LoyaltyReward {
   id              String     @id @default(cuid())
   name            String
@@ -271,10 +299,18 @@ model LoyaltyReward {
   type            RewardType
   points_required Int
   is_active       Boolean    @default(true)
+  quantity_limit  Int?
+  quantity_claimed Int @default(0)
+  expires_at      DateTime?
+  discount_percent Int?
+  gifted_product_id Int?
+  giftedProduct Product? @relation("giftedRewardProduct", fields: [gifted_product_id], references: [id], onDelete: SetNull)
   created_at      DateTime   @default(now())
   updated_at      DateTime   @updatedAt
 
   redemptions LoyaltyRedemption[]
+
+  @@index([gifted_product_id])
 
   @@map("loyalty_rewards")
 }
@@ -286,6 +322,11 @@ model LoyaltyRedemption {
   reward_id   String
   reward      LoyaltyReward @relation(fields: [reward_id], references: [id], onDelete: Cascade)
   points_used Int
+  status LoyaltyRedemptionStatus @default(claimed)
+  expires_at DateTime?
+  promo_code_id String? @unique
+  promoCode PromoCode? @relation("redemptionPromo", fields: [promo_code_id], references: [id], onDelete: SetNull)
+  appliedOrder Order?
   created_at  DateTime      @default(now())
 
   @@map("loyalty_redemptions")
@@ -308,10 +349,34 @@ model PromoCode {
   used_count       Int       @default(0)
   is_active        Boolean   @default(true)
   expires_at       DateTime?
+  user_id          Int?
+  user             User? @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  redemption       LoyaltyRedemption? @relation("redemptionPromo")
+  orders           Order[]
   created_at       DateTime  @default(now())
   updated_at       DateTime  @updatedAt
 
+  @@index([user_id])
+
   @@map("promo_codes")
+}
+
+model LoyaltyPointEntry {
+  id Int @id @default(autoincrement())
+  user_id Int
+  user User @relation("loyaltyPointOwner", fields: [user_id], references: [id], onDelete: Cascade)
+  actor_id Int?
+  actor User? @relation("loyaltyPointActor", fields: [actor_id], references: [id], onDelete: SetNull)
+  order_id String?
+  order Order? @relation(fields: [order_id], references: [id], onDelete: SetNull)
+  type LoyaltyPointEntryType
+  points Int
+  reason String?
+  created_at DateTime @default(now())
+
+  @@unique([order_id, type])
+  @@index([user_id, created_at])
+  @@map("loyalty_point_entries")
 }
 
 enum ReviewStatus {

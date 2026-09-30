@@ -13,6 +13,7 @@ import { createPageUrl } from "../utils";
 import { useCart } from "../hooks/useCart";
 import { formatCustomization } from "../utils/customization";
 import api from "../services/api.service";
+import { toast } from 'react-hot-toast';
 
 export default function Checkout() {
   const navigate = useNavigate();
@@ -20,6 +21,11 @@ export default function Checkout() {
 
   const [user, setUser] = useState(null);
   const [serviceLocations, setServiceLocations] = useState([]);
+  const [linkedCustomer, setLinkedCustomer] = useState(null);
+  const [promoInput, setPromoInput] = useState('');
+  const [activePromo, setActivePromo] = useState(null);
+  const [giftRedemption, setGiftRedemption] = useState(null);
+  const [loyaltyClaims, setLoyaltyClaims] = useState(null);
   const isStaffOrder = user?.role === 'serveur' && sessionStorage.getItem('kot_staff_order_mode') === 'true';
   const [formData, setFormData] = useState({
     customer_name: "",
@@ -56,17 +62,23 @@ export default function Checkout() {
       const currentUser = await User.me();
       setUser(currentUser);
       if (currentUser) {
+        const staffOrderMode = currentUser.role === 'serveur';
         if (currentUser.role === 'serveur') sessionStorage.setItem('kot_staff_order_mode', 'true');
         setFormData(prev => ({
           ...prev,
-          customer_name: currentUser.full_name || "",
-          customer_email: currentUser.email || "",
-          customer_phone: currentUser.phone || "",
+          customer_name: staffOrderMode ? "" : currentUser.full_name || "",
+          customer_email: staffOrderMode ? "" : currentUser.email || "",
+          customer_phone: staffOrderMode ? "" : currentUser.phone || "",
           delivery_address: currentUser.address || "",
           order_type: currentUser.role === 'serveur' && sessionStorage.getItem('kot_staff_order_mode') === 'true'
             ? 'sur_place'
             : prev.order_type
         }));
+        if (currentUser.role === 'client') {
+          api.get('/loyalty/my-rewards').then(response => {
+            setLoyaltyClaims(response.data || []);
+          }).catch(error => console.error('Error loading claimed rewards:', error));
+        }
       }
     } catch (error) {
       console.log("User not logged in");
@@ -76,7 +88,65 @@ export default function Checkout() {
   const total = getTotal();
 
   const deliveryFee = formData.order_type === "livraison" ? 2000 : 0;
-  const finalTotal = total + deliveryFee;
+  const giftCartItem = !activePromo && giftRedemption?.reward?.giftedProduct
+    ? cart.find(item => item.product?.id === giftRedemption.reward.giftedProduct.id && item.quantity > 0)
+    : null;
+  const giftDiscount = giftCartItem ? Math.round(giftCartItem.subtotal / giftCartItem.quantity) : 0;
+  const promoDiscount = activePromo?.promo?.type === 'percentage'
+    ? Math.round(total * activePromo.promo.value / 100)
+    : activePromo?.promo?.type === 'free_delivery' ? deliveryFee
+      : activePromo?.promo?.type === 'fixed_amount' ? Math.min(total, activePromo.promo.value) : 0;
+  const appliedDiscount = activePromo ? promoDiscount : giftDiscount;
+  const finalTotal = Math.max(0, total + deliveryFee - appliedDiscount);
+
+  useEffect(() => {
+    if (user?.role !== 'client' || loyaltyClaims === null) return;
+    let cancelled = false;
+    const applyEligibleClaim = async () => {
+      const promoClaims = loyaltyClaims.filter(claim => claim.promoCode?.is_active).sort((a, b) => new Date(a.expires_at) - new Date(b.expires_at));
+      for (const claim of promoClaims) {
+        try {
+          const validation = await api.post('/loyalty/validate-promo', { code: claim.promoCode.code, order_amount: total, order_type: formData.order_type });
+          if (!cancelled) {
+            setActivePromo(current => current?.loyalty === false ? current : { code: validation.data.promo.code, promo: validation.data.promo, loyalty: true });
+            setGiftRedemption(null);
+          }
+          return;
+        } catch (_error) { /* Test the next unexpired reward code. */ }
+      }
+      if (!cancelled) {
+        setActivePromo(current => current?.loyalty ? null : current);
+        setGiftRedemption(current => current || loyaltyClaims.find(claim => claim.reward?.type === 'gifted_product') || null);
+      }
+    };
+    applyEligibleClaim();
+    return () => { cancelled = true; };
+  }, [user?.role, loyaltyClaims, formData.order_type, total]);
+
+  const applyPromoCode = async () => {
+    if (!promoInput.trim()) return toast.error('Saisissez un code promo.');
+    try {
+      const response = await api.post('/loyalty/validate-promo', { code: promoInput.trim(), order_amount: total, order_type: formData.order_type });
+      setActivePromo({ code: response.data.promo.code, promo: response.data.promo, loyalty: false });
+      setGiftRedemption(null);
+      toast.success('Code promo appliqué.');
+    } catch (error) { toast.error(error.response?.data?.message || 'Code promo invalide.'); }
+  };
+
+  const lookupLoyaltyCustomer = async () => {
+    const contact = formData.customer_email.trim() || formData.customer_phone.trim();
+    if (!contact) return toast.error('Saisissez le courriel ou le téléphone du client.');
+    try {
+      const response = await api.get('/loyalty/staff/customer', { params: { contact } });
+      setLinkedCustomer(response.data);
+      setFormData(current => ({ ...current, loyalty_customer_id: response.data.id }));
+      toast.success(`Compte fidélité associé : ${response.data.full_name}`);
+    } catch (error) {
+      setLinkedCustomer(null);
+      setFormData(current => ({ ...current, loyalty_customer_id: '' }));
+      toast.error(error.response?.data?.message || 'Compte fidélité introuvable.');
+    }
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -85,7 +155,12 @@ export default function Checkout() {
       state: {
         cart,
         formData,
-        total: finalTotal
+        total: finalTotal,
+        pre_discount_total: total + deliveryFee,
+        pre_discount_subtotal: total,
+        promo_code: activePromo?.code || null,
+        gifted_redemption_id: !activePromo && giftCartItem ? giftRedemption.id : null,
+        loyalty_discount: appliedDiscount
       }
     });
   };
@@ -146,7 +221,7 @@ export default function Checkout() {
                       required={!isStaffOrder}
                       type="tel"
                       value={formData.customer_phone}
-                      onChange={(e) => setFormData({...formData, customer_phone: e.target.value})}
+                      onChange={(e) => { setLinkedCustomer(null); setFormData(current => ({...current, customer_phone: e.target.value, loyalty_customer_id: ''})); }}
                       className="rounded-xl border-2 focus:border-amber-400"
                       placeholder="06 12 34 56 78"
                     />
@@ -158,11 +233,16 @@ export default function Checkout() {
                       id="email"
                       type="email"
                       value={formData.customer_email}
-                      onChange={(e) => setFormData({...formData, customer_email: e.target.value})}
+                      onChange={(e) => { setLinkedCustomer(null); setFormData(current => ({...current, customer_email: e.target.value, loyalty_customer_id: ''})); }}
                       className="rounded-xl border-2 focus:border-amber-400"
                       placeholder="votre@email.com"
                     />
                   </div>
+                  {isStaffOrder && <div className="rounded-lg border bg-amber-50 p-3">
+                    <p className="text-sm text-gray-700">Pour créditer les points après paiement et clôture, associez cette commande au compte du client inscrit.</p>
+                    <Button type="button" variant="outline" className="mt-2" onClick={lookupLoyaltyCustomer}>Rechercher le compte fidélité</Button>
+                    {linkedCustomer && <p className="mt-2 text-sm font-medium text-green-700">{linkedCustomer.full_name} · {linkedCustomer.loyalty_points} points</p>}
+                  </div>}
                 </CardContent>
               </Card>
 
@@ -283,6 +363,22 @@ export default function Checkout() {
                 </CardContent>
               </Card>
 
+              {!isStaffOrder && <Card>
+                <CardHeader><CardTitle>Code promo et récompenses</CardTitle></CardHeader>
+                <CardContent className="space-y-3">
+                  {activePromo ? <div className="rounded-md bg-green-50 p-3 text-sm text-green-800">
+                    {activePromo.loyalty ? 'Votre récompense fidélité est appliquée automatiquement' : 'Code promo appliqué'} : <strong className="font-mono">{activePromo.code}</strong>
+                    <Button type="button" variant="link" className="ml-2 p-0" onClick={() => { setActivePromo(null); setGiftRedemption(loyaltyClaims?.find(claim => claim.reward?.type === 'gifted_product') || null); }}>Retirer</Button>
+                  </div> : <div className="flex gap-2">
+                    <Input value={promoInput} onChange={event => setPromoInput(event.target.value.toUpperCase())} placeholder="Saisir un code promo" />
+                    <Button type="button" variant="outline" onClick={applyPromoCode}>Appliquer</Button>
+                  </div>}
+                  {!activePromo && giftCartItem && <p className="text-sm text-green-700">Produit offert appliqué : {giftRedemption.reward.giftedProduct.name}</p>}
+                  {!activePromo && giftRedemption && !giftCartItem && <p className="text-sm text-amber-800">Ajoutez {giftRedemption.reward.giftedProduct?.name} au panier pour bénéficier de votre produit offert.</p>}
+                  {activePromo && <p className="text-sm text-green-700">Réduction : −{appliedDiscount.toLocaleString()} FCFA</p>}
+                </CardContent>
+              </Card>}
+
               <Button
                 type="submit"
                 className="w-full bg-gradient-to-r from-yellow-400 to-amber-600 hover:from-yellow-500 hover:to-amber-700 text-white py-6 rounded-2xl text-lg font-semibold shadow-lg"
@@ -327,6 +423,8 @@ export default function Checkout() {
                       <span className="font-semibold">{deliveryFee.toLocaleString()} FCFA</span>
                     </div>
                   )}
+
+                  {appliedDiscount > 0 && <div className="flex justify-between text-green-700"><span>{giftCartItem && !activePromo ? `Produit offert (${giftRedemption.reward.giftedProduct.name})` : 'Réduction promo'}</span><span>−{appliedDiscount.toLocaleString()} FCFA</span></div>}
 
                   <div className="flex justify-between text-2xl font-bold pt-2">
                     <span>Total</span>

@@ -28,6 +28,7 @@ export default function ProductFormDialog({ open, onOpenChange, product, onSave 
     image: "",
     stock: 0,
     stock_alert_threshold: 10,
+    loyalty_points: 0,
     available: true,
     tax_rate_ids: []
   });
@@ -56,6 +57,7 @@ export default function ProductFormDialog({ open, onOpenChange, product, onSave 
         image: "",
         stock: 0,
         stock_alert_threshold: 5,
+        loyalty_points: 0,
         available: true,
         tax_rate_ids: []
       });
@@ -236,6 +238,12 @@ export default function ProductFormDialog({ open, onOpenChange, product, onSave 
                 </span>
               </div>
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="loyalty-points">Points fidélité par unité vendue</Label>
+            <Input id="loyalty-points" type="number" min="0" step="1" value={formData.loyalty_points ?? 0} onChange={event => setFormData({ ...formData, loyalty_points: parseInt(event.target.value, 10) || 0 })} />
+            <p className="text-xs text-gray-500">Les points sont crédités après paiement et clôture, uniquement sur les unités payées.</p>
           </div>
 
           <div className="space-y-3 rounded-xl border bg-gray-50 p-4">

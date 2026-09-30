@@ -202,7 +202,7 @@ export default function Profile() {
           </Card>
 
           {/* Loyalty Card */}
-          <LoyaltyCard />
+          {user?.role === 'client' && <LoyaltyCard />}
 
 
         </div>

@@ -5,6 +5,8 @@ const PDFDocument = require('pdfkit');
 const ExcelJS = require('exceljs');
 const { format } = require('date-fns');
 const { recordOrderStockSale } = require('../utils/inventory');
+const { awardOrderPoints, reverseOrderPoints } = require('../utils/loyalty');
+const { getPaidItemTaxMultiplier, getOrderItemTaxQuantity } = require('../utils/orderTaxAdjustment');
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -184,6 +186,7 @@ async function buildSalesReport(period) {
     },
     include: {
       items: true,
+      promoCode: { select: { type: true } },
       user: true,
       validatedBy: { select: { id: true, full_name: true } },
       closedBy: { select: { id: true, full_name: true } }
@@ -241,6 +244,7 @@ async function buildSalesReport(period) {
   const userSales = {};
 
   for (const order of orders) {
+    const taxMultiplier = getPaidItemTaxMultiplier(order);
     const orderItemsTotal = order.items.reduce(
       (sum, item) => sum + (item.price || 0) * item.quantity,
       0
@@ -270,18 +274,19 @@ async function buildSalesReport(period) {
     userSales[userKey].orders += 1;
 
     for (const item of order.items) {
-      totalTaxes += (item.unit_tax_total || 0) * item.quantity;
+      const taxQuantity = getOrderItemTaxQuantity(item);
+      totalTaxes += Math.round((item.unit_tax_total || 0) * taxQuantity * taxMultiplier);
       const itemTaxes = Array.isArray(item.tax_breakdown) ? item.tax_breakdown : [];
       for (const tax of itemTaxes) {
         const current = taxBreakdown.get(tax.id) || {
           id: tax.id, name: tax.name, percentage: tax.percentage_basis_points / 100, amount: 0
         };
-        current.amount += (tax.amount || 0) * item.quantity;
+        current.amount += Math.round((tax.amount || 0) * taxQuantity * taxMultiplier);
         taxBreakdown.set(tax.id, current);
       }
       const product = productMapByName.get(item.product_name);
       const unitPrice = item.price ?? product?.price ?? 0;
-      const lineTotal = unitPrice * item.quantity;
+      const lineTotal = Math.round(unitPrice * getOrderItemTaxQuantity(item) * taxMultiplier);
 
       userSales[userKey].quantity += item.quantity;
       userSales[userKey].revenue += lineTotal;
@@ -984,6 +989,7 @@ router.put('/orders/:id/pay', authenticateToken, requirePagePermission('cashier'
       data: { payment_method, payment_status: 'paid' },
       include: { items: true }
     });
+    await awardOrderPoints(prisma, id);
 
     const session = await prisma.cashRegisterSession.findFirst({ where: { closed_at: null } });
     if (session) {
@@ -1013,15 +1019,16 @@ router.put('/orders/:id/refund', authenticateToken, requirePagePermission('cashi
     const { id } = req.params;
     const order = await prisma.order.findUnique({ where: { id } });
     if (!order) return res.status(404).json({ message: 'Order not found' });
-    if (order.closed_at) return res.status(400).json({ message: 'La commande est déjà clôturée' });
-    if (order.status !== 'annulee' || order.payment_status !== 'paid') {
-      return res.status(400).json({ message: 'Seule une commande annulée et payée peut être remboursée' });
+    const refundableOrder = order.status === 'annulee' || Boolean(order.closed_at);
+    if (!refundableOrder || order.payment_status !== 'paid') {
+      return res.status(400).json({ message: 'Seule une commande annulée ou clôturée et payée peut être remboursée' });
     }
 
     const updatedOrder = await prisma.order.update({
       where: { id },
       data: { payment_status: 'refunded' }
     });
+    await reverseOrderPoints(prisma, id, req.user.id);
     const session = await prisma.cashRegisterSession.findFirst({ where: { closed_at: null } });
     if (session) {
       const refundAmount = order.total_amount;

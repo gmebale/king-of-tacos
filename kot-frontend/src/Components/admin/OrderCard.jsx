@@ -107,6 +107,7 @@ export default function OrderCard({ order, onUpdateStatus }) {
             <div className="rounded-lg bg-gray-50 p-3 text-sm text-gray-700 space-y-1">
               <p>Moyen de paiement : {order.payment_method || "Non renseigné"}</p>
               <p>État du paiement : {order.payment_status === "paid" ? "Payé" : order.payment_status === "refunded" ? "Remboursé" : order.payment_status || "En attente"}</p>
+              {order.discount_amount > 0 && <p>Avantage promo : −{order.discount_amount.toLocaleString()} FCFA</p>}
               <p>Validé par : {order.validatedBy?.full_name || "Client en ligne"}</p>
               {order.closedBy && <p>Clôturé par : {order.closedBy.full_name}</p>}
             </div>

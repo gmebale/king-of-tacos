@@ -11,6 +11,7 @@ import { Badge } from '../Components/ui/badge';
 import { Textarea } from '../Components/ui/textarea';
 import { toast } from 'react-hot-toast';
 import api from '../services/api.service';
+import { useAuthContext } from '../contexts/AuthContext';
 import {
   Star,
   Plus,
@@ -25,11 +26,15 @@ import {
 } from 'lucide-react';
 
 export default function AdminLoyalty() {
+  const { user: currentUser } = useAuthContext();
   const [activeTab, setActiveTab] = useState('rewards');
   const [rewards, setRewards] = useState([]);
   const [users, setUsers] = useState([]);
   const [redemptions, setRedemptions] = useState([]);
   const [promos, setPromos] = useState([]);
+  const [products, setProducts] = useState([]);
+  const [pointHistory, setPointHistory] = useState([]);
+  const [manualPoints, setManualPoints] = useState({ points: '', reason: '' });
   const [loading, setLoading] = useState(true);
 
   // Form states
@@ -46,6 +51,10 @@ export default function AdminLoyalty() {
     description: '',
     type: 'free_delivery',
     points_required: '',
+    quantity_limit: '',
+    expires_at: '',
+    discount_percent: '',
+    gifted_product_id: '',
     is_active: true
   });
 
@@ -66,29 +75,28 @@ export default function AdminLoyalty() {
   }, []);
 
   const loadData = async () => {
-    try {
-      const [rewardsRes, usersRes, redemptionsRes, promosRes] = await Promise.all([
+    const results = await Promise.allSettled([
         api.get('/loyalty/admin/rewards'),
         api.get('/loyalty/admin/users'),
         api.get('/loyalty/admin/redemptions'),
-        api.get('/loyalty/admin/promos')
-      ]);
-
-      setRewards(rewardsRes.data);
-      setUsers(usersRes.data);
-      setRedemptions(redemptionsRes.data);
-      setPromos(promosRes.data);
-    } catch (error) {
-      console.error('Error loading data:', error);
-      toast.error('Erreur lors du chargement des données');
-    } finally {
-      setLoading(false);
-    }
+        api.get('/loyalty/admin/promos'),
+        api.get('/products'),
+        api.get('/loyalty/admin/point-history')
+    ]);
+    const [rewardsRes, usersRes, redemptionsRes, promosRes, productsRes, historyRes] = results;
+    if (rewardsRes.status === 'fulfilled') setRewards(rewardsRes.value.data || []);
+    if (usersRes.status === 'fulfilled') setUsers(usersRes.value.data || []);
+    if (redemptionsRes.status === 'fulfilled') setRedemptions(redemptionsRes.value.data || []);
+    if (promosRes.status === 'fulfilled') setPromos(promosRes.value.data || []);
+    if (productsRes.status === 'fulfilled') setProducts((productsRes.value.data || []).filter(product => product.available));
+    if (historyRes.status === 'fulfilled') setPointHistory(historyRes.value.data || []);
+    if (results.some(result => result.status === 'rejected')) toast.error('Certaines données fidélité n’ont pas pu être chargées.');
+    setLoading(false);
   };
 
   const handleCreateReward = async () => {
     try {
-      const payload = { ...rewardForm };
+      const payload = { ...rewardForm, expires_at: new Date(rewardForm.expires_at).toISOString() };
       await api.post('/loyalty/admin/rewards', payload);
       toast.success('Récompense créée avec succès');
       setShowRewardDialog(false);
@@ -96,13 +104,13 @@ export default function AdminLoyalty() {
       loadData();
     } catch (error) {
       console.error('Error creating reward:', error);
-      toast.error('Erreur lors de la création de la récompense');
+      toast.error(error.response?.data?.message || 'Erreur lors de la création de la récompense');
     }
   };
 
   const handleUpdateReward = async () => {
     try {
-      const payload = { ...rewardForm };
+      const payload = { ...rewardForm, expires_at: new Date(rewardForm.expires_at).toISOString() };
       await api.put(`/loyalty/admin/rewards/${editingReward.id}`, payload);
       toast.success('Récompense mise à jour avec succès');
       setShowRewardDialog(false);
@@ -111,7 +119,7 @@ export default function AdminLoyalty() {
       loadData();
     } catch (error) {
       console.error('Error updating reward:', error);
-      toast.error('Erreur lors de la mise à jour de la récompense');
+      toast.error(error.response?.data?.message || 'Erreur lors de la mise à jour de la récompense');
     }
   };
 
@@ -124,7 +132,7 @@ export default function AdminLoyalty() {
       loadData();
     } catch (error) {
       console.error('Error deleting reward:', error);
-      toast.error('Erreur lors de la suppression de la récompense');
+      toast.error(error.response?.data?.message || 'Erreur lors de la suppression de la récompense');
     }
   };
 
@@ -143,6 +151,18 @@ export default function AdminLoyalty() {
     } catch (error) {
       console.error('Error granting reward:', error);
       toast.error('Erreur lors de l\'attribution de la récompense');
+    }
+  };
+
+  const handleManualPoints = async () => {
+    if (!selectedUser || !manualPoints.points || !manualPoints.reason.trim()) return toast.error('Choisissez un client, un nombre de points et un motif.');
+    try {
+      await api.post(`/loyalty/admin/points/${selectedUser}`, manualPoints);
+      toast.success('Solde de points mis à jour');
+      setManualPoints({ points: '', reason: '' });
+      loadData();
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Impossible de modifier les points');
     }
   };
 
@@ -202,6 +222,10 @@ export default function AdminLoyalty() {
       description: '',
       type: 'free_delivery',
       points_required: '',
+      quantity_limit: '',
+      expires_at: '',
+      discount_percent: '',
+      gifted_product_id: '',
       is_active: true
     });
   };
@@ -220,12 +244,18 @@ export default function AdminLoyalty() {
   };
 
   const openEditReward = (reward) => {
+    const expiryDate = reward.expires_at ? new Date(reward.expires_at) : null;
+    if (expiryDate) expiryDate.setMinutes(expiryDate.getMinutes() - expiryDate.getTimezoneOffset());
     setEditingReward(reward);
     setRewardForm({
       name: reward.name,
       description: reward.description || '',
       type: reward.type,
       points_required: reward.points_required.toString(),
+      quantity_limit: reward.quantity_limit?.toString() || '',
+      expires_at: expiryDate ? expiryDate.toISOString().slice(0, 16) : '',
+      discount_percent: reward.discount_percent?.toString() || '',
+      gifted_product_id: reward.gifted_product_id?.toString() || '',
       is_active: reward.is_active
     });
     setShowRewardDialog(true);
@@ -330,7 +360,7 @@ export default function AdminLoyalty() {
         </TabsList>
 
         <TabsContent value="rewards" className="space-y-6">
-          <Card>
+          {currentUser?.role === 'admin' && <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div>
@@ -381,7 +411,6 @@ export default function AdminLoyalty() {
                             <SelectItem value="free_delivery">Livraison gratuite</SelectItem>
                             <SelectItem value="gifted_product">Produit offert</SelectItem>
                             <SelectItem value="discount">Réduction</SelectItem>
-                            <SelectItem value="custom">Personnalisé</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
@@ -395,6 +424,26 @@ export default function AdminLoyalty() {
                           placeholder="100"
                         />
                       </div>
+                      <div>
+                        <Label htmlFor="reward-limit">Quantité totale disponible</Label>
+                        <Input id="reward-limit" type="number" min="1" required value={rewardForm.quantity_limit} onChange={e => setRewardForm({ ...rewardForm, quantity_limit: e.target.value })} />
+                      </div>
+                      <div>
+                        <Label htmlFor="reward-expiry">Date et heure d’expiration</Label>
+                        <Input id="reward-expiry" type="datetime-local" required value={rewardForm.expires_at} onChange={e => setRewardForm({ ...rewardForm, expires_at: e.target.value })} />
+                      </div>
+                      {rewardForm.type === 'discount' && <div>
+                        <Label htmlFor="reward-percent">Remise générée (%)</Label>
+                        <Input id="reward-percent" type="number" min="1" max="100" required value={rewardForm.discount_percent} onChange={e => setRewardForm({ ...rewardForm, discount_percent: e.target.value })} />
+                        <p className="text-xs text-gray-500">Un code à usage unique, réservé au client, sera généré automatiquement.</p>
+                      </div>}
+                      {rewardForm.type === 'gifted_product' && <div>
+                        <Label htmlFor="reward-product">Produit offert</Label>
+                        <Select value={rewardForm.gifted_product_id} onValueChange={value => setRewardForm({ ...rewardForm, gifted_product_id: value })}>
+                          <SelectTrigger><SelectValue placeholder="Choisir le produit offert" /></SelectTrigger>
+                          <SelectContent>{products.map(product => <SelectItem key={product.id} value={product.id.toString()}>{product.name}</SelectItem>)}</SelectContent>
+                        </Select>
+                      </div>}
                       <div className="flex items-center gap-2">
                         <input
                           id="reward-active"
@@ -424,7 +473,8 @@ export default function AdminLoyalty() {
                   <TableRow>
                     <TableHead>Nom</TableHead>
                     <TableHead>Type</TableHead>
-                    <TableHead>Points requis</TableHead>
+                    <TableHead>Points / disponibilité</TableHead>
+                    <TableHead>Expiration</TableHead>
                     <TableHead>Statut</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
@@ -434,7 +484,8 @@ export default function AdminLoyalty() {
                     <TableRow key={reward.id}>
                       <TableCell className="font-medium">{reward.name}</TableCell>
                       <TableCell>{getRewardTypeLabel(reward.type)}</TableCell>
-                      <TableCell>{reward.points_required}</TableCell>
+                      <TableCell>{reward.points_required} pts · {reward.quantity_claimed}/{reward.quantity_limit ?? '—'}</TableCell>
+                      <TableCell>{reward.expires_at ? new Date(reward.expires_at).toLocaleDateString('fr-FR') : 'À configurer'}</TableCell>
                       <TableCell>
                         <Badge variant={reward.is_active ? 'default' : 'secondary'}>
                           {reward.is_active ? 'Actif' : 'Inactif'}
@@ -455,11 +506,11 @@ export default function AdminLoyalty() {
                 </TableBody>
               </Table>
             </CardContent>
-          </Card>
+          </Card>}
         </TabsContent>
 
         <TabsContent value="users" className="space-y-6">
-          <Card>
+          {currentUser?.role === 'admin' && <Card>
             <CardHeader>
               <CardTitle>Attribuer une Récompense</CardTitle>
               <CardDescription>Sélectionnez un utilisateur et une récompense à attribuer</CardDescription>
@@ -502,13 +553,21 @@ export default function AdminLoyalty() {
                 </Button>
               </div>
             </CardContent>
-          </Card>
+          </Card>}
 
           <Card>
             <CardHeader>
               <CardTitle>Utilisateurs et Points de Fidélité</CardTitle>
-              <CardDescription>Liste de tous les utilisateurs avec leurs points</CardDescription>
+              <CardDescription>Seuls les comptes clients inscrits participent au programme.</CardDescription>
             </CardHeader>
+            <CardContent className="space-y-4">
+              {currentUser?.role === 'admin' && <div className="grid gap-3 md:grid-cols-4 items-end rounded-lg bg-gray-50 p-4">
+                <div><Label>Client</Label><Select value={selectedUser} onValueChange={setSelectedUser}><SelectTrigger><SelectValue placeholder="Sélectionner un client" /></SelectTrigger><SelectContent>{users.map(user => <SelectItem key={user.id} value={user.id.toString()}>{user.full_name} · {user.loyalty_points} pts</SelectItem>)}</SelectContent></Select></div>
+                <div><Label htmlFor="manual-points">Points (+ ou −)</Label><Input id="manual-points" type="number" step="1" value={manualPoints.points} onChange={e => setManualPoints({ ...manualPoints, points: e.target.value })} placeholder="Ex. 20 ou -5" /></div>
+                <div><Label htmlFor="manual-reason">Motif obligatoire</Label><Input id="manual-reason" value={manualPoints.reason} onChange={e => setManualPoints({ ...manualPoints, reason: e.target.value })} placeholder="Encouragement, correction…" /></div>
+                <Button onClick={handleManualPoints} disabled={!selectedUser || !manualPoints.points || !manualPoints.reason.trim()}>Ajuster les points</Button>
+              </div>}
+            </CardContent>
             <CardContent>
               <Table>
                 <TableHeader>
@@ -537,10 +596,12 @@ export default function AdminLoyalty() {
               </Table>
             </CardContent>
           </Card>
+
+          <Card><CardHeader><CardTitle>Journal des ajustements manuels</CardTitle><CardDescription>Qui a modifié le solde, pour quel client, avec quel motif.</CardDescription></CardHeader><CardContent><Table><TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Client</TableHead><TableHead>Admin</TableHead><TableHead>Variation</TableHead><TableHead>Motif</TableHead></TableRow></TableHeader><TableBody>{pointHistory.map(entry => <TableRow key={entry.id}><TableCell>{new Date(entry.created_at).toLocaleString('fr-FR')}</TableCell><TableCell>{entry.user.full_name}</TableCell><TableCell>{entry.actor?.full_name || '—'}</TableCell><TableCell>{entry.points > 0 ? '+' : ''}{entry.points}</TableCell><TableCell>{entry.reason}</TableCell></TableRow>)}</TableBody></Table></CardContent></Card>
         </TabsContent>
 
         <TabsContent value="promos" className="space-y-6">
-          <Card>
+          {currentUser?.role === 'admin' && <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div>
@@ -728,7 +789,7 @@ export default function AdminLoyalty() {
                 </TableBody>
               </Table>
             </CardContent>
-          </Card>
+          </Card>}
         </TabsContent>
 
         <TabsContent value="history" className="space-y-6">
@@ -744,6 +805,7 @@ export default function AdminLoyalty() {
                     <TableHead>Utilisateur</TableHead>
                     <TableHead>Récompense</TableHead>
                     <TableHead>Points utilisés</TableHead>
+                    <TableHead>État / code</TableHead>
                     <TableHead>Date</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -755,6 +817,7 @@ export default function AdminLoyalty() {
                       </TableCell>
                       <TableCell>{redemption.reward.name}</TableCell>
                       <TableCell>{redemption.points_used}</TableCell>
+                      <TableCell>{redemption.status === 'used' ? 'Utilisée' : redemption.status === 'expired' ? 'Expirée' : 'En attente'}{redemption.promoCode?.code ? ` · ${redemption.promoCode.code}` : ''}</TableCell>
                       <TableCell>{new Date(redemption.created_at).toLocaleDateString('fr-FR')}</TableCell>
                     </TableRow>
                   ))}

@@ -10,19 +10,20 @@ import { formatCustomization } from "../utils/customization";
 import { useAuthContext } from "../contexts/AuthContext";
 import { Input } from "../Components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "../Components/ui/dialog";
+import { toast } from 'react-hot-toast';
 
 export default function Payment() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuthContext();
-  const { cart, formData, total } = location.state || {};
+  const { cart, formData, total, pre_discount_total, pre_discount_subtotal, promo_code, gifted_redemption_id, loyalty_discount } = location.state || {};
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [serverCode, setServerCode] = useState("");
   const [serverCodeError, setServerCodeError] = useState("");
   const [isCodeDialogOpen, setIsCodeDialogOpen] = useState(false);
   const isStaffOrder = user?.role === "serveur" && sessionStorage.getItem("kot_staff_order_mode") === "true";
 
-  if (!cart || !total) {
+  if (!cart || total == null) {
     navigate(createPageUrl("Checkout"));
     return null;
   }
@@ -42,6 +43,7 @@ export default function Payment() {
     try {
       console.log('Cart before filtering:', cart);
       const orderItems = cart.filter(item => item.product).map(item => ({
+        product_id: item.product.id,
         product_name: item.product.name,
         quantity: item.quantity,
         price: item.subtotal / item.quantity,
@@ -53,6 +55,8 @@ export default function Payment() {
       const orderData = {
         items: orderItems,
         total_amount: total,
+        pre_discount_total: pre_discount_total ?? total,
+        pre_discount_subtotal: pre_discount_subtotal ?? total,
         customer_name: formData.customer_name,
         customer_phone: formData.customer_phone,
         customer_email: formData.customer_email,
@@ -61,7 +65,10 @@ export default function Payment() {
         delivery_address: formData.delivery_address,
         table_number: formData.table_number,
         pickup_time: formData.pickup_time,
-        notes: formData.notes
+        notes: formData.notes,
+        loyalty_customer_id: formData.loyalty_customer_id || null,
+        promo_code: promo_code || null,
+        gifted_redemption_id: gifted_redemption_id || null
       };
 
       if (isStaffOrder) {
@@ -81,6 +88,7 @@ export default function Payment() {
     } catch (error) {
       console.error("Error creating order:", error);
       if (isStaffOrder) setServerCodeError(error.response?.data?.message || "Impossible de valider le code serveur.");
+      else toast.error(error.response?.data?.message || 'Impossible de créer la commande. Vérifiez le code promo et réessayez.');
     }
 
     setIsSubmitting(false);
@@ -138,6 +146,7 @@ export default function Payment() {
                       {total.toLocaleString()} FCFA
                     </span>
                   </div>
+                  {loyalty_discount > 0 && <p className="mt-2 text-right text-sm text-green-700">Avantage fidélité / promo : −{loyalty_discount.toLocaleString()} FCFA</p>}
                 </div>
               </CardContent>
             </Card>

@@ -1,5 +1,6 @@
 const express = require('express');
 const { PrismaClient } = require('@prisma/client');
+const { getPaidItemTaxMultiplier, getOrderItemTaxQuantity } = require('../utils/orderTaxAdjustment');
 const { authenticateToken, requirePagePermission } = require('../middleware/auth');
 
 const router = express.Router();
@@ -269,9 +270,13 @@ router.get('/profit-summary', authenticateToken, requirePagePermission('finance'
         },
         select: {
           total_amount: true,
+          discount_amount: true,
+          promoCode: { select: { type: true } },
           items: {
             select: {
+              price: true,
               quantity: true,
+              free_quantity: true,
               unit_tax_base: true,
               unit_tax_total: true,
               tax_breakdown: true,
@@ -293,13 +298,15 @@ router.get('/profit-summary', authenticateToken, requirePagePermission('finance'
     let uncostedQuantity = 0;
     const taxBreakdown = new Map();
     for (const order of orders) {
+      const taxMultiplier = getPaidItemTaxMultiplier(order);
       revenueWithTax += order.total_amount;
       for (const item of order.items) {
-        taxTotal += item.unit_tax_total * item.quantity;
+        const taxQuantity = getOrderItemTaxQuantity(item);
+        taxTotal += Math.round(item.unit_tax_total * taxQuantity * taxMultiplier);
         const breakdown = Array.isArray(item.tax_breakdown) ? item.tax_breakdown : [];
         for (const tax of breakdown) {
           const current = taxBreakdown.get(tax.id) || { id: tax.id, name: tax.name, rate: tax.percentage_basis_points / 100, amount: 0 };
-          current.amount += (tax.amount || 0) * item.quantity;
+          current.amount += Math.round((tax.amount || 0) * taxQuantity * taxMultiplier);
           taxBreakdown.set(tax.id, current);
         }
         if (item.stock_deducted && item.unit_cost_snapshot !== null) {

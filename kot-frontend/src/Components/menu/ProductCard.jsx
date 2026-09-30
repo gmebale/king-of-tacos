@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { motion } from "framer-motion";
-import { Plus, Minus, ShoppingCart, TrendingDown } from "lucide-react";
+import { Plus, Minus, ShoppingCart, TrendingDown, Star } from "lucide-react";
 import { Button } from '../ui/button';
 import { Card, CardContent } from '../ui/card';
 import { Badge } from '../ui/badge';
@@ -98,6 +98,7 @@ export default function ProductCard({ product, onAddToCart, cartItem, onUpdateQu
                   {product.description}
                 </p>
               )}
+              {product.loyalty_points > 0 && <p className="mt-2 flex items-center gap-1 text-sm font-medium text-amber-700"><Star className="h-4 w-4" />{product.loyalty_points} point{product.loyalty_points > 1 ? 's' : ''} fidélité par unité pour les clients inscrits</p>}
             </div>
 
             <div className="flex items-center justify-between">

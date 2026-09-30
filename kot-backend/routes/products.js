@@ -108,6 +108,7 @@ router.get('/', async (req, res) => {
         image: true,
         stock: true,
         stock_alert_threshold: true,
+        loyalty_points: true,
         customization: true,
         taxRates: { include: { taxRate: true } }
       }
@@ -140,7 +141,7 @@ router.get('/:id', async (req, res) => {
       where: { id: parseInt(id) },
       select: {
         id: true, name: true, description: true, price: true, discount_percentage: true,
-        category: true, available: true, image: true, stock: true, stock_alert_threshold: true,
+        category: true, available: true, image: true, stock: true, stock_alert_threshold: true, loyalty_points: true,
         customization: true, taxRates: { include: { taxRate: true } }
       }
     });
@@ -159,7 +160,7 @@ router.get('/:id', async (req, res) => {
 // Create product (admin only)
 router.post('/', authenticateToken, requirePagePermission('stock'), async (req, res) => {
   try {
-    const { name, description, price, discount_percentage, category, available, image, stock, stock_alert_threshold, customization, tax_rate_ids } = req.body;
+    const { name, description, price, discount_percentage, category, available, image, stock, stock_alert_threshold, customization, tax_rate_ids, loyalty_points } = req.body;
     const taxRateIds = parseTaxRateIds(tax_rate_ids);
     if (taxRateIds === null) return res.status(400).json({ message: 'Liste de taux de taxe invalide' });
 
@@ -192,6 +193,7 @@ router.post('/', authenticateToken, requirePagePermission('stock'), async (req, 
           image,
           stock: parseInt(stock) || 0,
           stock_alert_threshold: parseInt(stock_alert_threshold) || 10,
+          loyalty_points: Math.max(0, parseInt(loyalty_points, 10) || 0),
           customization: customization || { isConfigurable: isCustomCategory },
           ...(taxRateIds !== undefined ? { taxRates: { create: taxRateIds.map(tax_rate_id => ({ taxRate: { connect: { id: tax_rate_id } } })) } } : {})
         }
@@ -220,7 +222,7 @@ router.post('/', authenticateToken, requirePagePermission('stock'), async (req, 
 router.put('/:id', authenticateToken, requirePagePermission('stock'), async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, description, price, discount_percentage, category, available, image, stock, stock_alert_threshold, customization, tax_rate_ids } = req.body;
+    const { name, description, price, discount_percentage, category, available, image, stock, stock_alert_threshold, customization, tax_rate_ids, loyalty_points } = req.body;
     const taxRateIds = parseTaxRateIds(tax_rate_ids);
     if (taxRateIds === null) return res.status(400).json({ message: 'Liste de taux de taxe invalide' });
 
@@ -258,6 +260,11 @@ router.put('/:id', authenticateToken, requirePagePermission('stock'), async (req
     if (stock !== undefined) data.stock = parseInt(stock);
     if (stock_alert_threshold !== undefined) data.stock_alert_threshold = parseInt(stock_alert_threshold);
     if (customization !== undefined) data.customization = customization;
+    if (loyalty_points !== undefined) {
+      const points = Number(loyalty_points);
+      if (!Number.isInteger(points) || points < 0) return res.status(400).json({ message: 'Les points doivent être un entier positif ou nul' });
+      data.loyalty_points = points;
+    }
 
     const product = await prisma.$transaction(async tx => {
       if (taxRateIds !== undefined) {
@@ -296,6 +303,9 @@ router.delete('/:id', authenticateToken, requirePagePermission('stock'), async (
     if (purchaseHistory > 0) {
       return res.status(409).json({ message: 'Ce produit figure dans des achats de stock et doit être désactivé plutôt que supprimé.' });
     }
+
+    const linkedRewards = await prisma.loyaltyReward.count({ where: { gifted_product_id: productId } });
+    if (linkedRewards > 0) return res.status(409).json({ message: 'Ce produit est associé à une récompense fidélité. Désactivez-le ou modifiez la récompense avant suppression.' });
 
     // Supprimer d'abord toutes les options de personnalisation qui utilisent ce produit
     await prisma.productOption.deleteMany({
