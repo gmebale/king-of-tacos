@@ -211,8 +211,9 @@ export default function CustomizationDialog({ open, onOpenChange, product, optio
           <div className="space-y-2">
             {group.options.map(option => {
               const isSelected = Array.isArray(selectedValue) && selectedValue.includes(option.id);
-              const isExtra = group.includedCount && Array.isArray(selectedValue) &&
-                            selectedValue.indexOf(option.id) >= group.includedCount;
+              const includedCount = Number(group.includedCount) || 0;
+              const isExtra = includedCount > 0 && Array.isArray(selectedValue) &&
+                            selectedValue.indexOf(option.id) >= includedCount;
 
               return (
                 <div key={option.id} className="flex items-center space-x-2">
@@ -228,7 +229,7 @@ export default function CustomizationDialog({ open, onOpenChange, product, optio
                     <div className="flex justify-between items-center">
                       <span>{option.name}</span>
                       <div className="flex items-center gap-2">
-                        {isExtra && group.extraPrice && (
+                        {isExtra && Number(group.extraPrice) > 0 && (
                           <Badge variant="outline" className="text-xs">
                             +{group.extraPrice} FCFA
                           </Badge>
@@ -244,7 +245,7 @@ export default function CustomizationDialog({ open, onOpenChange, product, optio
                 </div>
               );
             })}
-            {group.includedCount && (
+            {Number(group.includedCount) > 0 && (
               <p className="text-sm text-gray-500">
                 {group.includedCount} inclus{group.includedCount > 1 ? 's' : ''}, supplément de {group.extraPrice} FCFA chacun
               </p>
