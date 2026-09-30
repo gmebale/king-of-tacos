@@ -29,6 +29,7 @@ import { Label } from "../Components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../Components/ui/table";
 import { Badge } from "../Components/ui/badge";
 import { MapPin } from "lucide-react";
+import { Link } from "react-router-dom";
 
 function formatDateInput(date) {
   const year = date.getFullYear();
@@ -43,6 +44,7 @@ export default function AdminFinance() {
   const [topCustomers, setTopCustomers] = useState([]);
   const [topLocations, setTopLocations] = useState([]);
   const [topServers, setTopServers] = useState([]);
+  const [profitSummary, setProfitSummary] = useState(null);
   const [filterOptions, setFilterOptions] = useState({ locations: [], servers: [] });
   const [selectedLocation, setSelectedLocation] = useState("all");
   const [selectedServer, setSelectedServer] = useState("all");
@@ -77,12 +79,13 @@ export default function AdminFinance() {
         ...(selectedLocation !== 'all' ? { service_location: selectedLocation } : {}),
         ...(selectedServer !== 'all' ? { server_id: selectedServer } : {})
       };
-      const [revenueRes, productsRes, customersRes, locationsRes, serversRes] = await Promise.all([
+      const [revenueRes, productsRes, customersRes, locationsRes, serversRes, profitRes] = await Promise.all([
         api.get('/finance/revenue', { params }),
         api.get('/finance/top-products', { params }),
         api.get('/finance/top-customers', { params }),
         api.get('/finance/top-locations', { params }),
-        api.get('/finance/top-servers', { params })
+        api.get('/finance/top-servers', { params }),
+        api.get('/finance/profit-summary', { params: { start_date: startDate, end_date: endDate } })
       ]);
 
       setRevenueData(revenueRes.data || []);
@@ -90,6 +93,7 @@ export default function AdminFinance() {
       setTopCustomers(customersRes.data || []);
       setTopLocations(locationsRes.data || []);
       setTopServers(serversRes.data || []);
+      setProfitSummary(profitRes.data || null);
     } catch (error) {
       console.error('Error loading finance data:', error);
     }
@@ -125,6 +129,7 @@ export default function AdminFinance() {
             <Printer className="w-4 h-4 mr-2" />
             Imprimer le rapport
           </Button>
+          <Link to="/admin/finance/expenses"><Button variant="outline">Gérer les dépenses</Button></Link>
         </div>
 
       {/* Combined filters */}
@@ -242,6 +247,38 @@ export default function AdminFinance() {
           </CardContent>
         </Card>
       </div>
+
+      <section className="mb-8">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-semibold">Résultat après taxes et charges</h2>
+            <p className="text-sm text-gray-500">Période sélectionnée, toutes zones et tous serveurs confondus.</p>
+          </div>
+          <Link to="/admin/finance/expenses" className="text-sm font-medium text-blue-700 underline">Ouvrir l’onglet Dépenses</Link>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {[
+            ['Ventes TTC', profitSummary?.revenueWithTax],
+            ['Taxes incluses', profitSummary?.taxTotal],
+            ['Ventes hors taxes', profitSummary?.salesBeforeTax],
+            ['Coût du stock vendu', profitSummary?.costOfGoodsSold],
+            ['Charges courantes', profitSummary?.operatingExpenses],
+            ['Bénéfice estimé', profitSummary?.netProfit],
+            ['Achats de stock payés', profitSummary?.stockPurchases]
+          ].map(([label, value]) => (
+            <Card key={label}><CardHeader className="pb-2"><CardTitle className="text-sm text-gray-600">{label}</CardTitle></CardHeader><CardContent><p className={`text-2xl font-bold ${label === 'Bénéfice estimé' ? 'text-green-700' : 'text-gray-900'}`}>{Number(value || 0).toLocaleString()} FCFA</p></CardContent></Card>
+          ))}
+        </div>
+        {profitSummary?.uncostedQuantity > 0 && <p className="mt-3 rounded-md bg-amber-50 p-3 text-sm text-amber-800">Coût d’achat manquant pour {profitSummary.uncostedQuantity} article(s) vendu(s). Le bénéfice affiché est incomplet pour ces articles.</p>}
+        {profitSummary?.taxBreakdown?.length > 0 && (
+          <Card className="mt-5">
+            <CardHeader><CardTitle className="text-base">Taxes collectées par taux</CardTitle></CardHeader>
+            <CardContent><Table><TableHeader><TableRow><TableHead>Taxe</TableHead><TableHead className="text-right">Taux</TableHead><TableHead className="text-right">Montant</TableHead></TableRow></TableHeader><TableBody>
+              {profitSummary.taxBreakdown.map(tax => <TableRow key={tax.id}><TableCell>{tax.name}</TableCell><TableCell className="text-right">{tax.rate.toFixed(2)} %</TableCell><TableCell className="text-right">{Number(tax.amount).toLocaleString()} FCFA</TableCell></TableRow>)}
+            </TableBody></Table></CardContent>
+          </Card>
+        )}
+      </section>
 
 
 

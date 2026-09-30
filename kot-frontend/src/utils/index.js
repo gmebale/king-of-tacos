@@ -29,6 +29,7 @@ export function createPageUrl(pageName) {
     BarMode: '/admin/bar',
     CashierMode: '/admin/cashier',
     AdminFinance: '/admin/finance',
+    AdminExpenses: '/admin/finance/expenses',
     AdminMobileMoney: '/admin/mobile-money',
     AdminStock: '/admin/stock',
     AdminStaff: '/admin/staff',

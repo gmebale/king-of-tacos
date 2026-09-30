@@ -109,15 +109,7 @@ router.get('/top-products', authenticateToken, requirePagePermission('finance', 
       if (!isLostOrder(item.order)) {
         productStats[productName].quantity += item.quantity;
 
-        // Get product price to calculate revenue
-        const product = await prisma.product.findFirst({
-          where: { name: productName },
-          select: { price: true }
-        });
-
-        if (product) {
-          productStats[productName].revenue += item.quantity * product.price;
-        }
+        productStats[productName].revenue += item.quantity * item.price;
       }
     }
 
@@ -262,6 +254,181 @@ router.get('/top-servers', authenticateToken, requirePagePermission('finance', '
   } catch (error) {
     console.error('Get top servers error:', error);
     res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+router.get('/profit-summary', authenticateToken, requirePagePermission('finance', 'dashboard'), async (req, res) => {
+  try {
+    const dateFilter = getFinanceFilters({ start_date: req.query.start_date, end_date: req.query.end_date });
+    const [orders, expenses] = await Promise.all([
+      prisma.order.findMany({
+        where: {
+          ...dateFilter,
+          status: { in: ['livree', 'servie', 'recuperee'] },
+          payment_status: { not: 'refunded' }
+        },
+        select: {
+          total_amount: true,
+          items: {
+            select: {
+              quantity: true,
+              unit_tax_base: true,
+              unit_tax_total: true,
+              tax_breakdown: true,
+              unit_cost_snapshot: true,
+              stock_deducted: true
+            }
+          }
+        }
+      }),
+      prisma.expense.findMany({
+        where: dateFilter.created_date ? { expense_date: dateFilter.created_date } : {},
+        select: { expense_type: true, amount: true }
+      })
+    ]);
+
+    let revenueWithTax = 0;
+    let taxTotal = 0;
+    let costOfGoodsSold = 0;
+    let uncostedQuantity = 0;
+    const taxBreakdown = new Map();
+    for (const order of orders) {
+      revenueWithTax += order.total_amount;
+      for (const item of order.items) {
+        taxTotal += item.unit_tax_total * item.quantity;
+        const breakdown = Array.isArray(item.tax_breakdown) ? item.tax_breakdown : [];
+        for (const tax of breakdown) {
+          const current = taxBreakdown.get(tax.id) || { id: tax.id, name: tax.name, rate: tax.percentage_basis_points / 100, amount: 0 };
+          current.amount += (tax.amount || 0) * item.quantity;
+          taxBreakdown.set(tax.id, current);
+        }
+        if (item.stock_deducted && item.unit_cost_snapshot !== null) {
+          costOfGoodsSold += item.unit_cost_snapshot * item.quantity;
+        } else {
+          uncostedQuantity += item.quantity;
+        }
+      }
+    }
+
+    const operatingExpenses = expenses.filter(expense => expense.expense_type !== 'stock_purchase')
+      .reduce((sum, expense) => sum + expense.amount, 0);
+    const stockPurchases = expenses.filter(expense => expense.expense_type === 'stock_purchase')
+      .reduce((sum, expense) => sum + expense.amount, 0);
+    const salesBeforeTax = revenueWithTax - taxTotal;
+    res.json({
+      revenueWithTax,
+      taxTotal,
+      salesBeforeTax,
+      costOfGoodsSold,
+      operatingExpenses,
+      stockPurchases,
+      netProfit: salesBeforeTax - costOfGoodsSold - operatingExpenses,
+      uncostedQuantity,
+      taxBreakdown: [...taxBreakdown.values()].sort((a, b) => b.amount - a.amount)
+    });
+  } catch (error) {
+    console.error('Get profit summary error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+router.get('/expenses', authenticateToken, requirePagePermission('finance', 'dashboard'), async (req, res) => {
+  try {
+    const filters = getFinanceFilters({ start_date: req.query.start_date, end_date: req.query.end_date });
+    const expenses = await prisma.expense.findMany({
+      where: filters.created_date ? { expense_date: filters.created_date } : {},
+      include: {
+        createdBy: { select: { full_name: true } },
+        items: { include: { product: { select: { id: true, name: true } } } }
+      },
+      orderBy: { expense_date: 'desc' }
+    });
+    res.json(expenses);
+  } catch (error) {
+    console.error('Get expenses error:', error);
+    res.status(500).json({ message: 'Impossible de charger les dépenses' });
+  }
+});
+
+router.post('/expenses', authenticateToken, requirePagePermission('finance', 'dashboard'), async (req, res) => {
+  try {
+    const {
+      expense_type = 'operating', category, description, amount, expense_date,
+      payment_method, supplier, items = []
+    } = req.body;
+    if (!['operating', 'stock_purchase'].includes(expense_type)) {
+      return res.status(400).json({ message: 'Type de dépense invalide' });
+    }
+    if (!String(category || '').trim() || !String(description || '').trim()) {
+      return res.status(400).json({ message: 'La catégorie et la description sont obligatoires' });
+    }
+    const expenseDate = expense_date ? new Date(expense_date) : new Date();
+    if (Number.isNaN(expenseDate.getTime())) return res.status(400).json({ message: 'Date de dépense invalide' });
+
+    let normalizedItems = [];
+    let finalAmount = Number(amount);
+    if (expense_type === 'stock_purchase') {
+      if (!Array.isArray(items) || !items.length) return res.status(400).json({ message: 'Ajoutez au moins un produit à cet achat de stock' });
+      normalizedItems = items.map(item => ({
+        product_id: Number(item.product_id),
+        quantity: Number(item.quantity),
+        unit_cost: Number(item.unit_cost)
+      }));
+      if (normalizedItems.some(item => !Number.isInteger(item.product_id) || item.product_id < 1 || !Number.isInteger(item.quantity) || item.quantity < 1 || !Number.isInteger(item.unit_cost) || item.unit_cost < 0)) {
+        return res.status(400).json({ message: 'Produit, quantité ou coût unitaire invalide' });
+      }
+      finalAmount = normalizedItems.reduce((sum, item) => sum + item.quantity * item.unit_cost, 0);
+    } else if (!Number.isInteger(finalAmount) || finalAmount <= 0) {
+      return res.status(400).json({ message: 'Le montant de la dépense doit être supérieur à zéro' });
+    }
+
+    const expense = await prisma.$transaction(async tx => {
+      if (expense_type === 'stock_purchase') {
+        const productIds = [...new Set(normalizedItems.map(item => item.product_id))];
+        const products = await tx.product.findMany({ where: { id: { in: productIds } } });
+        if (products.length !== productIds.length) {
+          const error = new Error('Un produit de l’achat est introuvable');
+          error.statusCode = 400;
+          throw error;
+        }
+      }
+      const created = await tx.expense.create({
+        data: {
+          expense_type,
+          category: String(category).trim(),
+          description: String(description).trim(),
+          amount: finalAmount,
+          expense_date: expenseDate,
+          payment_method: payment_method || null,
+          supplier: supplier ? String(supplier).trim() : null,
+          created_by: req.user.id,
+          ...(expense_type === 'stock_purchase' ? { items: { create: normalizedItems } } : {})
+        }
+      });
+
+      if (expense_type === 'stock_purchase') {
+        for (const line of normalizedItems) {
+          const product = await tx.product.findUnique({ where: { id: line.product_id } });
+          const previousQuantity = Math.max(0, product.stock);
+          const averageCost = product.average_purchase_cost === null || previousQuantity === 0
+            ? line.unit_cost
+            : Math.round((previousQuantity * product.average_purchase_cost + line.quantity * line.unit_cost) / (previousQuantity + line.quantity));
+          await tx.product.update({
+            where: { id: product.id },
+            data: { stock: { increment: line.quantity }, average_purchase_cost: averageCost }
+          });
+        }
+      }
+      return tx.expense.findUnique({
+        where: { id: created.id },
+        include: { items: { include: { product: { select: { id: true, name: true } } } }, createdBy: { select: { full_name: true } } }
+      });
+    });
+    res.status(201).json(expense);
+  } catch (error) {
+    console.error('Create expense error:', error);
+    if (error.statusCode) return res.status(error.statusCode).json({ message: error.message });
+    res.status(500).json({ message: 'Impossible d’enregistrer cette dépense' });
   }
 });
 

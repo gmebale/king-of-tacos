@@ -19,6 +19,7 @@ import AdminStock from './Pages/AdminStock';
 import AdminStaff from './Pages/AdminStaff';
 import AdminSettings from './Pages/AdminSettings';
 import AdminFinance from './Pages/AdminFinance';
+import AdminExpenses from './Pages/AdminExpenses';
 import KitchenMode from './Pages/KitchenMode';
 import CashierMode from './Pages/CashierMode';
 import AdminLoyalty from './Pages/AdminLoyalty';
@@ -48,6 +49,7 @@ function App() {
           <Route path="/admin/bar" element={<ProtectedRoute requiredRoles={['admin', 'bar']}><Layout currentPageName="BarMode"><KitchenMode station="bar" /></Layout></ProtectedRoute>} />
           <Route path="/admin/cashier" element={<ProtectedRoute requiredPermission="cashier"><Layout currentPageName="CashierMode"><CashierMode /></Layout></ProtectedRoute>} />
           <Route path="/admin/finance" element={<ProtectedRoute requiredPermission="finance"><Layout currentPageName="AdminFinance"><AdminFinance /></Layout></ProtectedRoute>} />
+          <Route path="/admin/finance/expenses" element={<ProtectedRoute requiredPermission="finance"><Layout currentPageName="AdminExpenses"><AdminExpenses /></Layout></ProtectedRoute>} />
           <Route path="/admin/mobile-money" element={<ProtectedRoute requiredPermission="cashier"><Layout currentPageName="AdminMobileMoney"><AdminMobileMoney /></Layout></ProtectedRoute>} />
           <Route path="/admin/stock" element={<ProtectedRoute requiredPermission="stock"><Layout currentPageName="AdminStock"><AdminStock /></Layout></ProtectedRoute>} />
           <Route path="/admin/staff" element={<ProtectedRoute requiredRoles={['admin']}><Layout currentPageName="AdminStaff"><AdminStaff /></Layout></ProtectedRoute>} />

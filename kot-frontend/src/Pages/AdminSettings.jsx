@@ -7,8 +7,10 @@ import { Textarea } from '../Components/ui/textarea';
 import { Switch } from '../Components/ui/switch';
 import { toast } from 'react-hot-toast';
 import api from '../services/api.service';
+import { useAuthContext } from '../contexts/AuthContext';
 
 const AdminSettings = () => {
+  const { user } = useAuthContext();
   const [settings, setSettings] = useState({
     name: '',
     address: '',
@@ -29,11 +31,71 @@ const AdminSettings = () => {
   const [locations, setLocations] = useState([]);
   const [newLocationName, setNewLocationName] = useState('');
   const [savingLocation, setSavingLocation] = useState(false);
+  const [taxRates, setTaxRates] = useState([]);
+  const [newTaxName, setNewTaxName] = useState('');
+  const [newTaxPercentage, setNewTaxPercentage] = useState('');
+  const [savingTax, setSavingTax] = useState(false);
+  const [editingTaxId, setEditingTaxId] = useState(null);
+  const [editingTaxName, setEditingTaxName] = useState('');
+  const [editingTaxPercentage, setEditingTaxPercentage] = useState('');
 
   useEffect(() => {
     loadSettings();
-    loadLocations();
-  }, []);
+    if (user?.role === 'admin') {
+      loadLocations();
+      loadTaxRates();
+    }
+  }, [user?.role]);
+
+  const loadTaxRates = async () => {
+    try {
+      const response = await api.get('/settings/tax-rates/manage');
+      setTaxRates(response.data || []);
+    } catch (error) {
+      console.error('Error loading tax rates:', error);
+      toast.error('Erreur lors du chargement des taxes');
+    }
+  };
+
+  const addTaxRate = async (event) => {
+    event.preventDefault();
+    try {
+      setSavingTax(true);
+      await api.post('/settings/tax-rates', { name: newTaxName.trim(), percentage: Number(newTaxPercentage) });
+      setNewTaxName('');
+      setNewTaxPercentage('');
+      await loadTaxRates();
+      toast.success('Taux de taxe ajouté');
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Impossible d’ajouter ce taux');
+    } finally {
+      setSavingTax(false);
+    }
+  };
+
+  const toggleTaxRate = async (rate) => {
+    try {
+      const response = await api.patch(`/settings/tax-rates/${rate.id}`, { active: !rate.active });
+      setTaxRates(current => current.map(item => item.id === rate.id ? response.data : item));
+      toast.success(rate.active ? 'Taux désactivé pour les nouvelles commandes' : 'Taux réactivé');
+    } catch (error) {
+      toast.error('Impossible de modifier ce taux');
+    }
+  };
+
+  const editTaxRate = async (event, rate) => {
+    event.preventDefault();
+    try {
+      const response = await api.patch(`/settings/tax-rates/${rate.id}`, {
+        name: editingTaxName.trim(), percentage: Number(editingTaxPercentage)
+      });
+      setTaxRates(current => current.map(item => item.id === rate.id ? response.data : item));
+      setEditingTaxId(null);
+      toast.success('Taux modifié. Les commandes déjà enregistrées gardent leur ancien calcul.');
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Impossible de modifier ce taux');
+    }
+  };
 
   const loadLocations = async () => {
     try {
@@ -300,7 +362,7 @@ const AdminSettings = () => {
         </CardContent>
       </Card>
 
-      <Card className="max-w-2xl mt-8">
+      {user?.role === 'admin' && <Card className="max-w-2xl mt-8">
         <CardHeader>
           <CardTitle>Lieux de service</CardTitle>
           <p className="text-sm text-gray-500">Les lieux actifs sont proposés aux serveurs pour les commandes sur place.</p>
@@ -330,7 +392,49 @@ const AdminSettings = () => {
             {!locations.length && <p className="p-4 text-sm text-gray-500">Aucun lieu configuré.</p>}
           </div>
         </CardContent>
-      </Card>
+      </Card>}
+
+      {user?.role === 'admin' && <Card className="max-w-2xl mt-8">
+        <CardHeader>
+          <CardTitle>Taux de taxe</CardTitle>
+          <p className="text-sm text-gray-500">Créez les taux ici, puis associez un ou plusieurs taux aux produits dans Stock.</p>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <form onSubmit={addTaxRate} className="grid sm:grid-cols-[1fr_150px_auto] gap-3 items-end">
+            <div>
+              <Label htmlFor="tax-name">Nom du taux</Label>
+              <Input id="tax-name" value={newTaxName} onChange={event => setNewTaxName(event.target.value)} maxLength={80} placeholder="Ex. Taxe locale" required />
+            </div>
+            <div>
+              <Label htmlFor="tax-percentage">Pourcentage</Label>
+              <Input id="tax-percentage" type="number" min="0" max="100" step="0.01" value={newTaxPercentage} onChange={event => setNewTaxPercentage(event.target.value)} placeholder="Ex. 18" required />
+            </div>
+            <Button type="submit" disabled={savingTax}>{savingTax ? 'Ajout...' : 'Ajouter'}</Button>
+          </form>
+          <div className="divide-y rounded-lg border">
+            {taxRates.map(rate => (
+              <div key={rate.id} className="flex items-center justify-between gap-4 p-3">
+                {editingTaxId === rate.id ? (
+                  <form onSubmit={event => editTaxRate(event, rate)} className="grid flex-1 gap-2 sm:grid-cols-[1fr_130px_auto_auto]">
+                    <Input aria-label="Nom du taux" value={editingTaxName} onChange={event => setEditingTaxName(event.target.value)} maxLength={80} required />
+                    <Input aria-label="Pourcentage du taux" type="number" min="0" max="100" step="0.01" value={editingTaxPercentage} onChange={event => setEditingTaxPercentage(event.target.value)} required />
+                    <Button type="submit" size="sm">Enregistrer</Button>
+                    <Button type="button" size="sm" variant="outline" onClick={() => setEditingTaxId(null)}>Annuler</Button>
+                  </form>
+                ) : <div className="flex-1">
+                  <p className="font-medium">{rate.name} — {rate.percentage}%</p>
+                  <p className="text-xs text-gray-500">{rate.active ? 'Actif pour les nouvelles commandes' : 'Inactif'}</p>
+                </div>}
+                {editingTaxId !== rate.id && <div className="flex gap-2">
+                  <Button type="button" size="sm" variant="outline" onClick={() => { setEditingTaxId(rate.id); setEditingTaxName(rate.name); setEditingTaxPercentage(String(rate.percentage)); }}>Modifier</Button>
+                  <Button type="button" size="sm" variant="outline" onClick={() => toggleTaxRate(rate)}>{rate.active ? 'Désactiver' : 'Réactiver'}</Button>
+                </div>}
+              </div>
+            ))}
+            {!taxRates.length && <p className="p-4 text-sm text-gray-500">Aucun taux configuré.</p>}
+          </div>
+        </CardContent>
+      </Card>}
     </div>
   );
 };

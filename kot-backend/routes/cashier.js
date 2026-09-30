@@ -4,6 +4,7 @@ const { authenticateToken, requirePagePermission } = require('../middleware/auth
 const PDFDocument = require('pdfkit');
 const ExcelJS = require('exceljs');
 const { format } = require('date-fns');
+const { recordOrderStockSale } = require('../utils/inventory');
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -227,6 +228,8 @@ async function buildSalesReport(period) {
 
   let totalRevenue = 0;
   let totalItems = 0;
+  let totalTaxes = 0;
+  const taxBreakdown = new Map();
   const paymentBreakdown = {
     cash: 0,
     card: 0,
@@ -267,6 +270,15 @@ async function buildSalesReport(period) {
     userSales[userKey].orders += 1;
 
     for (const item of order.items) {
+      totalTaxes += (item.unit_tax_total || 0) * item.quantity;
+      const itemTaxes = Array.isArray(item.tax_breakdown) ? item.tax_breakdown : [];
+      for (const tax of itemTaxes) {
+        const current = taxBreakdown.get(tax.id) || {
+          id: tax.id, name: tax.name, percentage: tax.percentage_basis_points / 100, amount: 0
+        };
+        current.amount += (tax.amount || 0) * item.quantity;
+        taxBreakdown.set(tax.id, current);
+      }
       const product = productMapByName.get(item.product_name);
       const unitPrice = item.price ?? product?.price ?? 0;
       const lineTotal = unitPrice * item.quantity;
@@ -337,6 +349,9 @@ async function buildSalesReport(period) {
     startDate,
     endDate,
     totalRevenue,
+    totalTaxes,
+    revenueExcludingTax: totalRevenue - totalTaxes,
+    taxBreakdown: [...taxBreakdown.values()].sort((a, b) => b.amount - a.amount),
     totalOrders,
     totalItems,
     averageOrderValue: totalOrders > 0 ? totalRevenue / totalOrders : 0,
@@ -763,6 +778,8 @@ router.get('/reports/:period/pdf', authenticateToken, requirePagePermission('cas
     // Résumé général
     sectionTitle(doc, 'Résumé général');
     metricRow(doc, "Chiffre d'affaires", formatAmount(report.totalRevenue));
+    metricRow(doc, 'Taxes incluses dans les ventes', formatAmount(report.totalTaxes));
+    metricRow(doc, 'Ventes hors taxes', formatAmount(report.revenueExcludingTax));
     metricRow(doc, 'Nombre de commandes', report.totalOrders);
     metricRow(doc, "Nombre d'articles vendus", report.totalItems);
     metricRow(doc, 'Panier moyen', formatAmount(report.averageOrderValue));
@@ -785,6 +802,14 @@ router.get('/reports/:period/pdf', authenticateToken, requirePagePermission('cas
       doc.x = doc.page.margins.left;
       doc.moveDown(0.4);
     });
+    doc.moveDown();
+
+    sectionTitle(doc, 'Taxes collectées par taux');
+    if (!report.taxBreakdown.length) {
+      doc.fontSize(10).fillColor(palette.muted).text('Aucune taxe enregistrée sur la période.');
+    } else {
+      report.taxBreakdown.forEach(tax => metricRow(doc, `${tax.name} (${tax.percentage.toFixed(2)} %)`, formatAmount(tax.amount)));
+    }
     doc.moveDown();
 
     // Utilisateurs
@@ -870,6 +895,8 @@ router.get('/reports/:period/excel', authenticateToken, requirePagePermission('c
       ['Rapport de ventes'],
       ['Période', format(report.startDate, 'dd/MM/yyyy'), format(report.endDate, 'dd/MM/yyyy')],
       ["Chiffre d'affaires (FCFA)", report.totalRevenue],
+      ['Taxes incluses (FCFA)', report.totalTaxes],
+      ['Ventes hors taxes (FCFA)', report.revenueExcludingTax],
       ['Nombre de commandes', report.totalOrders],
       ["Nombre d'articles vendus", report.totalItems],
       ['Panier moyen (FCFA)', report.averageOrderValue],
@@ -878,8 +905,13 @@ router.get('/reports/:period/excel', authenticateToken, requirePagePermission('c
       ...Object.entries(report.paymentBreakdown).map(([method, amount]) => [method, amount])
     ]);
     summary.getRow(1).font = { bold: true, size: 16 };
-    summary.getRow(8).font = { bold: true };
+    summary.getRow(10).font = { bold: true };
     summary.columns = [{ width: 32 }, { width: 22 }, { width: 22 }];
+
+    const taxes = workbook.addWorksheet('Taxes');
+    taxes.addRow(['Taux', 'Pourcentage', 'Montant collecté (FCFA)']).font = { bold: true };
+    report.taxBreakdown.forEach(tax => taxes.addRow([tax.name, tax.percentage, tax.amount]));
+    taxes.columns = [{ width: 32 }, { width: 18 }, { width: 28 }];
 
     const products = workbook.addWorksheet('Produits');
     products.addRow(['Produit', 'Catégorie', 'Quantité', 'Ventes (FCFA)']).font = { bold: true };
@@ -905,7 +937,7 @@ router.get('/reports/:period/excel', authenticateToken, requirePagePermission('c
       { width: 24 }, { width: 20, style: { numFmt: 'dd/mm/yyyy hh:mm' } }, { width: 18 },
       { width: 24 }, { width: 16 }, { width: 20 }, { width: 18 }, { width: 20 }, { width: 28 }, { width: 28 }
     ];
-    for (const sheet of [products, staff, orders]) sheet.views = [{ state: 'frozen', ySplit: 1 }];
+    for (const sheet of [taxes, products, staff, orders]) sheet.views = [{ state: 'frozen', ySplit: 1 }];
 
     const filename = `rapport-ventes-${req.params.period}-${format(new Date(), 'yyyy-MM-dd-HH-mm')}.xlsx`;
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -1044,6 +1076,8 @@ router.put('/orders/:id/deliver', authenticateToken, requirePagePermission('cash
         items: true
       }
     });
+
+    await recordOrderStockSale(prisma, id);
 
     if (updatedOrder.user_id) {
       await prisma.user.update({

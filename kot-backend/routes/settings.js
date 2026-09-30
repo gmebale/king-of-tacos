@@ -102,6 +102,69 @@ router.patch('/locations/:id', authenticateToken, requireRole(['admin']), async 
   }
 });
 
+router.get('/tax-rates', authenticateToken, requirePagePermission('stock'), async (_req, res) => {
+  try {
+    const rates = await prisma.taxRate.findMany({ orderBy: [{ active: 'desc' }, { name: 'asc' }] });
+    res.json(rates.map(rate => ({ ...rate, percentage: rate.percentage_basis_points / 100 })));
+  } catch (error) {
+    console.error('Get tax rates error:', error);
+    res.status(500).json({ message: 'Impossible de charger les taux de taxe' });
+  }
+});
+
+router.get('/tax-rates/manage', authenticateToken, requireRole(['admin']), async (_req, res) => {
+  try {
+    const rates = await prisma.taxRate.findMany({ orderBy: [{ active: 'desc' }, { name: 'asc' }] });
+    res.json(rates.map(rate => ({ ...rate, percentage: rate.percentage_basis_points / 100 })));
+  } catch (error) {
+    console.error('Manage tax rates error:', error);
+    res.status(500).json({ message: 'Impossible de charger les taux de taxe' });
+  }
+});
+
+router.post('/tax-rates', authenticateToken, requireRole(['admin']), async (req, res) => {
+  try {
+    const name = String(req.body.name || '').trim();
+    const percentage = Number(req.body.percentage);
+    if (!name || name.length > 80 || !Number.isFinite(percentage) || percentage < 0 || percentage > 100 || Math.abs(Math.round(percentage * 100) - percentage * 100) > 1e-7) {
+      return res.status(400).json({ message: 'Nom ou pourcentage de taxe invalide (de 0 à 100 %, deux décimales maximum)' });
+    }
+    const rate = await prisma.taxRate.create({ data: { name, percentage_basis_points: Math.round(percentage * 100) } });
+    res.status(201).json({ ...rate, percentage });
+  } catch (error) {
+    console.error('Create tax rate error:', error);
+    res.status(error.code === 'P2002' ? 409 : 500).json({ message: error.code === 'P2002' ? 'Un taux porte déjà ce nom' : 'Impossible de créer le taux' });
+  }
+});
+
+router.patch('/tax-rates/:id', authenticateToken, requireRole(['admin']), async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ message: 'Identifiant invalide' });
+    const data = {};
+    if (typeof req.body.name === 'string') {
+      const name = req.body.name.trim();
+      if (!name || name.length > 80) return res.status(400).json({ message: 'Nom de taxe invalide' });
+      data.name = name;
+    }
+    if (req.body.percentage !== undefined) {
+      const percentage = Number(req.body.percentage);
+      if (!Number.isFinite(percentage) || percentage < 0 || percentage > 100 || Math.abs(Math.round(percentage * 100) - percentage * 100) > 1e-7) {
+        return res.status(400).json({ message: 'Le pourcentage doit être compris entre 0 et 100, avec deux décimales maximum' });
+      }
+      data.percentage_basis_points = Math.round(percentage * 100);
+    }
+    if (typeof req.body.active === 'boolean') data.active = req.body.active;
+    if (!Object.keys(data).length) return res.status(400).json({ message: 'Aucune modification fournie' });
+    const rate = await prisma.taxRate.update({ where: { id }, data });
+    res.json({ ...rate, percentage: rate.percentage_basis_points / 100 });
+  } catch (error) {
+    console.error('Update tax rate error:', error);
+    const status = error.code === 'P2025' ? 404 : error.code === 'P2002' ? 409 : 500;
+    res.status(status).json({ message: status === 409 ? 'Un taux porte déjà ce nom' : 'Impossible de modifier le taux' });
+  }
+});
+
 // Get restaurant settings
 router.get('/restaurant', authenticateToken, requirePagePermission('settings'), async (req, res) => {
   try {

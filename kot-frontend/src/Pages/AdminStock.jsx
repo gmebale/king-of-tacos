@@ -41,7 +41,7 @@ export default function AdminStock() {
     setError(null);
     try {
       const [productsData, categoriesData] = await Promise.all([
-        Product.list(),
+        Product.adminList(),
         Product.getCategories()
       ]);
       setProducts(productsData);
@@ -56,7 +56,7 @@ export default function AdminStock() {
 
   const loadProducts = async () => {
     try {
-      const data = await Product.list();
+      const data = await Product.adminList();
       setProducts(data);
     } catch (err) {
       setError('Erreur de chargement des produits. Vérifiez la connexion au serveur.');
@@ -108,7 +108,7 @@ export default function AdminStock() {
         loadProducts();
       } catch (error) {
         console.error('Error deleting product:', error);
-        alert("❌ Erreur lors de la suppression du produit. Veuillez réessayer.");
+        alert(error.response?.data?.message || "❌ Erreur lors de la suppression du produit. Veuillez réessayer.");
       }
     }
   };
@@ -153,6 +153,14 @@ export default function AdminStock() {
       return product.price * (1 - product.discount_percentage / 100);
     }
     return product.price;
+  };
+
+  const getTaxInfo = (product) => {
+    const rates = (product.taxRates || []).map(entry => entry.taxRate).filter(rate => rate?.active);
+    const rateBasisPoints = rates.reduce((sum, rate) => sum + rate.percentage_basis_points, 0);
+    const finalPrice = Math.round(getFinalPrice(product));
+    const amount = rateBasisPoints ? finalPrice - Math.round(finalPrice * 10000 / (10000 + rateBasisPoints)) : 0;
+    return { rates, percentage: rateBasisPoints / 100, amount };
   };
 
 
@@ -308,6 +316,7 @@ export default function AdminStock() {
                 ) : (
                   filteredProducts.map((product) => {
                     const finalPrice = getFinalPrice(product);
+                    const taxInfo = getTaxInfo(product);
                     return (
                       <TableRow key={product.id} className="hover:bg-amber-50 transition-colors">
                         <TableCell>
@@ -358,6 +367,14 @@ export default function AdminStock() {
                               <span className="font-semibold text-amber-600 text-lg">
                                 {(product.price).toLocaleString()} FCFA
                               </span>
+                            )}
+                            {taxInfo.rates.length > 0 && (
+                              <div className="mt-1 text-xs text-gray-500">
+                                Taxes incluses : {taxInfo.percentage.toFixed(2)} % · {Math.round(taxInfo.amount).toLocaleString()} FCFA
+                              </div>
+                            )}
+                            {product.average_purchase_cost !== null && product.average_purchase_cost !== undefined && (
+                              <div className="mt-1 text-xs text-gray-500">Coût moyen d’achat : {product.average_purchase_cost.toLocaleString()} FCFA</div>
                             )}
                           </div>
                         </TableCell>
@@ -448,6 +465,7 @@ export default function AdminStock() {
               <div className="p-3 sm:p-4 space-y-3 sm:space-y-4">
                 {filteredProducts.map((product) => {
                   const finalPrice = getFinalPrice(product);
+                          const taxInfo = getTaxInfo(product);
                   return (
                     <motion.div
                       key={product.id}
@@ -523,6 +541,12 @@ export default function AdminStock() {
                               </div>
                             </div>
                           </div>
+                          {taxInfo.rates.length > 0 && (
+                            <p className="mb-3 text-xs text-gray-500">Taxes incluses : {taxInfo.percentage.toFixed(2)} % · {Math.round(taxInfo.amount).toLocaleString()} FCFA</p>
+                          )}
+                          {product.average_purchase_cost !== null && product.average_purchase_cost !== undefined && (
+                            <p className="mb-3 text-xs text-gray-500">Coût moyen d’achat : {product.average_purchase_cost.toLocaleString()} FCFA</p>
+                          )}
 
                           <div className="flex items-center justify-between pt-3 border-t">
                             <Badge className={

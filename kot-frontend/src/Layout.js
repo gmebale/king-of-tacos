@@ -74,6 +74,7 @@ export default function Layout({ children, currentPageName }) {
     { name: "Bar", path: "BarMode", station: "bar", icon: Coffee },
     { name: "Caissier", path: "CashierMode", permission: "cashier", icon: Receipt },
     { name: "Finances", path: "AdminFinance", permission: "finance", icon: TrendingUp },
+    { name: "Dépenses", path: "AdminExpenses", permission: "finance", icon: Receipt },
     { name: "Mobile Money", path: "AdminMobileMoney", permission: "cashier", icon: Smartphone },
     { name: "Stock", path: "AdminStock", permission: "stock", icon: Package },
     { name: "Personnel", path: "AdminStaff", permission: "staff", icon: Users },

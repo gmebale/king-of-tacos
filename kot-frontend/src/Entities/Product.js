@@ -10,6 +10,11 @@ class Product {
     }
   }
 
+  static async adminList() {
+    const response = await api.get('/products/admin/inventory');
+    return response.data;
+  }
+
   static async getCategories() {
     try {
       const response = await api.get('/products/categories/list');

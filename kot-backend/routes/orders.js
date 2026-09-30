@@ -2,6 +2,8 @@ const express = require('express');
 const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcryptjs');
 const { authenticateToken, requireRole, requirePagePermission } = require('../middleware/auth');
+const { buildTaxSnapshot } = require('../utils/orderItemPricing');
+const { recordOrderStockSale } = require('../utils/inventory');
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -24,19 +26,31 @@ function getPreparationStation(categoryName) {
 async function buildOrderItems(items) {
   const products = await prisma.product.findMany({
     where: { name: { in: [...new Set(items.map(item => item.product_name))] } },
-    include: { category: { select: { name: true } } }
+    include: {
+      category: { select: { name: true } },
+      taxRates: { include: { taxRate: true } }
+    }
   });
-  const categoryByName = new Map(products.map(product => [product.name, product.category?.name]));
+  const productByName = new Map(products.map(product => [product.name, product]));
 
-  return items.map(item => ({
-    product_name: item.product_name,
-    quantity: parseInt(item.quantity, 10),
-    price: parseInt(item.price, 10),
-    customization: item.customization || null,
-    customizationSummary: item.customizationSummary || null,
-    preparation_station: getPreparationStation(categoryByName.get(item.product_name)),
-    preparation_status: 'en_attente'
-  }));
+  return items.map(item => {
+    const product = productByName.get(item.product_name);
+    const price = parseInt(item.price, 10);
+    const tax = buildTaxSnapshot(price, product);
+    return {
+      product_id: product?.id || null,
+      product_name: item.product_name,
+      quantity: parseInt(item.quantity, 10),
+      price,
+      unit_tax_base: tax.unitTaxBase,
+      unit_tax_total: tax.unitTaxTotal,
+      tax_breakdown: tax.breakdown,
+      customization: item.customization || null,
+      customizationSummary: item.customizationSummary || null,
+      preparation_station: getPreparationStation(product?.category?.name),
+      preparation_status: 'en_attente'
+    };
+  });
 }
 
 async function generateOrderCode() {
@@ -456,11 +470,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
         });
         // Create new items
         updateData.items = {
-          create: items.map(item => ({
-            product_name: item.product_name,
-            quantity: parseInt(item.quantity),
-            price: parseInt(item.price)
-          }))
+          create: await buildOrderItems(items)
         };
       }
     }
@@ -475,6 +485,10 @@ router.put('/:id', authenticateToken, async (req, res) => {
         items: true
       }
     });
+
+    if (status && ['livree', 'servie', 'recuperee'].includes(status)) {
+      await recordOrderStockSale(prisma, id);
+    }
 
     // Log status change when admin/staff update status
     if (isAdminOrStaff && status) {
@@ -585,6 +599,7 @@ router.post('/:id/close', authenticateToken, requireRole(['caissier','admin']), 
       if (!['servie', 'recuperee', 'livree'].includes(order.status)) {
         return res.status(400).json({ message: 'La commande doit être servie, récupérée ou livrée avant clôture' });
       }
+      await recordOrderStockSale(prisma, id);
     }
 
     const updated = await prisma.order.update({

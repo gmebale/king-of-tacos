@@ -153,6 +153,7 @@ model User {
   reviews            Review[]
   logs               Log[]
   userPermissions    UserPermission[]
+  createdExpenses   Expense[]
 
   @@map("users")
 }
@@ -169,6 +170,7 @@ model Product {
   image                 String?
   stock                 Int            @default(0) // Quantité en stock
   stock_alert_threshold Int            @default(10) // Seuil d'alerte stock
+  average_purchase_cost Int?
   type                  String? // Type du produit (main, size, meat, sauce, extra, side)
   customization         Json? // Configuration des options de personnalisation
   created_at            DateTime       @default(now())
@@ -177,6 +179,9 @@ model Product {
   // Relations pour options
   optionFor ProductOption[] @relation("optionProducts")
   options   ProductOption[] @relation("productOptions")
+  taxRates ProductTax[]
+  orderItems OrderItem[]
+  expenseItems ExpenseItem[]
 
   @@map("products")
 }
@@ -241,6 +246,13 @@ model OrderItem {
   customizationSummary String? // Résumé textuel des personnalisations
   preparation_station PreparationStation?
   preparation_status PreparationStatus @default(en_attente)
+  product_id Int?
+  product Product? @relation(fields: [product_id], references: [id], onDelete: SetNull)
+  unit_tax_base Int @default(0)
+  unit_tax_total Int @default(0)
+  tax_breakdown Json?
+  unit_cost_snapshot Int?
+  stock_deducted Boolean @default(false)
 
   @@map("order_items")
 }
@@ -371,6 +383,57 @@ model Settings {
   value String
 
   @@map("settings")
+}
+
+model TaxRate {
+  id Int @id @default(autoincrement())
+  name String @unique
+  percentage_basis_points Int
+  active Boolean @default(true)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  products ProductTax[]
+
+  @@map("tax_rates")
+}
+
+model ProductTax {
+  product_id Int
+  tax_rate_id Int
+  product Product @relation(fields: [product_id], references: [id], onDelete: Cascade)
+  taxRate TaxRate @relation(fields: [tax_rate_id], references: [id], onDelete: Cascade)
+
+  @@id([product_id, tax_rate_id])
+  @@map("product_taxes")
+}
+
+model Expense {
+  id Int @id @default(autoincrement())
+  expense_type String @default("operating")
+  category String
+  description String
+  amount Int
+  expense_date DateTime @default(now())
+  payment_method String?
+  supplier String?
+  created_by Int?
+  createdBy User? @relation(fields: [created_by], references: [id], onDelete: SetNull)
+  items ExpenseItem[]
+  created_at DateTime @default(now())
+
+  @@map("expenses")
+}
+
+model ExpenseItem {
+  id Int @id @default(autoincrement())
+  expense_id Int
+  expense Expense @relation(fields: [expense_id], references: [id], onDelete: Cascade)
+  product_id Int
+  product Product @relation(fields: [product_id], references: [id], onDelete: Restrict)
+  quantity Int
+  unit_cost Int
+
+  @@map("expense_items")
 }
 
 model RestaurantLocation {

@@ -16,6 +16,7 @@ import { UploadFile } from "../../integrations/Core";
 import { Upload, X, Image as ImageIcon, Loader2 } from "lucide-react";
 import { Card } from "../ui/card";
 import { Product } from "../../Entities/Product";
+import api from "../../services/api.service";
 
 export default function ProductFormDialog({ open, onOpenChange, product, onSave }) {
   const [formData, setFormData] = useState({
@@ -27,19 +28,23 @@ export default function ProductFormDialog({ open, onOpenChange, product, onSave 
     image: "",
     stock: 0,
     stock_alert_threshold: 10,
-    available: true
+    available: true,
+    tax_rate_ids: []
   });
   const [categories, setCategories] = useState([]);
+  const [taxRates, setTaxRates] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [imagePreview, setImagePreview] = useState(null);
 
   useEffect(() => {
     loadCategories();
+    api.get('/settings/tax-rates').then(response => setTaxRates(response.data || []))
+      .catch(error => console.error('Error loading tax rates:', error));
   }, []);
 
   useEffect(() => {
     if (product) {
-      setFormData(product);
+      setFormData({ ...product, tax_rate_ids: (product.taxRates || []).map(entry => entry.tax_rate_id) });
       setImagePreview(product.image);
     } else {
       setFormData({
@@ -51,7 +56,8 @@ export default function ProductFormDialog({ open, onOpenChange, product, onSave 
         image: "",
         stock: 0,
         stock_alert_threshold: 5,
-        available: true
+        available: true,
+        tax_rate_ids: []
       });
       setImagePreview(null);
     }
@@ -93,6 +99,9 @@ export default function ProductFormDialog({ open, onOpenChange, product, onSave 
   };
 
   const finalPrice = formData.price * (1 - formData.discount_percentage / 100);
+  const selectedTaxes = taxRates.filter(rate => formData.tax_rate_ids?.includes(rate.id) && rate.active);
+  const combinedRate = selectedTaxes.reduce((sum, rate) => sum + rate.percentage_basis_points, 0);
+  const includedTax = finalPrice - (combinedRate ? Math.round(finalPrice * 10000 / (10000 + combinedRate)) : finalPrice);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -227,6 +236,33 @@ export default function ProductFormDialog({ open, onOpenChange, product, onSave 
                 </span>
               </div>
             </div>
+          </div>
+
+          <div className="space-y-3 rounded-xl border bg-gray-50 p-4">
+            <div>
+              <Label>Taxes appliquées</Label>
+              <p className="text-xs text-gray-500">Les taux sont cumulés sur une même base hors taxes et restent inclus dans le prix final.</p>
+            </div>
+            {!taxRates.length && <p className="text-sm text-gray-500">Aucun taux actif. Configurez-les dans Paramètres.</p>}
+            <div className="grid sm:grid-cols-2 gap-2">
+              {taxRates.map(rate => (
+                <label key={rate.id} className={`flex items-center gap-2 rounded-md border bg-white p-2 text-sm ${!rate.active ? 'text-gray-400' : ''}`}>
+                  <input
+                    type="checkbox"
+                    checked={formData.tax_rate_ids?.includes(rate.id) || false}
+                    disabled={!rate.active && !formData.tax_rate_ids?.includes(rate.id)}
+                    onChange={event => setFormData(current => ({
+                      ...current,
+                      tax_rate_ids: event.target.checked
+                        ? [...(current.tax_rate_ids || []), rate.id]
+                        : (current.tax_rate_ids || []).filter(id => id !== rate.id)
+                    }))}
+                  />
+                  <span>{rate.name} — {rate.percentage}%{!rate.active ? ' (inactif, non appliqué)' : ''}</span>
+                </label>
+              ))}
+            </div>
+            <p className="text-sm font-medium text-gray-700">Taxes incluses dans le prix remisé : {Math.round(includedTax).toLocaleString()} FCFA ({(combinedRate / 100).toFixed(2)} %)</p>
           </div>
 
           <div className="grid md:grid-cols-2 gap-4">

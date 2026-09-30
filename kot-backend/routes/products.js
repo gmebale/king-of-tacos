@@ -5,6 +5,21 @@ const { authenticateToken, requirePagePermission } = require('../middleware/auth
 const router = express.Router();
 const prisma = new PrismaClient();
 
+function parseTaxRateIds(value) {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) return null;
+  const ids = [...new Set(value.map(Number))];
+  return ids.every(id => Number.isInteger(id) && id > 0) ? ids : null;
+}
+
+async function validateTaxRates(tx, ids, activeOnly = true) {
+  const rows = ids.length ? await tx.taxRate.findMany({
+    where: { id: { in: ids }, ...(activeOnly ? { active: true } : {}) },
+    select: { id: true }
+  }) : [];
+  return rows.length === ids.length;
+}
+
 // Modèle d'options à attacher automatiquement par catégorie de produit principal.
 // On se base sur les noms exacts des produits existants (table products) pour éviter
 // d'ajouter toutes les options indistinctement.
@@ -93,7 +108,8 @@ router.get('/', async (req, res) => {
         image: true,
         stock: true,
         stock_alert_threshold: true,
-        customization: true
+        customization: true,
+        taxRates: { include: { taxRate: true } }
       }
     });
     res.json(products);
@@ -103,12 +119,30 @@ router.get('/', async (req, res) => {
   }
 });
 
+router.get('/admin/inventory', authenticateToken, requirePagePermission('stock'), async (_req, res) => {
+  try {
+    const products = await prisma.product.findMany({
+      orderBy: { created_at: 'desc' },
+      include: { taxRates: { include: { taxRate: true } } }
+    });
+    res.json(products);
+  } catch (error) {
+    console.error('Get inventory products error:', error);
+    res.status(500).json({ message: 'Impossible de charger les données de stock' });
+  }
+});
+
 // Get product by ID
 router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const product = await prisma.product.findUnique({
-      where: { id: parseInt(id) }
+      where: { id: parseInt(id) },
+      select: {
+        id: true, name: true, description: true, price: true, discount_percentage: true,
+        category: true, available: true, image: true, stock: true, stock_alert_threshold: true,
+        customization: true, taxRates: { include: { taxRate: true } }
+      }
     });
 
     if (!product) {
@@ -125,7 +159,9 @@ router.get('/:id', async (req, res) => {
 // Create product (admin only)
 router.post('/', authenticateToken, requirePagePermission('stock'), async (req, res) => {
   try {
-    const { name, description, price, discount_percentage, category, available, image, stock, stock_alert_threshold, customization } = req.body;
+    const { name, description, price, discount_percentage, category, available, image, stock, stock_alert_threshold, customization, tax_rate_ids } = req.body;
+    const taxRateIds = parseTaxRateIds(tax_rate_ids);
+    if (taxRateIds === null) return res.status(400).json({ message: 'Liste de taux de taxe invalide' });
 
     // Find category by name
     const categoryRecord = await prisma.categoryModel.findUnique({
@@ -140,6 +176,11 @@ router.post('/', authenticateToken, requirePagePermission('stock'), async (req, 
 
     // Transaction pour garder produit + options cohérents
     const product = await prisma.$transaction(async (tx) => {
+      if (taxRateIds !== undefined && !(await validateTaxRates(tx, taxRateIds, true))) {
+        const error = new Error('Un ou plusieurs taux sélectionnés sont indisponibles');
+        error.statusCode = 400;
+        throw error;
+      }
       const createdProduct = await tx.product.create({
         data: {
           name,
@@ -151,7 +192,8 @@ router.post('/', authenticateToken, requirePagePermission('stock'), async (req, 
           image,
           stock: parseInt(stock) || 0,
           stock_alert_threshold: parseInt(stock_alert_threshold) || 10,
-          customization: customization || { isConfigurable: isCustomCategory }
+          customization: customization || { isConfigurable: isCustomCategory },
+          ...(taxRateIds !== undefined ? { taxRates: { create: taxRateIds.map(tax_rate_id => ({ taxRate: { connect: { id: tax_rate_id } } })) } } : {})
         }
       });
 
@@ -169,6 +211,7 @@ router.post('/', authenticateToken, requirePagePermission('stock'), async (req, 
     res.status(201).json(product);
   } catch (error) {
     console.error('Create product error:', error);
+    if (error.statusCode) return res.status(error.statusCode).json({ message: error.message });
     res.status(500).json({ message: 'Internal server error' });
   }
 });
@@ -177,7 +220,9 @@ router.post('/', authenticateToken, requirePagePermission('stock'), async (req, 
 router.put('/:id', authenticateToken, requirePagePermission('stock'), async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, description, price, discount_percentage, category, available, image, stock, stock_alert_threshold, customization } = req.body;
+    const { name, description, price, discount_percentage, category, available, image, stock, stock_alert_threshold, customization, tax_rate_ids } = req.body;
+    const taxRateIds = parseTaxRateIds(tax_rate_ids);
+    if (taxRateIds === null) return res.status(400).json({ message: 'Liste de taux de taxe invalide' });
 
     const data = {};
     if (name !== undefined) data.name = name;
@@ -214,13 +259,25 @@ router.put('/:id', authenticateToken, requirePagePermission('stock'), async (req
     if (stock_alert_threshold !== undefined) data.stock_alert_threshold = parseInt(stock_alert_threshold);
     if (customization !== undefined) data.customization = customization;
 
-    const product = await prisma.product.update({
-      where: { id: parseInt(id) },
-      data
+    const product = await prisma.$transaction(async tx => {
+      if (taxRateIds !== undefined) {
+        if (!(await validateTaxRates(tx, taxRateIds, false))) {
+          const error = new Error('Un ou plusieurs taux sélectionnés sont indisponibles');
+          error.statusCode = 400;
+          throw error;
+        }
+        await tx.productTax.deleteMany({ where: { product_id: parseInt(id) } });
+        if (taxRateIds.length) {
+          await tx.productTax.createMany({ data: taxRateIds.map(tax_rate_id => ({ product_id: parseInt(id), tax_rate_id })) });
+        }
+      }
+      await tx.product.update({ where: { id: parseInt(id) }, data });
+      return tx.product.findUnique({ where: { id: parseInt(id) }, include: { taxRates: { include: { taxRate: true } } } });
     });
 
     res.json(product);
   } catch (error) {
+    if (error.statusCode) return res.status(error.statusCode).json({ message: error.message });
     if (error.code === 'P2025') {
       return res.status(404).json({ message: 'Product not found' });
     }
@@ -234,6 +291,11 @@ router.delete('/:id', authenticateToken, requirePagePermission('stock'), async (
   try {
     const { id } = req.params;
     const productId = parseInt(id);
+
+    const purchaseHistory = await prisma.expenseItem.count({ where: { product_id: productId } });
+    if (purchaseHistory > 0) {
+      return res.status(409).json({ message: 'Ce produit figure dans des achats de stock et doit être désactivé plutôt que supprimé.' });
+    }
 
     // Supprimer d'abord toutes les options de personnalisation qui utilisent ce produit
     await prisma.productOption.deleteMany({
