@@ -1,11 +1,13 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ChefHat,
   Coffee,
   Clock,
   CheckCircle,
-  Play
+  Play,
+  Volume2,
+  VolumeX
 } from "lucide-react";
 import { Button } from "../Components/ui/button";
 import { Badge } from "../Components/ui/badge";
@@ -24,6 +26,11 @@ export default function KitchenMode({ station = 'cuisine_chaude' }) {
   const [orders, setOrders] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [updatingOrder, setUpdatingOrder] = useState(null);
+  const [isSoundEnabled, setIsSoundEnabled] = useState(false);
+  const [soundError, setSoundError] = useState('');
+  const audioContextRef = useRef(null);
+  const soundEnabledRef = useRef(false);
+  const knownItemIdsRef = useRef(null);
 
   useEffect(() => {
     loadOrders();
@@ -35,11 +42,82 @@ export default function KitchenMode({ station = 'cuisine_chaude' }) {
   const loadOrders = async () => {
     try {
       const response = await api.get('/kitchen/orders', { params: { station } });
-      setOrders(response.data);
+      const nextOrders = response.data;
+      const nextItemIds = new Set(
+        nextOrders.flatMap(order => order.items.map(item => String(item.id)))
+      );
+      const knownItemIds = knownItemIdsRef.current;
+
+      if (
+        knownItemIds &&
+        soundEnabledRef.current &&
+        [...nextItemIds].some(itemId => !knownItemIds.has(itemId))
+      ) {
+        playOrderAlert();
+      }
+
+      knownItemIdsRef.current = nextItemIds;
+      setOrders(nextOrders);
     } catch (error) {
       console.error('Error loading kitchen orders:', error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const playOrderAlert = async () => {
+    const audioContext = audioContextRef.current;
+    if (!audioContext) return;
+
+    try {
+      if (audioContext.state !== 'running') {
+        await audioContext.resume();
+      }
+
+      const oscillator = audioContext.createOscillator();
+      const volume = audioContext.createGain();
+      const now = audioContext.currentTime;
+
+      oscillator.frequency.setValueAtTime(880, now);
+      volume.gain.setValueAtTime(0.0001, now);
+      volume.gain.exponentialRampToValueAtTime(0.2, now + 0.02);
+      volume.gain.exponentialRampToValueAtTime(0.0001, now + 0.45);
+      oscillator.connect(volume);
+      volume.connect(audioContext.destination);
+      oscillator.start(now);
+      oscillator.stop(now + 0.45);
+      setSoundError('');
+    } catch (error) {
+      console.error('Error playing kitchen order alert:', error);
+      soundEnabledRef.current = false;
+      setIsSoundEnabled(false);
+      setSoundError("Le son a été bloqué. Veuillez l'activer à nouveau.");
+    }
+  };
+
+  const toggleOrderSound = async () => {
+    if (soundEnabledRef.current) {
+      soundEnabledRef.current = false;
+      setIsSoundEnabled(false);
+      setSoundError('');
+      return;
+    }
+
+    if (!window.AudioContext) {
+      setSoundError("La lecture audio n'est pas prise en charge par ce navigateur.");
+      return;
+    }
+
+    try {
+      const audioContext = audioContextRef.current || new window.AudioContext();
+      await audioContext.resume();
+      audioContextRef.current = audioContext;
+      soundEnabledRef.current = true;
+      setIsSoundEnabled(true);
+      setSoundError('');
+    } catch (error) {
+      console.error('Error enabling kitchen order alerts:', error);
+      setSoundError("Impossible d'activer le son. Vérifiez les réglages du navigateur.");
     }
   };
 
@@ -83,7 +161,7 @@ export default function KitchenMode({ station = 'cuisine_chaude' }) {
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="mb-8"
+        className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"
       >
         <div className="flex items-center gap-3 mb-2">
           {station === 'bar' ? <Coffee className="w-8 h-8 text-orange-600" /> : <ChefHat className="w-8 h-8 text-orange-600" />}
@@ -94,6 +172,19 @@ export default function KitchenMode({ station = 'cuisine_chaude' }) {
         <p className="text-gray-600">
           Traitez les articles attribués à ce poste. Une commande passe à « prête » lorsque tous ses articles sont terminés.
         </p>
+        <div className="flex flex-col items-start gap-2 sm:items-end">
+          <Button
+            type="button"
+            variant={isSoundEnabled ? 'default' : 'outline'}
+            aria-pressed={isSoundEnabled}
+            onClick={toggleOrderSound}
+            className={isSoundEnabled ? 'bg-green-600 text-white hover:bg-green-700' : ''}
+          >
+            {isSoundEnabled ? <Volume2 className="mr-2 h-4 w-4" /> : <VolumeX className="mr-2 h-4 w-4" />}
+            {isSoundEnabled ? 'Son activé' : 'Activer le son'}
+          </Button>
+          {soundError && <p role="alert" className="text-sm text-red-600">{soundError}</p>}
+        </div>
       </motion.div>
 
       {/* Stats Overview */}
