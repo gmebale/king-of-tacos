@@ -67,22 +67,17 @@ export function SelectItem({ children, value, ...props }) {
   const { onValueChange, setIsOpen, value: selectedValue, setSelectedLabel } = useContext(SelectContext);
   const isSelected = value === selectedValue;
 
-  const label =
-    typeof children === 'string' || typeof children === 'number'
-      ? children
-      : React.isValidElement(children) && typeof children.props?.children === 'string'
-        ? children.props.children
-        : typeof children === 'object'
-          ? children.label || children.name || children.displayName || children.id || ''
-          : '';
+  const getTextContent = (node) => React.Children.toArray(node).map((child) => {
+    if (typeof child === 'string' || typeof child === 'number') return String(child);
+    return React.isValidElement(child) ? getTextContent(child.props.children) : '';
+  }).join('');
+  const label = getTextContent(children);
 
   useEffect(() => {
     if (isSelected && label) {
       setSelectedLabel(label);
     }
   }, [isSelected, label, setSelectedLabel]);
-
-  const rendered = React.isValidElement(children) ? children : <span>{label}</span>;
 
   return (
     <div
@@ -94,7 +89,7 @@ export function SelectItem({ children, value, ...props }) {
       }}
       {...props}
     >
-      {rendered}
+      {children}
     </div>
   );
 }
