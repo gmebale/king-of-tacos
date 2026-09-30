@@ -18,7 +18,9 @@ async function attachServiceLocationNames(orders) {
   }
   return orders;
 }
-function getPreparationStation(categoryName) {
+function getPreparationStation(category) {
+  if (category?.preparation_station) return category.preparation_station;
+  const categoryName = typeof category === 'string' ? category : category?.name;
   if (categoryName === 'boissons') return 'bar';
   if (categoryName === 'desserts') return 'cuisine_froide';
   return 'cuisine_chaude';
@@ -35,7 +37,7 @@ async function buildOrderItems(items, { giftedProductId = null } = {}) {
   const products = await prisma.product.findMany({
     where: { name: { in: [...new Set(items.map(item => item.product_name))] } },
     include: {
-      category: { select: { name: true } },
+      category: { select: { name: true, preparation_station: true } },
       taxRates: { include: { taxRate: true } }
     }
   });
@@ -57,7 +59,7 @@ async function buildOrderItems(items, { giftedProductId = null } = {}) {
       free_quantity: product?.id === giftedProductId ? 1 : 0,
       customization: item.customization || null,
       customizationSummary: item.customizationSummary || null,
-      preparation_station: getPreparationStation(product?.category?.name),
+      preparation_station: getPreparationStation(product?.category),
       preparation_status: 'en_attente'
     };
   });

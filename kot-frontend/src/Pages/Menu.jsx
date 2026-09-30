@@ -41,9 +41,8 @@ export default function Menu() {
         Product.list(),
         Product.getCategories()
       ]);
-      setProducts(productsData.filter(p => p.available && p.category?.name !== "options" && p.category?.name !== "supp" && p.category?.name !== "viande" && p.category?.name !== "sauces" && p.category?.name !== "goûts"));
-      // Filter out "options", "Suppléments", and "Viande" categories from the menu
-      setCategories(categoriesData.filter(cat => cat.name !== "options" && cat.name !== "supp" && cat.name !== "viande" && cat.name !== "sauces" && cat.name !== "goûts"));
+      setProducts(productsData.filter(p => p.available && p.category?.is_menu_visible !== false));
+      setCategories(categoriesData.filter(cat => cat.is_menu_visible !== false));
     } catch (err) {
       setError('Erreur de chargement des produits. Vérifiez la connexion au serveur.');
       console.error('Error loading products:', err);

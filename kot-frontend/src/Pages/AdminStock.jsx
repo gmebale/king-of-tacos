@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Product } from "../Entities/Product";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Search, Edit, Trash2, AlertCircle, Eye, EyeOff } from "lucide-react";
+import { Plus, Search, Edit, Trash2, AlertCircle, Eye, EyeOff, Tags } from "lucide-react";
 import { Button } from "../Components/ui/button";
 import { Input } from "../Components/ui/input";
 import { Badge } from "../Components/ui/badge";
@@ -17,6 +17,7 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "../Components/ui/tabs";
 
 import ProductFormDialog from "../Components/admin/ProductFormDialog";
+import CategoryManagementDialog from "../Components/admin/CategoryManagementDialog";
 
 export default function AdminStock() {
   const [products, setProducts] = useState([]);
@@ -26,6 +27,7 @@ export default function AdminStock() {
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [isLoading, setIsLoading] = useState(true);
   const [showDialog, setShowDialog] = useState(false);
+  const [showCategoryDialog, setShowCategoryDialog] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
   const [error, setError] = useState(null);
   useEffect(() => {
@@ -190,17 +192,22 @@ export default function AdminStock() {
               Gérez votre catalogue, prix, stocks et promotions
             </p>
           </div>
-          <Button
-            onClick={() => {
-              setEditingProduct(null);
-              setShowDialog(true);
-            }}
-            className="bg-gradient-to-r from-yellow-400 to-amber-600 hover:from-yellow-500 hover:to-amber-700 text-white rounded-xl shadow-lg w-full md:w-auto"
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            <span className="hidden sm:inline">Nouveau produit</span>
-            <span className="sm:hidden">Nouveau</span>
-          </Button>
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+            <Button type="button" variant="outline" onClick={() => setShowCategoryDialog(true)} className="w-full sm:w-auto">
+              <Tags className="mr-2 h-4 w-4" /> Catégories
+            </Button>
+            <Button
+              onClick={() => {
+                setEditingProduct(null);
+                setShowDialog(true);
+              }}
+              className="bg-gradient-to-r from-yellow-400 to-amber-600 hover:from-yellow-500 hover:to-amber-700 text-white rounded-xl shadow-lg w-full md:w-auto"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              <span className="hidden sm:inline">Nouveau produit</span>
+              <span className="sm:hidden">Nouveau</span>
+            </Button>
+          </div>
         </div>
 
         {/* Stats Overview - Responsive Grid */}
@@ -602,6 +609,12 @@ export default function AdminStock() {
         onOpenChange={setShowDialog}
         product={editingProduct}
         onSave={handleSave}
+      />
+      <CategoryManagementDialog
+        open={showCategoryDialog}
+        onOpenChange={setShowCategoryDialog}
+        categories={categories}
+        onSaved={loadData}
       />
     </div>
   );

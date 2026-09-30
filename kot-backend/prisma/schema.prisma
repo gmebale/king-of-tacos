@@ -119,10 +119,13 @@ enum Category {
 }
 
 model CategoryModel {
-  id          Int       @id @default(autoincrement())
-  name        String    @unique
-  displayName String
-  products    Product[]
+  id                   Int                @id @default(autoincrement())
+  name                 String             @unique
+  displayName          String
+  preparation_station  PreparationStation @default(cuisine_chaude)
+  is_menu_visible      Boolean            @default(true)
+  display_order        Int                @default(0)
+  products             Product[]
 
   @@map("categories")
 }

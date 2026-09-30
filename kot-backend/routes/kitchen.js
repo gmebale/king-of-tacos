@@ -6,7 +6,9 @@ const router = express.Router();
 const prisma = new PrismaClient();
 const PREPARATION_STATIONS = ['bar', 'cuisine_chaude', 'cuisine_froide'];
 
-function stationForCategory(categoryName) {
+function stationForCategory(category) {
+  if (category?.preparation_station) return category.preparation_station;
+  const categoryName = typeof category === 'string' ? category : category?.name;
   if (categoryName === 'boissons') return 'bar';
   if (categoryName === 'desserts') return 'cuisine_froide';
   return 'cuisine_chaude';
@@ -101,7 +103,7 @@ router.get('/orders', authenticateToken, async (req, res) => {
     const productNames = [...new Set(orders.flatMap(order => order.items.map(item => item.product_name)))];
     const products = await prisma.product.findMany({
       where: { name: { in: productNames } },
-      include: { category: { select: { name: true } } }
+      include: { category: { select: { name: true, preparation_station: true } } }
     });
     const productsByName = new Map(products.map(product => [product.name, product]));
     const locationNames = new Map((await prisma.restaurantLocation.findMany({ select: { slug: true, name: true } }))
@@ -112,7 +114,7 @@ router.get('/orders', authenticateToken, async (req, res) => {
         const product = productsByName.get(item.product_name);
         item.productCustomization = product?.customization || null;
         const isLegacyItem = !item.preparation_station;
-        item.preparation_station = item.preparation_station || stationForCategory(product?.category?.name);
+        item.preparation_station = item.preparation_station || stationForCategory(product?.category);
         if (order.status === 'prete') item.preparation_status = 'prete';
         else if (isLegacyItem && order.status === 'en_preparation' && item.preparation_status === 'en_attente') item.preparation_status = 'en_preparation';
 
@@ -161,9 +163,9 @@ router.put('/orders/:id/items/:itemId/status', authenticateToken, async (req, re
     if (!station) {
       const product = await prisma.product.findFirst({
         where: { name: item.product_name },
-        include: { category: { select: { name: true } } }
+        include: { category: { select: { name: true, preparation_station: true } } }
       });
-      station = stationForCategory(product?.category?.name);
+      station = stationForCategory(product?.category);
     }
     if (!canAccessStation(req.user, station)) {
       return res.status(403).json({ message: 'Accès refusé à ce poste de préparation' });
@@ -239,14 +241,14 @@ router.get('/orders/:id', authenticateToken, async (req, res) => {
 
     const products = await prisma.product.findMany({
       where: { name: { in: [...new Set(order.items.map(item => item.product_name))] } },
-      include: { category: { select: { name: true } } }
+      include: { category: { select: { name: true, preparation_station: true } } }
     });
     const productsByName = new Map(products.map(product => [product.name, product]));
     order.items = order.items
-      .filter(item => (item.preparation_station || stationForCategory(productsByName.get(item.product_name)?.category?.name)) === station)
+      .filter(item => (item.preparation_station || stationForCategory(productsByName.get(item.product_name)?.category)) === station)
       .map(item => ({
         ...item,
-        preparation_station: item.preparation_station || stationForCategory(productsByName.get(item.product_name)?.category?.name),
+        preparation_station: item.preparation_station || stationForCategory(productsByName.get(item.product_name)?.category),
         preparation_status: order.status === 'prete' ? 'prete' : item.preparation_status
       }));
     if (order.service_location) {

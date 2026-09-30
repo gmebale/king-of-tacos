@@ -4,6 +4,7 @@ const { authenticateToken, requirePagePermission } = require('../middleware/auth
 
 const router = express.Router();
 const prisma = new PrismaClient();
+const PREPARATION_STATIONS = ['bar', 'cuisine_chaude', 'cuisine_froide'];
 
 function parseTaxRateIds(value) {
   if (value === undefined) return undefined;
@@ -332,11 +333,73 @@ router.delete('/:id', authenticateToken, requirePagePermission('stock'), async (
   }
 });
 
+// Category management
+router.post('/categories', authenticateToken, requirePagePermission('stock'), async (req, res) => {
+  const { name, displayName, preparation_station, is_menu_visible, display_order } = req.body;
+  const normalizedName = String(name || '').trim().toLowerCase().replace(/\s+/g, '_');
+  const label = String(displayName || '').trim();
+  const station = preparation_station || 'cuisine_chaude';
+  const order = Number(display_order || 0);
+  if (!/^[a-z0-9_-]{2,60}$/.test(normalizedName) || !label || label.length > 80 || !PREPARATION_STATIONS.includes(station) || !Number.isInteger(order)) {
+    return res.status(400).json({ message: 'Nom, libellé, poste de préparation ou ordre invalide.' });
+  }
+  try {
+    const category = await prisma.categoryModel.create({ data: {
+      name: normalizedName,
+      displayName: label,
+      preparation_station: station,
+      is_menu_visible: is_menu_visible !== false,
+      display_order: order
+    } });
+    res.status(201).json(category);
+  } catch (error) {
+    if (error.code === 'P2002') return res.status(409).json({ message: 'Une catégorie porte déjà ce nom technique.' });
+    console.error('Create category error:', error);
+    res.status(500).json({ message: 'Impossible de créer la catégorie.' });
+  }
+});
+
+router.put('/categories/:id', authenticateToken, requirePagePermission('stock'), async (req, res) => {
+  const id = Number(req.params.id);
+  const { name, displayName, preparation_station, is_menu_visible, display_order } = req.body;
+  const data = {};
+  if (!Number.isInteger(id) || id < 1) return res.status(400).json({ message: 'Catégorie invalide.' });
+  if (name !== undefined) {
+    const normalizedName = String(name).trim().toLowerCase().replace(/\s+/g, '_');
+    if (!/^[a-z0-9_-]{2,60}$/.test(normalizedName)) return res.status(400).json({ message: 'Nom technique invalide.' });
+    data.name = normalizedName;
+  }
+  if (displayName !== undefined) {
+    const label = String(displayName).trim();
+    if (!label || label.length > 80) return res.status(400).json({ message: 'Le libellé doit contenir de 1 à 80 caractères.' });
+    data.displayName = label;
+  }
+  if (preparation_station !== undefined) {
+    if (!PREPARATION_STATIONS.includes(preparation_station)) return res.status(400).json({ message: 'Poste de préparation invalide.' });
+    data.preparation_station = preparation_station;
+  }
+  if (is_menu_visible !== undefined) data.is_menu_visible = Boolean(is_menu_visible);
+  if (display_order !== undefined) {
+    const order = Number(display_order);
+    if (!Number.isInteger(order)) return res.status(400).json({ message: 'Ordre d’affichage invalide.' });
+    data.display_order = order;
+  }
+  try {
+    const category = await prisma.categoryModel.update({ where: { id }, data });
+    res.json(category);
+  } catch (error) {
+    if (error.code === 'P2002') return res.status(409).json({ message: 'Une catégorie porte déjà ce nom technique.' });
+    if (error.code === 'P2025') return res.status(404).json({ message: 'Catégorie introuvable.' });
+    console.error('Update category error:', error);
+    res.status(500).json({ message: 'Impossible de modifier la catégorie.' });
+  }
+});
+
 // Get all categories
 router.get('/categories/list', async (req, res) => {
   try {
     const categories = await prisma.categoryModel.findMany({
-      orderBy: { name: 'asc' }
+      orderBy: [{ display_order: 'asc' }, { displayName: 'asc' }]
     });
     res.json(categories);
   } catch (error) {
