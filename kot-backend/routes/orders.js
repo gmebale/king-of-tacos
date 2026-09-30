@@ -6,6 +6,36 @@ const { authenticateToken, requireRole, requirePagePermission } = require('../mi
 const router = express.Router();
 const prisma = new PrismaClient();
 
+async function generateOrderCode() {
+  const now = new Date();
+  const datePart = [
+    String(now.getFullYear()).slice(-2),
+    String(now.getMonth() + 1).padStart(2, '0'),
+    String(now.getDate()).padStart(2, '0')
+  ].join('');
+
+  const sequence = await prisma.orderCodeSequence.upsert({
+    where: { date: datePart },
+    update: { counter: { increment: 1 } },
+    create: { date: datePart, counter: 1 }
+  });
+
+  let counter = sequence.counter;
+  let code = `KOT-${datePart}-${String(counter).padStart(4, '0')}`;
+
+  // Protect against an existing order code if the sequence table was reset.
+  while (await prisma.order.findUnique({ where: { order_code: code }, select: { id: true } })) {
+    const nextSequence = await prisma.orderCodeSequence.update({
+      where: { date: datePart },
+      data: { counter: { increment: 1 } }
+    });
+    counter = nextSequence.counter;
+    code = `KOT-${datePart}-${String(counter).padStart(4, '0')}`;
+  }
+
+  return code;
+}
+
 // Utility function to format customization details
 function formatCustomization(customization, productCustomization) {
   if (!customization || !productCustomization?.isConfigurable) {
@@ -212,8 +242,10 @@ router.post('/staff', authenticateToken, requireRole(['serveur']), async (req, r
       return res.status(401).json({ message: 'Code serveur incorrect' });
     }
 
+    const orderCode = await generateOrderCode();
     const order = await prisma.order.create({
       data: {
+        order_code: orderCode,
         total_amount: parseInt(total_amount, 10),
         customer_name,
         customer_phone,
@@ -278,8 +310,10 @@ router.post('/', async (req, res) => {
     }
 
     // Create order
+    const orderCode = await generateOrderCode();
     const order = await prisma.order.create({
       data: {
+        order_code: orderCode,
         user_id: userId,
         total_amount: parseInt(total_amount),
         customer_name,
