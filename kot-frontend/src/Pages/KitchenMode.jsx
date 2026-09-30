@@ -2,22 +2,25 @@ import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ChefHat,
+  Coffee,
   Clock,
   CheckCircle,
-  Package,
-  Play,
-  Pause,
-  AlertCircle
+  Play
 } from "lucide-react";
 import { Button } from "../Components/ui/button";
 import { Badge } from "../Components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "../Components/ui/card";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
-import { formatCustomization } from "../utils/customization";
 import api from "../services/api.service";
 
-export default function KitchenMode() {
+const STATION_LABELS = {
+  bar: 'Bar',
+  cuisine_chaude: 'Cuisine chaude',
+  cuisine_froide: 'Cuisine froide'
+};
+
+export default function KitchenMode({ station = 'cuisine_chaude' }) {
   const [orders, setOrders] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [updatingOrder, setUpdatingOrder] = useState(null);
@@ -27,11 +30,11 @@ export default function KitchenMode() {
     // Auto-refresh every 30 seconds
     const interval = setInterval(loadOrders, 30000);
     return () => clearInterval(interval);
-  }, []);
+  }, [station]);
 
   const loadOrders = async () => {
     try {
-      const response = await api.get('/kitchen/orders');
+      const response = await api.get('/kitchen/orders', { params: { station } });
       setOrders(response.data);
     } catch (error) {
       console.error('Error loading kitchen orders:', error);
@@ -40,13 +43,13 @@ export default function KitchenMode() {
     }
   };
 
-  const updateOrderStatus = async (orderId, newStatus) => {
-    setUpdatingOrder(orderId);
+  const updateItemStatus = async (orderId, itemId, newStatus) => {
+    setUpdatingOrder(itemId);
     try {
-      await api.put(`/kitchen/orders/${orderId}/status`, { status: newStatus });
-      await loadOrders(); // Refresh orders
+      await api.put(`/kitchen/orders/${orderId}/items/${itemId}/status`, { status: newStatus });
+      await loadOrders();
     } catch (error) {
-      console.error('Error updating order status:', error);
+      console.error('Error updating preparation item:', error);
     } finally {
       setUpdatingOrder(null);
     }
@@ -61,15 +64,6 @@ export default function KitchenMode() {
     }
   };
 
-  const getStatusIcon = (status) => {
-    switch (status) {
-      case 'en_attente': return <Clock className="w-4 h-4" />;
-      case 'en_preparation': return <Play className="w-4 h-4" />;
-      case 'prete': return <CheckCircle className="w-4 h-4" />;
-      default: return <AlertCircle className="w-4 h-4" />;
-    }
-  };
-
   const getStatusText = (status) => {
     switch (status) {
       case 'en_attente': return 'En attente';
@@ -79,25 +73,10 @@ export default function KitchenMode() {
     }
   };
 
-  const getNextStatus = (currentStatus) => {
-    switch (currentStatus) {
-      case 'en_attente': return 'en_preparation';
-      case 'en_preparation': return 'prete';
-      default: return null;
-    }
-  };
-
-  const getNextStatusText = (currentStatus) => {
-    switch (currentStatus) {
-      case 'en_attente': return 'Commencer';
-      case 'en_preparation': return 'Marquer prête';
-      default: return null;
-    }
-  };
-
-  const pendingOrders = orders.filter(o => o.status === 'en_attente');
-  const preparingOrders = orders.filter(o => o.status === 'en_preparation');
-  const readyOrders = orders.filter(o => o.status === 'prete');
+  const stationItems = orders.flatMap(order => order.items.map(item => ({ ...item, order })));
+  const pendingCount = stationItems.filter(item => item.preparation_status === 'en_attente').length;
+  const preparingCount = stationItems.filter(item => item.preparation_status === 'en_preparation').length;
+  const readyCount = stationItems.filter(item => item.preparation_status === 'prete').length;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 to-red-50 p-4 md:p-6">
@@ -107,13 +86,13 @@ export default function KitchenMode() {
         className="mb-8"
       >
         <div className="flex items-center gap-3 mb-2">
-          <ChefHat className="w-8 h-8 text-orange-600" />
+          {station === 'bar' ? <Coffee className="w-8 h-8 text-orange-600" /> : <ChefHat className="w-8 h-8 text-orange-600" />}
           <h1 className="text-3xl md:text-4xl font-bold text-gray-900">
-            Mode Cuisine
+            {STATION_LABELS[station]}
           </h1>
         </div>
         <p className="text-gray-600">
-          Gérez efficacement les commandes en cuisine
+          Traitez les articles attribués à ce poste. Une commande passe à « prête » lorsque tous ses articles sont terminés.
         </p>
       </motion.div>
 
@@ -123,8 +102,8 @@ export default function KitchenMode() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-yellow-800">En attente</p>
-                <p className="text-2xl font-bold text-yellow-900">{pendingOrders.length}</p>
+                <p className="text-sm font-medium text-yellow-800">Articles en attente</p>
+                <p className="text-2xl font-bold text-yellow-900">{pendingCount}</p>
               </div>
               <Clock className="w-8 h-8 text-yellow-600" />
             </div>
@@ -135,8 +114,8 @@ export default function KitchenMode() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-blue-800">En préparation</p>
-                <p className="text-2xl font-bold text-blue-900">{preparingOrders.length}</p>
+                <p className="text-sm font-medium text-blue-800">Articles en préparation</p>
+                <p className="text-2xl font-bold text-blue-900">{preparingCount}</p>
               </div>
               <Play className="w-8 h-8 text-blue-600" />
             </div>
@@ -147,8 +126,8 @@ export default function KitchenMode() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-green-800">Prêtes</p>
-                <p className="text-2xl font-bold text-green-900">{readyOrders.length}</p>
+                <p className="text-sm font-medium text-green-800">Articles prêts</p>
+                <p className="text-2xl font-bold text-green-900">{readyCount}</p>
               </div>
               <CheckCircle className="w-8 h-8 text-green-600" />
             </div>
@@ -156,91 +135,36 @@ export default function KitchenMode() {
         </Card>
       </div>
 
-      {/* Orders Sections */}
-      <div className="space-y-8">
-        {/* En Attente */}
-        <div>
-          <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
-            <Clock className="w-5 h-5 text-yellow-600" />
-            En Attente ({pendingOrders.length})
-          </h2>
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <AnimatePresence>
-              {pendingOrders.map((order) => (
-                <OrderCard
-                  key={order.id}
-                  order={order}
-                  onUpdateStatus={updateOrderStatus}
-                  updatingOrder={updatingOrder}
-                  getNextStatus={getNextStatus}
-                  getNextStatusText={getNextStatusText}
-                  getStatusColor={getStatusColor}
-                  getStatusIcon={getStatusIcon}
-                  getStatusText={getStatusText}
-                />
-              ))}
-            </AnimatePresence>
-          </div>
+      <section>
+        <h2 className="text-xl font-semibold text-gray-900 mb-4">
+          Commandes avec des articles pour {STATION_LABELS[station]} ({orders.length})
+        </h2>
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <AnimatePresence>
+            {orders.map(order => (
+              <OrderCard
+                key={order.id}
+                order={order}
+                updatingOrder={updatingOrder}
+                onUpdateItemStatus={updateItemStatus}
+                getStatusColor={getStatusColor}
+                getStatusText={getStatusText}
+              />
+            ))}
+          </AnimatePresence>
         </div>
-
-        {/* En Préparation */}
-        <div>
-          <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
-            <Play className="w-5 h-5 text-blue-600" />
-            En Préparation ({preparingOrders.length})
-          </h2>
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <AnimatePresence>
-              {preparingOrders.map((order) => (
-                <OrderCard
-                  key={order.id}
-                  order={order}
-                  onUpdateStatus={updateOrderStatus}
-                  updatingOrder={updatingOrder}
-                  getNextStatus={getNextStatus}
-                  getNextStatusText={getNextStatusText}
-                  getStatusColor={getStatusColor}
-                  getStatusIcon={getStatusIcon}
-                  getStatusText={getStatusText}
-                />
-              ))}
-            </AnimatePresence>
+        {!isLoading && orders.length === 0 && (
+          <div className="rounded-xl border border-dashed bg-white p-10 text-center text-gray-500">
+            Aucune commande à traiter sur ce poste.
           </div>
-        </div>
-
-        {/* Prêtes */}
-        <div>
-          <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
-            <CheckCircle className="w-5 h-5 text-green-600" />
-            Prêtes ({readyOrders.length})
-          </h2>
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <AnimatePresence>
-              {readyOrders.map((order) => (
-                <OrderCard
-                  key={order.id}
-                  order={order}
-                  onUpdateStatus={updateOrderStatus}
-                  updatingOrder={updatingOrder}
-                  getNextStatus={getNextStatus}
-                  getNextStatusText={getNextStatusText}
-                  getStatusColor={getStatusColor}
-                  getStatusIcon={getStatusIcon}
-                  getStatusText={getStatusText}
-                />
-              ))}
-            </AnimatePresence>
-          </div>
-        </div>
-      </div>
+        )}
+      </section>
     </div>
   );
 }
 
 // Order Card Component
-function OrderCard({ order, onUpdateStatus, updatingOrder, getNextStatus, getNextStatusText, getStatusColor, getStatusIcon, getStatusText }) {
-  const nextStatus = getNextStatus(order.status);
-
+function OrderCard({ order, onUpdateItemStatus, updatingOrder, getStatusColor, getStatusText }) {
   return (
     <motion.div
       layout
@@ -252,11 +176,10 @@ function OrderCard({ order, onUpdateStatus, updatingOrder, getNextStatus, getNex
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg font-semibold text-gray-900">
-            #{order.id.slice(-6)}
+            #{order.order_code || order.id.slice(-6)}
           </CardTitle>
           <Badge className={`${getStatusColor(order.status)} border`}>
-            {getStatusIcon(order.status)}
-            <span className="ml-1">{getStatusText(order.status)}</span>
+            {getStatusText(order.status)}
           </Badge>
         </div>
         <p className="text-sm text-gray-600">
@@ -268,24 +191,37 @@ function OrderCard({ order, onUpdateStatus, updatingOrder, getNextStatus, getNex
         <div>
           <p className="font-medium text-gray-900">{order.customer_name}</p>
           <p className="text-sm text-gray-600">{order.customer_phone}</p>
+          {order.table_number && <p className="text-sm text-gray-600">Table {order.table_number}</p>}
+          {order.service_location && <p className="text-sm text-gray-600">Lieu : {{ salon_principal: 'Salon principal', terrasse: 'Terrasse', vip: 'Espace VIP', bar: 'Bar' }[order.service_location]}</p>}
         </div>
 
         <div className="space-y-2">
           <p className="text-sm font-medium text-gray-700">Articles:</p>
-          {order.items.map((item, index) => (
-            <div key={index} className="text-sm">
-              <div className="flex justify-between">
-                <span className="text-gray-700">
-                  {item.quantity}x {item.product_name}
-                </span>
+          {order.items.map((item) => {
+            const nextStatus = item.preparation_status === 'en_attente'
+              ? 'en_preparation'
+              : item.preparation_status === 'en_preparation' ? 'prete' : null;
+            const buttonLabel = item.preparation_status === 'en_attente' ? 'Commencer' : 'Marquer prêt';
+            return <div key={item.id} className="rounded-lg border p-3 text-sm">
+              <div className="flex items-start justify-between gap-2">
+                <span className="text-gray-700">{item.quantity}x {item.product_name}</span>
+                <Badge className={`${getStatusColor(item.preparation_status)} border`}>{getStatusText(item.preparation_status)}</Badge>
               </div>
               {item.customizationSummary && (
                 <div className="text-xs text-gray-500 mt-1 ml-4">
                   {item.customizationSummary}
                 </div>
               )}
-            </div>
-          ))}
+              {nextStatus && <Button
+                size="sm"
+                className="mt-2 w-full bg-gradient-to-r from-orange-500 to-red-500 text-white"
+                disabled={updatingOrder === item.id}
+                onClick={() => onUpdateItemStatus(order.id, item.id, nextStatus)}
+              >
+                {updatingOrder === item.id ? 'Mise à jour...' : buttonLabel}
+              </Button>}
+            </div>;
+          })}
         </div>
 
         {order.notes && (
@@ -293,23 +229,6 @@ function OrderCard({ order, onUpdateStatus, updatingOrder, getNextStatus, getNex
             <p className="text-sm font-medium text-yellow-800 mb-1">Notes:</p>
             <p className="text-sm text-yellow-700">{order.notes}</p>
           </div>
-        )}
-
-        {nextStatus && (
-          <Button
-            onClick={() => onUpdateStatus(order.id, nextStatus)}
-            disabled={updatingOrder === order.id}
-            className="w-full bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white"
-          >
-            {updatingOrder === order.id ? (
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                Mise à jour...
-              </div>
-            ) : (
-              getNextStatusText(order.status)
-            )}
-          </Button>
         )}
       </CardContent>
     </motion.div>

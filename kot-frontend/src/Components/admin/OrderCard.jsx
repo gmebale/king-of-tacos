@@ -102,6 +102,7 @@ export default function OrderCard({ order, onUpdateStatus }) {
                 {order.order_type === "livraison" && "Livraison"} {/* Updated for delivery type */}
               </Badge>
             </div>
+            {order.service_location && <p className="text-sm text-gray-600">Lieu : {{ salon_principal: "Salon principal", terrasse: "Terrasse", vip: "Espace VIP", bar: "Bar" }[order.service_location]}</p>}
 
             <div className="rounded-lg bg-gray-50 p-3 text-sm text-gray-700 space-y-1">
               <p>Moyen de paiement : {order.payment_method || "Non renseigné"}</p>
@@ -146,6 +147,9 @@ export default function OrderCard({ order, onUpdateStatus }) {
                       {item.customizationSummary}
                     </div>
                   )}
+                  {item.preparation_station && <div className="text-xs text-gray-500 mt-1 ml-4">
+                    Poste : {{ bar: "Bar", cuisine_chaude: "Cuisine chaude", cuisine_froide: "Cuisine froide" }[item.preparation_station]} · {item.preparation_status === "prete" ? "Prêt" : item.preparation_status === "en_preparation" ? "En préparation" : "En attente"}
+                  </div>}
                 </div>
               ))}
             </div>

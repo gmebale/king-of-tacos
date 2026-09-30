@@ -43,6 +43,9 @@ function App() {
           <Route path="/admin/orders" element={<ProtectedRoute requiredPermission="orders"><Layout currentPageName="AdminOrders"><AdminOrders /></Layout></ProtectedRoute>} />
           <Route path="/admin/new-order" element={<ProtectedRoute requiredRoles={['serveur']}><Layout currentPageName="NewRestaurantOrder"><StaffOrderStart /></Layout></ProtectedRoute>} />
           <Route path="/admin/kitchen" element={<ProtectedRoute requiredPermission="kitchen"><Layout currentPageName="KitchenMode"><KitchenMode /></Layout></ProtectedRoute>} />
+          <Route path="/admin/kitchen-hot" element={<ProtectedRoute requiredPermissions={['kitchen_hot', 'kitchen']}><Layout currentPageName="KitchenHotMode"><KitchenMode station="cuisine_chaude" /></Layout></ProtectedRoute>} />
+          <Route path="/admin/kitchen-cold" element={<ProtectedRoute requiredPermissions={['kitchen_cold', 'kitchen']}><Layout currentPageName="KitchenColdMode"><KitchenMode station="cuisine_froide" /></Layout></ProtectedRoute>} />
+          <Route path="/admin/bar" element={<ProtectedRoute requiredRoles={['admin', 'bar']}><Layout currentPageName="BarMode"><KitchenMode station="bar" /></Layout></ProtectedRoute>} />
           <Route path="/admin/cashier" element={<ProtectedRoute requiredPermission="cashier"><Layout currentPageName="CashierMode"><CashierMode /></Layout></ProtectedRoute>} />
           <Route path="/admin/finance" element={<ProtectedRoute requiredPermission="finance"><Layout currentPageName="AdminFinance"><AdminFinance /></Layout></ProtectedRoute>} />
           <Route path="/admin/mobile-money" element={<ProtectedRoute requiredPermission="cashier"><Layout currentPageName="AdminMobileMoney"><AdminMobileMoney /></Layout></ProtectedRoute>} />

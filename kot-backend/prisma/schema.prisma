@@ -96,6 +96,25 @@ enum PaymentStatus {
   refunded
 }
 
+enum ServiceLocation {
+  salon_principal
+  terrasse
+  vip
+  bar
+}
+
+enum PreparationStation {
+  cuisine_chaude
+  cuisine_froide
+  bar
+}
+
+enum PreparationStatus {
+  en_attente
+  en_preparation
+  prete
+}
+
 enum Category {
   tacos
   burritos
@@ -188,6 +207,7 @@ model Order {
   customer_phone   String?
   customer_email   String?
   order_type       String? // emporter, sur_place, livraison
+  service_location ServiceLocation?
   table_number     String?
   delivery_address String?
   pickup_time      String?
@@ -226,6 +246,8 @@ model OrderItem {
   price                Int // Prix unitaire en centimes
   customization        Json? // Détails de personnalisation du produit
   customizationSummary String? // Résumé textuel des personnalisations
+  preparation_station PreparationStation?
+  preparation_status PreparationStatus @default(en_attente)
 
   @@map("order_items")
 }

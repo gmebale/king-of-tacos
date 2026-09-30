@@ -9,6 +9,7 @@ import {
   User as UserIcon,
   LayoutDashboard,
   ChefHat,
+  Coffee,
   Package,
   PackageCheck,
   Receipt,
@@ -68,7 +69,9 @@ export default function Layout({ children, currentPageName }) {
     { name: "Dashboard", path: "AdminDashboard", permission: "dashboard", icon: LayoutDashboard },
     { name: "Prendre une commande", path: "NewRestaurantOrder", permission: "orders", serverOnly: true, icon: ShoppingCart },
     { name: "Commandes", path: "AdminOrders", permission: "orders", icon: ShoppingCart },
-    { name: "Cuisine", path: "KitchenMode", permission: "kitchen", icon: ChefHat },
+    { name: "Cuisine chaude", path: "KitchenHotMode", station: "cuisine_chaude", icon: ChefHat },
+    { name: "Cuisine froide", path: "KitchenColdMode", station: "cuisine_froide", icon: ChefHat },
+    { name: "Bar", path: "BarMode", station: "bar", icon: Coffee },
     { name: "Caissier", path: "CashierMode", permission: "cashier", icon: Receipt },
     { name: "Finances", path: "AdminFinance", permission: "finance", icon: TrendingUp },
     { name: "Mobile Money", path: "AdminMobileMoney", permission: "cashier", icon: Smartphone },
@@ -78,6 +81,13 @@ export default function Layout({ children, currentPageName }) {
     { name: "Avis", path: "AdminReviews", permission: "reviews", icon: MessageSquare },
     { name: "Paramètres", path: "AdminSettings", permission: "settings", icon: Settings }
   ];
+
+  const canAccessAdminNavItem = (item) => {
+    if (!item.station) return hasPagePermission(item.permission);
+    if (item.station === "bar") return user?.role === "admin" || user?.role === "bar";
+    const permission = item.station === "cuisine_chaude" ? "kitchen_hot" : "kitchen_cold";
+    return hasPagePermission(permission) || hasPagePermission("kitchen");
+  };
 
   if (isAdminPage) {
     return (
@@ -105,7 +115,7 @@ export default function Layout({ children, currentPageName }) {
           </div>
 
           <nav className="flex-1 overflow-y-auto p-4 space-y-1">
-            {adminNavItems.filter((item) => (item.serverOnly ? user?.role === "serveur" : hasPagePermission(item.permission)) && (item.path !== "AdminStaff" || user?.role === "admin")).map((item) => {
+            {adminNavItems.filter((item) => (item.serverOnly ? user?.role === "serveur" : canAccessAdminNavItem(item)) && (item.path !== "AdminStaff" || user?.role === "admin")).map((item) => {
               const isActive = location.pathname === createPageUrl(item.path);
               return (
                 <Link

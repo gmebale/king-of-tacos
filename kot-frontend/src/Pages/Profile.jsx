@@ -176,11 +176,11 @@ export default function Profile() {
               )}
 
               <div className="mt-6 pt-6 border-t space-y-3">
-                {(user?.role === "admin" || ["dashboard", "orders", "kitchen", "cashier", "finance", "stock", "loyalty", "settings", "reviews"].some((key) => user?.pagePermissions?.[key] === true)) && (
+                {(user?.role === "admin" || user?.role === "bar" || user?.role === "serveur" || ["dashboard", "orders", "kitchen", "kitchen_hot", "kitchen_cold", "cashier", "finance", "stock", "loyalty", "settings", "reviews"].some((key) => user?.pagePermissions?.[key] === true)) && (
                   <Button
                     onClick={() => {
-                      const entries = { dashboard: "AdminDashboard", orders: "AdminOrders", kitchen: "KitchenMode", cashier: "CashierMode", finance: "AdminFinance", stock: "AdminStock", staff: "AdminStaff", loyalty: "AdminLoyalty", settings: "AdminSettings", reviews: "AdminReviews" };
-                      const page = user?.role === "admin" ? "AdminDashboard" : entries[Object.keys(entries).find((key) => user?.pagePermissions?.[key])];
+                      const entries = { dashboard: "AdminDashboard", orders: "AdminOrders", kitchen: "KitchenMode", kitchen_hot: "KitchenHotMode", kitchen_cold: "KitchenColdMode", cashier: "CashierMode", finance: "AdminFinance", stock: "AdminStock", staff: "AdminStaff", loyalty: "AdminLoyalty", settings: "AdminSettings", reviews: "AdminReviews" };
+                      const page = user?.role === "admin" ? "AdminDashboard" : user?.role === "bar" ? "BarMode" : user?.role === "serveur" && !Object.keys(entries).some((key) => user?.pagePermissions?.[key]) ? "NewRestaurantOrder" : entries[Object.keys(entries).find((key) => user?.pagePermissions?.[key])];
                       if (page) navigate(createPageUrl(page));
                     }}
                     variant="outline"

@@ -3,7 +3,7 @@ import { Navigate } from 'react-router-dom';
 import { useAuthContext } from '../../contexts/AuthContext';
 import { createPageUrl } from '../../utils';
 
-const ProtectedRoute = ({ children, requiredPermission, requiredRoles }) => {
+const ProtectedRoute = ({ children, requiredPermission, requiredPermissions, requiredRoles }) => {
   const { user, isLoading } = useAuthContext();
 
   if (isLoading) {
@@ -23,7 +23,8 @@ const ProtectedRoute = ({ children, requiredPermission, requiredRoles }) => {
   }
 
   const permissions = user.pagePermissions || {};
-  if (requiredPermission && user.role !== 'admin' && permissions[requiredPermission] !== true) {
+  const permissionKeys = requiredPermissions || (requiredPermission ? [requiredPermission] : []);
+  if (permissionKeys.length && user.role !== 'admin' && !permissionKeys.some(key => permissions[key] === true)) {
     return <Navigate to={createPageUrl('Home')} replace />;
   }
 

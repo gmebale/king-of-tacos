@@ -7,6 +7,12 @@ const { format } = require('date-fns');
 
 const router = express.Router();
 const prisma = new PrismaClient();
+const SERVICE_LOCATION_LABELS = {
+  salon_principal: 'Salon principal',
+  terrasse: 'Terrasse',
+  vip: 'Espace VIP',
+  bar: 'Bar'
+};
 
 // Utility function to format customization details
 function formatCustomization(customization, productCustomization) {
@@ -346,6 +352,7 @@ async function buildSalesReport(period) {
       order_code: order.order_code,
       status: order.status,
       order_type: order.order_type,
+      service_location: order.service_location,
       total_amount: order.total_amount,
       payment_method: order.payment_method,
       payment_status: order.payment_status,
@@ -631,7 +638,7 @@ router.get('/invoice/:orderId', authenticateToken, requirePagePermission('cashie
     doc.fontSize(12);
     doc.text(`Numéro de commande: ${displayCode}`);
     doc.text(`Date: ${new Date(order.created_date).toLocaleDateString('fr-FR')}`);
-    doc.text(`Type: ${order.order_type || '—'}${order.table_number ? ` · Table ${order.table_number}` : ''}`);
+    doc.text(`Type: ${order.order_type || '—'}${order.service_location ? ` · Lieu : ${SERVICE_LOCATION_LABELS[order.service_location] || order.service_location}` : ''}${order.table_number ? ` · Table ${order.table_number}` : ''}`);
     doc.text(`Moyen de paiement: ${order.payment_method || 'Non renseigné'} · Paiement: ${order.payment_status}`);
     doc.text(`Validé par: ${order.validatedBy?.full_name || 'Client en ligne'}`);
     doc.text(`Clôturé par: ${order.closedBy?.full_name || 'Non clôturée'}`);
@@ -831,7 +838,7 @@ router.get('/reports/:period/pdf', authenticateToken, requirePagePermission('cas
       report.orders.forEach(order => {
         const code = order.order_code || order.id.slice(-8);
         doc.fontSize(9).fillColor(palette.text)
-          .text(`Commande #${code} — ${order.order_type || '—'} — ${order.status} — ${formatAmount(order.total_amount)}`);
+          .text(`Commande #${code} — ${order.order_type || '—'}${order.service_location ? ` · ${SERVICE_LOCATION_LABELS[order.service_location] || order.service_location}` : ''} — ${order.status} — ${formatAmount(order.total_amount)}`);
         doc.fontSize(8).fillColor(palette.muted)
           .text(`Paiement : ${order.payment_method || '—'} (${order.payment_status}) | Validé par : ${order.validated_by || 'Client en ligne'} | Clôturé par : ${order.closed_by || '—'}`);
         doc.moveDown(0.4);
@@ -1109,6 +1116,7 @@ router.get('/session/close-report', authenticateToken, requirePagePermission('ca
         `${index + 1}. Commande #${displayCode} - ${(order.total_amount / 100).toFixed(2)} FCFA - ${order.payment_method || 'cash'}`
       );
       doc.fontSize(8).text(`Validé par : ${order.validatedBy?.full_name || 'Client en ligne'} | Clôturé par : ${order.closedBy?.full_name || 'Non clôturée'}`);
+      if (order.service_location) doc.fontSize(8).text(`Lieu : ${SERVICE_LOCATION_LABELS[order.service_location] || order.service_location}${order.table_number ? ` · Table ${order.table_number}` : ''}`);
       order.items.forEach(item => {
         doc.text(`   - ${item.quantity}x ${item.product_name}`, { indent: 20 });
       });

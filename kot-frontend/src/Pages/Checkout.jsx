@@ -24,6 +24,7 @@ export default function Checkout() {
     customer_phone: "",
     customer_email: "",
     order_type: "emporter",
+    service_location: "",
     delivery_address: "",
     pickup_time: "",
     table_number: "",
@@ -206,9 +207,21 @@ export default function Checkout() {
                   </RadioGroup>
 
                   {isStaffOrder && formData.order_type === 'sur_place' && (
-                    <div className="mt-4">
-                      <Label htmlFor="table-number">Numéro de table *</Label>
-                      <Input id="table-number" required value={formData.table_number} onChange={(e) => setFormData({ ...formData, table_number: e.target.value })} />
+                    <div className="mt-4 space-y-4">
+                      <div>
+                        <Label htmlFor="service-location">Lieu *</Label>
+                        <select id="service-location" required value={formData.service_location} onChange={(e) => setFormData({ ...formData, service_location: e.target.value })} className="mt-1 h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
+                          <option value="">Choisir un lieu</option>
+                          <option value="salon_principal">Salon principal</option>
+                          <option value="terrasse">Terrasse</option>
+                          <option value="vip">Espace VIP</option>
+                          <option value="bar">Bar</option>
+                        </select>
+                      </div>
+                      <div>
+                        <Label htmlFor="table-number">Numéro de table *</Label>
+                        <Input id="table-number" required value={formData.table_number} onChange={(e) => setFormData({ ...formData, table_number: e.target.value })} />
+                      </div>
                     </div>
                   )}
 

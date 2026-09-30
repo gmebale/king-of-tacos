@@ -4,25 +4,50 @@ const { authenticateToken, requirePagePermission } = require('../middleware/auth
 
 const router = express.Router();
 const prisma = new PrismaClient();
+const SERVICE_LOCATIONS = ['salon_principal', 'terrasse', 'vip', 'bar'];
+
+function getFinanceFilters(query) {
+  const where = {};
+  if (query.start_date || query.end_date) {
+    where.created_date = {};
+    if (query.start_date) where.created_date.gte = new Date(`${query.start_date}T00:00:00.000Z`);
+    if (query.end_date) {
+      const endExclusive = new Date(`${query.end_date}T00:00:00.000Z`);
+      endExclusive.setUTCDate(endExclusive.getUTCDate() + 1);
+      where.created_date.lt = endExclusive;
+    }
+  }
+  if (query.service_location && SERVICE_LOCATIONS.includes(query.service_location)) {
+    where.service_location = query.service_location;
+  }
+  if (query.server_id && Number.isInteger(Number(query.server_id))) {
+    where.validated_by = Number(query.server_id);
+  }
+  return where;
+}
+
+function isLostOrder(order) {
+  return order.status === 'annulee' || order.payment_status === 'refunded';
+}
+
+function getNonLostOrderFilter(filters) {
+  return {
+    ...filters,
+    status: { not: 'annulee' },
+    payment_status: { not: 'refunded' }
+  };
+}
 
 // Get revenue data aggregated by date (admin only)
 router.get('/revenue', authenticateToken, requirePagePermission('finance', 'dashboard'), async (req, res) => {
   try {
-    const { start_date, end_date } = req.query;
-
-    let whereClause = {};
-    if (start_date || end_date) {
-      whereClause.created_date = {};
-      if (start_date) whereClause.created_date.gte = new Date(start_date);
-      if (end_date) whereClause.created_date.lte = new Date(end_date);
-    }
-
     const orders = await prisma.order.findMany({
-      where: whereClause,
+      where: getFinanceFilters(req.query),
       select: {
         created_date: true,
         total_amount: true,
-        status: true
+        status: true,
+        payment_status: true
       }
     });
 
@@ -34,7 +59,7 @@ router.get('/revenue', authenticateToken, requirePagePermission('finance', 'dash
         revenueByDate[date] = { actual: 0, lost: 0 };
       }
 
-      if (order.status === 'annulee') {
+      if (isLostOrder(order)) {
         revenueByDate[date].lost += order.total_amount;
       } else {
         revenueByDate[date].actual += order.total_amount;
@@ -59,14 +84,8 @@ router.get('/revenue', authenticateToken, requirePagePermission('finance', 'dash
 // Get top-selling products (admin only)
 router.get('/top-products', authenticateToken, requirePagePermission('finance', 'dashboard'), async (req, res) => {
   try {
-    const { start_date, end_date, limit = 10 } = req.query;
-
-    let whereClause = {};
-    if (start_date || end_date) {
-      whereClause.created_date = {};
-      if (start_date) whereClause.created_date.gte = new Date(start_date);
-      if (end_date) whereClause.created_date.lte = new Date(end_date);
-    }
+    const { limit = 10 } = req.query;
+    const whereClause = getNonLostOrderFilter(getFinanceFilters(req.query));
 
     // Get all order items with order info
     const orderItems = await prisma.orderItem.findMany({
@@ -75,7 +94,7 @@ router.get('/top-products', authenticateToken, requirePagePermission('finance', 
       },
       include: {
         order: {
-          select: { status: true }
+          select: { status: true, payment_status: true }
         }
       }
     });
@@ -89,7 +108,7 @@ router.get('/top-products', authenticateToken, requirePagePermission('finance', 
       }
 
       // Only count non-canceled orders
-      if (item.order.status !== 'annulee') {
+      if (!isLostOrder(item.order)) {
         productStats[productName].quantity += item.quantity;
 
         // Get product price to calculate revenue
@@ -124,14 +143,8 @@ router.get('/top-products', authenticateToken, requirePagePermission('finance', 
 // Get top customers (admin only)
 router.get('/top-customers', authenticateToken, requirePagePermission('finance', 'dashboard'), async (req, res) => {
   try {
-    const { start_date, end_date, limit = 10 } = req.query;
-
-    let whereClause = { user_id: { not: null } }; // Only authenticated orders
-    if (start_date || end_date) {
-      whereClause.created_date = {};
-      if (start_date) whereClause.created_date.gte = new Date(start_date);
-      if (end_date) whereClause.created_date.lte = new Date(end_date);
-    }
+    const { limit = 10 } = req.query;
+    const whereClause = { ...getNonLostOrderFilter(getFinanceFilters(req.query)), user_id: { not: null } };
 
     const orders = await prisma.order.findMany({
       where: whereClause,
@@ -159,10 +172,8 @@ router.get('/top-customers', authenticateToken, requirePagePermission('finance',
         };
       }
 
-      if (order.status !== 'annulee') {
-        customerStats[userId].totalSpent += order.total_amount;
-        customerStats[userId].orderCount += 1;
-      }
+      customerStats[userId].totalSpent += order.total_amount;
+      customerStats[userId].orderCount += 1;
     });
 
     // Convert to array and sort by total spent
@@ -173,6 +184,87 @@ router.get('/top-customers', authenticateToken, requirePagePermission('finance',
     res.json(result);
   } catch (error) {
     console.error('Get top customers error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+router.get('/filter-options', authenticateToken, requirePagePermission('finance', 'dashboard'), async (_req, res) => {
+  try {
+    const servers = await prisma.user.findMany({
+      where: { role: 'serveur' },
+      select: { id: true, full_name: true },
+      orderBy: { full_name: 'asc' }
+    });
+    res.json({
+      servers,
+      locations: [
+        { value: 'salon_principal', label: 'Salon principal' },
+        { value: 'terrasse', label: 'Terrasse' },
+        { value: 'vip', label: 'Espace VIP' },
+        { value: 'bar', label: 'Bar' }
+      ]
+    });
+  } catch (error) {
+    console.error('Get finance filter options error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+router.get('/top-locations', authenticateToken, requirePagePermission('finance', 'dashboard'), async (req, res) => {
+  try {
+    const orders = await prisma.order.findMany({
+      where: { ...getFinanceFilters(req.query), order_type: 'sur_place' },
+      select: { service_location: true, total_amount: true, status: true, payment_status: true }
+    });
+    const locationStats = {};
+    for (const order of orders) {
+      const key = order.service_location || 'non_renseigne';
+      if (!locationStats[key]) locationStats[key] = { location: key, revenue: 0, orders: 0, lostRevenue: 0, lostOrders: 0 };
+      if (isLostOrder(order)) {
+        locationStats[key].lostRevenue += order.total_amount;
+        locationStats[key].lostOrders += 1;
+      } else {
+        locationStats[key].revenue += order.total_amount;
+        locationStats[key].orders += 1;
+      }
+    }
+    res.json(Object.values(locationStats).sort((a, b) => b.revenue - a.revenue));
+  } catch (error) {
+    console.error('Get top locations error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+router.get('/top-servers', authenticateToken, requirePagePermission('finance', 'dashboard'), async (req, res) => {
+  try {
+    const where = getFinanceFilters(req.query);
+    if (!where.validated_by) where.validated_by = { not: null };
+    const orders = await prisma.order.findMany({
+      where,
+      select: {
+        validated_by: true,
+        total_amount: true,
+        status: true,
+        payment_status: true,
+        validatedBy: { select: { full_name: true, role: true } }
+      }
+    });
+    const serverStats = {};
+    for (const order of orders) {
+      if (order.validatedBy?.role !== 'serveur') continue;
+      const id = order.validated_by;
+      if (!serverStats[id]) serverStats[id] = { id, name: order.validatedBy?.full_name || 'Serveur', revenue: 0, orders: 0, lostRevenue: 0, lostOrders: 0 };
+      if (isLostOrder(order)) {
+        serverStats[id].lostRevenue += order.total_amount;
+        serverStats[id].lostOrders += 1;
+      } else {
+        serverStats[id].revenue += order.total_amount;
+        serverStats[id].orders += 1;
+      }
+    }
+    res.json(Object.values(serverStats).sort((a, b) => b.revenue - a.revenue));
+  } catch (error) {
+    console.error('Get top servers error:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 });

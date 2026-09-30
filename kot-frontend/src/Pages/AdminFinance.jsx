@@ -30,40 +30,68 @@ import { Input } from "../Components/ui/input";
 import { Label } from "../Components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../Components/ui/table";
 import { Badge } from "../Components/ui/badge";
+import { MapPin } from "lucide-react";
+
+function formatDateInput(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
 
 export default function AdminFinance() {
   const [revenueData, setRevenueData] = useState([]);
   const [topProducts, setTopProducts] = useState([]);
   const [topCustomers, setTopCustomers] = useState([]);
+  const [topLocations, setTopLocations] = useState([]);
+  const [topServers, setTopServers] = useState([]);
+  const [filterOptions, setFilterOptions] = useState({ locations: [], servers: [] });
+  const [selectedLocation, setSelectedLocation] = useState("all");
+  const [selectedServer, setSelectedServer] = useState("all");
   const [isLoading, setIsLoading] = useState(true);
   const [startDate, setStartDate] = useState(() => {
     const now = new Date();
-    return new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+    return formatDateInput(new Date(now.getFullYear(), now.getMonth(), 1));
   });
-  const [endDate, setEndDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [endDate, setEndDate] = useState(() => formatDateInput(new Date()));
+
+  useEffect(() => {
+    api.get('/finance/filter-options')
+      .then(response => setFilterOptions(response.data || { locations: [], servers: [] }))
+      .catch(error => console.error('Error loading finance filter options:', error));
+  }, []);
 
   useEffect(() => {
     loadFinanceData();
-  }, [startDate, endDate]);
+  }, [startDate, endDate, selectedLocation, selectedServer]);
 
   useEffect(() => {
     const interval = setInterval(loadFinanceData, 30000); // Poll every 30 seconds
     return () => clearInterval(interval);
-  }, [startDate, endDate]);
+  }, [startDate, endDate, selectedLocation, selectedServer]);
 
   const loadFinanceData = async () => {
     setIsLoading(true);
     try {
-      const params = { start_date: startDate, end_date: endDate };
-      const [revenueRes, productsRes, customersRes] = await Promise.all([
+      const params = {
+        start_date: startDate,
+        end_date: endDate,
+        ...(selectedLocation !== 'all' ? { service_location: selectedLocation } : {}),
+        ...(selectedServer !== 'all' ? { server_id: selectedServer } : {})
+      };
+      const [revenueRes, productsRes, customersRes, locationsRes, serversRes] = await Promise.all([
         api.get('/finance/revenue', { params }),
         api.get('/finance/top-products', { params }),
-        api.get('/finance/top-customers', { params })
+        api.get('/finance/top-customers', { params }),
+        api.get('/finance/top-locations', { params }),
+        api.get('/finance/top-servers', { params })
       ]);
 
       setRevenueData(revenueRes.data || []);
       setTopProducts(productsRes.data || []);
       setTopCustomers(customersRes.data || []);
+      setTopLocations(locationsRes.data || []);
+      setTopServers(serversRes.data || []);
     } catch (error) {
       console.error('Error loading finance data:', error);
     }
@@ -100,10 +128,10 @@ export default function AdminFinance() {
           </Button>
         </div>
 
-        {/* Date Filters */}
+      {/* Combined filters */}
         <Card className="mb-6">
           <CardContent className="pt-6">
-            <div className="grid md:grid-cols-2 gap-4">
+            <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-4">
               <div>
                 <Label htmlFor="start-date">Date de début</Label>
                 <Input
@@ -121,6 +149,20 @@ export default function AdminFinance() {
                   value={endDate}
                   onChange={(e) => setEndDate(e.target.value)}
                 />
+              </div>
+              <div>
+                <Label htmlFor="location-filter">Lieu</Label>
+                <select id="location-filter" value={selectedLocation} onChange={event => setSelectedLocation(event.target.value)} className="mt-1 h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
+                  <option value="all">Tous les lieux</option>
+                  {filterOptions.locations.map(location => <option key={location.value} value={location.value}>{location.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <Label htmlFor="server-filter">Serveur</Label>
+                <select id="server-filter" value={selectedServer} onChange={event => setSelectedServer(event.target.value)} className="mt-1 h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
+                  <option value="all">Tous les serveurs</option>
+                  {filterOptions.servers.map(server => <option key={server.id} value={server.id}>{server.full_name}</option>)}
+                </select>
               </div>
             </div>
           </CardContent>
@@ -197,7 +239,7 @@ export default function AdminFinance() {
               {totalRevenue.toLocaleString()} FCFA
             </div>
             <div className="text-sm text-gray-600">
-              Commandes livrées/prêtes
+              Commandes non annulées ou remboursées
             </div>
           </CardContent>
         </Card>
@@ -214,7 +256,7 @@ export default function AdminFinance() {
               {totalLostRevenue.toLocaleString()} FCFA
             </div>
             <div className="text-sm text-gray-600">
-              Commandes annulées
+              Commandes annulées et remboursées
             </div>
           </CardContent>
         </Card>
@@ -290,6 +332,72 @@ export default function AdminFinance() {
                     </TableCell>
                   </TableRow>
                 ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid lg:grid-cols-2 gap-6 mt-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <MapPin className="w-5 h-5 text-teal-600" />
+              Top lieux
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Lieu</TableHead>
+                  <TableHead className="text-right">Commandes</TableHead>
+                  <TableHead className="text-right">Chiffre d’affaires</TableHead>
+                  <TableHead className="text-right">Manque à gagner</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {topLocations.map(location => (
+                  <TableRow key={location.location}>
+                    <TableCell className="font-medium">{{ salon_principal: 'Salon principal', terrasse: 'Terrasse', vip: 'Espace VIP', bar: 'Bar', non_renseigne: 'Lieu non renseigné' }[location.location]}</TableCell>
+                    <TableCell className="text-right">{location.orders}</TableCell>
+                    <TableCell className="text-right">{location.revenue.toLocaleString()} FCFA</TableCell>
+                    <TableCell className="text-right text-red-600">{location.lostRevenue.toLocaleString()} FCFA</TableCell>
+                  </TableRow>
+                ))}
+                {!topLocations.length && <TableRow><TableCell colSpan={4} className="text-center text-gray-500">Aucune donnée pour ces filtres</TableCell></TableRow>}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Users className="w-5 h-5 text-cyan-600" />
+              Top serveurs
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Serveur</TableHead>
+                  <TableHead className="text-right">Commandes</TableHead>
+                  <TableHead className="text-right">Chiffre d’affaires</TableHead>
+                  <TableHead className="text-right">Manque à gagner</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {topServers.map(server => (
+                  <TableRow key={server.id}>
+                    <TableCell className="font-medium">{server.name}</TableCell>
+                    <TableCell className="text-right">{server.orders}</TableCell>
+                    <TableCell className="text-right">{server.revenue.toLocaleString()} FCFA</TableCell>
+                    <TableCell className="text-right text-red-600">{server.lostRevenue.toLocaleString()} FCFA</TableCell>
+                  </TableRow>
+                ))}
+                {!topServers.length && <TableRow><TableCell colSpan={4} className="text-center text-gray-500">Aucune donnée pour ces filtres</TableCell></TableRow>}
               </TableBody>
             </Table>
           </CardContent>

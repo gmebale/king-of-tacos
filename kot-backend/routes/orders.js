@@ -5,6 +5,31 @@ const { authenticateToken, requireRole, requirePagePermission } = require('../mi
 
 const router = express.Router();
 const prisma = new PrismaClient();
+const SERVICE_LOCATIONS = ['salon_principal', 'terrasse', 'vip', 'bar'];
+
+function getPreparationStation(categoryName) {
+  if (categoryName === 'boissons') return 'bar';
+  if (categoryName === 'desserts') return 'cuisine_froide';
+  return 'cuisine_chaude';
+}
+
+async function buildOrderItems(items) {
+  const products = await prisma.product.findMany({
+    where: { name: { in: [...new Set(items.map(item => item.product_name))] } },
+    include: { category: { select: { name: true } } }
+  });
+  const categoryByName = new Map(products.map(product => [product.name, product.category?.name]));
+
+  return items.map(item => ({
+    product_name: item.product_name,
+    quantity: parseInt(item.quantity, 10),
+    price: parseInt(item.price, 10),
+    customization: item.customization || null,
+    customizationSummary: item.customizationSummary || null,
+    preparation_station: getPreparationStation(categoryByName.get(item.product_name)),
+    preparation_status: 'en_attente'
+  }));
+}
 
 async function generateOrderCode() {
   const now = new Date();
@@ -211,7 +236,7 @@ router.post('/staff', authenticateToken, requireRole(['serveur']), async (req, r
   try {
     const {
       items, total_amount, customer_name, customer_phone, customer_email,
-      order_type, table_number, delivery_address, pickup_time, notes,
+      order_type, table_number, service_location, delivery_address, pickup_time, notes,
       payment_method, server_code
     } = req.body;
 
@@ -223,6 +248,9 @@ router.post('/staff', authenticateToken, requireRole(['serveur']), async (req, r
     }
     if (order_type === 'sur_place' && !table_number) {
       return res.status(400).json({ message: 'Le numéro de table est requis pour une commande sur place' });
+    }
+    if (order_type === 'sur_place' && !SERVICE_LOCATIONS.includes(service_location)) {
+      return res.status(400).json({ message: 'Le lieu de service est requis pour une commande sur place' });
     }
     if (order_type === 'emporter' && !customer_name) {
       return res.status(400).json({ message: 'Le nom ou numéro de retrait est requis pour une commande à emporter' });
@@ -251,6 +279,7 @@ router.post('/staff', authenticateToken, requireRole(['serveur']), async (req, r
         customer_phone,
         customer_email: customer_email || null,
         order_type,
+        service_location: order_type === 'sur_place' ? service_location : null,
         table_number: order_type === 'sur_place' ? table_number : null,
         delivery_address: delivery_address || null,
         pickup_time: pickup_time || null,
@@ -260,13 +289,7 @@ router.post('/staff', authenticateToken, requireRole(['serveur']), async (req, r
         validated_at: new Date(),
         status: 'en_preparation',
         items: {
-          create: items.map((item) => ({
-            product_name: item.product_name,
-            quantity: parseInt(item.quantity, 10),
-            price: parseInt(item.price, 10),
-            customization: item.customization || null,
-            customizationSummary: item.customizationSummary || null
-          }))
+          create: await buildOrderItems(items)
         }
       },
       include: { items: true }
@@ -320,17 +343,12 @@ router.post('/', async (req, res) => {
         customer_phone,
         customer_email,
         order_type,
+        service_location: null,
         delivery_address,
         pickup_time,
         notes,
         items: {
-          create: items.map(item => ({
-            product_name: item.product_name,
-            quantity: parseInt(item.quantity),
-            price: parseInt(item.price),
-            customization: item.customization || null,
-            customizationSummary: item.customizationSummary || null
-          }))
+          create: await buildOrderItems(items)
         }
       },
       include: {

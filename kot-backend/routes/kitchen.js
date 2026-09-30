@@ -1,9 +1,24 @@
 const express = require('express');
 const { PrismaClient } = require('@prisma/client');
-const { authenticateToken, requirePagePermission } = require('../middleware/auth');
+const { authenticateToken } = require('../middleware/auth');
 
 const router = express.Router();
 const prisma = new PrismaClient();
+const PREPARATION_STATIONS = ['bar', 'cuisine_chaude', 'cuisine_froide'];
+
+function stationForCategory(categoryName) {
+  if (categoryName === 'boissons') return 'bar';
+  if (categoryName === 'desserts') return 'cuisine_froide';
+  return 'cuisine_chaude';
+}
+
+function canAccessStation(user, station) {
+  if (user.role === 'admin') return true;
+  const permissions = user.pagePermissions || {};
+  if (station === 'bar') return user.role === 'bar' || permissions.bar === true;
+  const permission = station === 'cuisine_chaude' ? 'kitchen_hot' : 'kitchen_cold';
+  return permissions[permission] === true || permissions.kitchen === true;
+}
 
 // Utility function to format customization details
 function formatCustomization(customization, productCustomization) {
@@ -56,14 +71,23 @@ function formatCustomization(customization, productCustomization) {
   };
 }
 
-// Get orders for kitchen view (staff and admin only)
-router.get('/orders', authenticateToken, requirePagePermission('kitchen'), async (req, res) => {
+// Get active orders and only the items assigned to the selected station.
+router.get('/orders', authenticateToken, async (req, res) => {
   try {
+    const { station } = req.query;
+    if (!PREPARATION_STATIONS.includes(station)) {
+      return res.status(400).json({ message: 'Poste de préparation invalide' });
+    }
+    if (!canAccessStation(req.user, station)) {
+      return res.status(403).json({ message: 'Accès refusé à ce poste de préparation' });
+    }
+
     const orders = await prisma.order.findMany({
       where: {
         status: {
           in: ['en_attente', 'en_preparation', 'prete']
-        }
+        },
+        closed_at: null
       },
       include: {
         user: {
@@ -74,15 +98,22 @@ router.get('/orders', authenticateToken, requirePagePermission('kitchen'), async
       orderBy: { created_date: 'asc' } // Oldest first for processing
     });
 
-    // Add product customization config to each item
+    const productNames = [...new Set(orders.flatMap(order => order.items.map(item => item.product_name)))];
+    const products = await prisma.product.findMany({
+      where: { name: { in: productNames } },
+      include: { category: { select: { name: true } } }
+    });
+    const productsByName = new Map(products.map(product => [product.name, product]));
+
     for (const order of orders) {
       for (const item of order.items) {
-        const product = await prisma.product.findFirst({
-          where: { name: item.product_name },
-          select: { customization: true }
-        });
+        const product = productsByName.get(item.product_name);
         item.productCustomization = product?.customization || null;
-        
+        const isLegacyItem = !item.preparation_station;
+        item.preparation_station = item.preparation_station || stationForCategory(product?.category?.name);
+        if (order.status === 'prete') item.preparation_status = 'prete';
+        else if (isLegacyItem && order.status === 'en_preparation' && item.preparation_status === 'en_attente') item.preparation_status = 'en_preparation';
+
         // Generate customization summary
         if (item.customization && product?.customization) {
           const customizationInfo = formatCustomization(item.customization, product.customization);
@@ -91,26 +122,21 @@ router.get('/orders', authenticateToken, requirePagePermission('kitchen'), async
           item.customizationSummary = '';
         }
       }
+      order.items = order.items.filter(item => item.preparation_station === station);
     }
 
-    res.json(orders);
+    res.json(orders.filter(order => order.items.length > 0));
   } catch (error) {
     console.error('Get kitchen orders error:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 });
 
-// Update order status (kitchen mode)
-router.put('/orders/:id/status', authenticateToken, requirePagePermission('kitchen'), async (req, res) => {
+// Move one item through its preparation steps at the assigned station.
+router.put('/orders/:id/items/:itemId/status', authenticateToken, async (req, res) => {
   try {
-    const { id } = req.params;
+    const { id, itemId } = req.params;
     const { status } = req.body;
-
-    // Validate status for kitchen
-    const allowedStatuses = ['en_preparation', 'prete'];
-    if (!allowedStatuses.includes(status)) {
-      return res.status(400).json({ message: 'Invalid status for kitchen mode' });
-    }
 
     const order = await prisma.order.findUnique({
       where: { id },
@@ -120,19 +146,57 @@ router.put('/orders/:id/status', authenticateToken, requirePagePermission('kitch
     if (!order) {
       return res.status(404).json({ message: 'Order not found' });
     }
-
-    // Only allow status progression
-    const statusOrder = ['en_attente', 'en_preparation', 'prete'];
-    const currentIndex = statusOrder.indexOf(order.status);
-    const newIndex = statusOrder.indexOf(status);
-
-    if (newIndex <= currentIndex) {
-      return res.status(400).json({ message: 'Cannot revert order status' });
+    if (order.closed_at || !['en_attente', 'en_preparation', 'prete'].includes(order.status)) {
+      return res.status(400).json({ message: 'Cette commande ne peut plus être préparée' });
     }
+
+    const item = order.items.find(entry => entry.id === Number(itemId));
+    if (!item) return res.status(404).json({ message: 'Article introuvable dans cette commande' });
+
+    const isLegacyItem = !item.preparation_station;
+    let station = item.preparation_station;
+    if (!station) {
+      const product = await prisma.product.findFirst({
+        where: { name: item.product_name },
+        include: { category: { select: { name: true } } }
+      });
+      station = stationForCategory(product?.category?.name);
+    }
+    if (!canAccessStation(req.user, station)) {
+      return res.status(403).json({ message: 'Accès refusé à ce poste de préparation' });
+    }
+
+    const currentItemStatus = order.status === 'prete'
+      ? 'prete'
+      : isLegacyItem && order.status === 'en_preparation' && item.preparation_status === 'en_attente'
+        ? 'en_preparation'
+        : item.preparation_status;
+    const nextStatus = { en_attente: 'en_preparation', en_preparation: 'prete' }[currentItemStatus];
+    if (nextStatus !== status) {
+      return res.status(400).json({ message: 'Progression invalide pour cet article' });
+    }
+
+    await prisma.orderItem.update({
+      where: { id: item.id },
+      data: { preparation_station: station, preparation_status: status }
+    });
+
+    const currentItems = await prisma.orderItem.findMany({ where: { order_id: id } });
+    const itemStatuses = currentItems.map(currentItem => {
+      if (currentItem.id === item.id) return status;
+      if (order.status === 'prete') return 'prete';
+      if (!currentItem.preparation_station && order.status === 'en_preparation' && currentItem.preparation_status === 'en_attente') return 'en_preparation';
+      return currentItem.preparation_status;
+    });
+    const nextOrderStatus = itemStatuses.every(itemStatus => itemStatus === 'prete')
+      ? 'prete'
+      : itemStatuses.some(itemStatus => itemStatus !== 'en_attente')
+        ? 'en_preparation'
+        : 'en_attente';
 
     const updatedOrder = await prisma.order.update({
       where: { id },
-      data: { status },
+      data: { status: nextOrderStatus },
       include: {
         user: {
           select: { id: true, full_name: true, email: true, phone: true, loyalty_points: true }
@@ -141,23 +205,6 @@ router.put('/orders/:id/status', authenticateToken, requirePagePermission('kitch
       }
     });
 
-    // If order is marked as ready and user exists, add loyalty points
-    if (status === 'prete' && updatedOrder.user_id) {
-      await prisma.user.update({
-        where: { id: updatedOrder.user_id },
-        data: {
-          loyalty_points: {
-            increment: 5
-          }
-        }
-      });
-      // Refresh user data
-      updatedOrder.user = await prisma.user.findUnique({
-        where: { id: updatedOrder.user_id },
-        select: { id: true, full_name: true, email: true, phone: true, loyalty_points: true }
-      });
-    }
-
     res.json(updatedOrder);
   } catch (error) {
     console.error('Update kitchen order status error:', error);
@@ -165,10 +212,14 @@ router.put('/orders/:id/status', authenticateToken, requirePagePermission('kitch
   }
 });
 
-// Get order details for kitchen (with preparation notes)
-router.get('/orders/:id', authenticateToken, requirePagePermission('kitchen'), async (req, res) => {
+// Get order details for a station with its own item list only.
+router.get('/orders/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
+    const { station } = req.query;
+    if (!PREPARATION_STATIONS.includes(station) || !canAccessStation(req.user, station)) {
+      return res.status(403).json({ message: 'Accès refusé à ce poste de préparation' });
+    }
     const order = await prisma.order.findUnique({
       where: { id },
       include: {
@@ -182,6 +233,19 @@ router.get('/orders/:id', authenticateToken, requirePagePermission('kitchen'), a
     if (!order) {
       return res.status(404).json({ message: 'Order not found' });
     }
+
+    const products = await prisma.product.findMany({
+      where: { name: { in: [...new Set(order.items.map(item => item.product_name))] } },
+      include: { category: { select: { name: true } } }
+    });
+    const productsByName = new Map(products.map(product => [product.name, product]));
+    order.items = order.items
+      .filter(item => (item.preparation_station || stationForCategory(productsByName.get(item.product_name)?.category?.name)) === station)
+      .map(item => ({
+        ...item,
+        preparation_station: item.preparation_station || stationForCategory(productsByName.get(item.product_name)?.category?.name),
+        preparation_status: order.status === 'prete' ? 'prete' : item.preparation_status
+      }));
 
     res.json(order);
   } catch (error) {

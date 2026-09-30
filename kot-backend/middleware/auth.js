@@ -13,7 +13,8 @@ const normalizeRole = (user) => {
 
 const PAGE_PERMISSION_KEYS = [
   'dashboard', 'orders', 'kitchen', 'cashier', 'stock',
-  'finance', 'settings', 'staff', 'reviews', 'customers', 'loyalty'
+  'kitchen_hot', 'kitchen_cold', 'bar', 'finance', 'settings',
+  'staff', 'reviews', 'customers', 'loyalty'
 ];
 
 const addPermission = (map, permission, granted) => {

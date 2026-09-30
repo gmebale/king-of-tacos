@@ -601,6 +601,7 @@ function OrderCard({ order, onGenerateInvoice, onMarkDelivered, onMarkPaid, onCl
         <div>
           <p className="font-medium text-gray-900">{order.customer_name}</p>
           {order.table_number && <p className="text-sm text-gray-600">Table {order.table_number}</p>}
+          {order.service_location && <p className="text-sm text-gray-600">Lieu : {{ salon_principal: 'Salon principal', terrasse: 'Terrasse', vip: 'Espace VIP', bar: 'Bar' }[order.service_location]}</p>}
           <p className="text-sm text-gray-600">{order.customer_phone}</p>
           <p className="text-sm text-gray-600">Paiement : {order.payment_method || 'Non renseigné'} ({order.payment_status})</p>
           <p className="text-sm text-gray-600">Validé par : {order.validatedBy?.full_name || 'Client en ligne'}</p>
