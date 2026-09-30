@@ -96,13 +96,6 @@ enum PaymentStatus {
   refunded
 }
 
-enum ServiceLocation {
-  salon_principal
-  terrasse
-  vip
-  bar
-}
-
 enum PreparationStation {
   cuisine_chaude
   cuisine_froide
@@ -207,7 +200,7 @@ model Order {
   customer_phone   String?
   customer_email   String?
   order_type       String? // emporter, sur_place, livraison
-  service_location ServiceLocation?
+  service_location String?
   table_number     String?
   delivery_address String?
   pickup_time      String?
@@ -378,6 +371,17 @@ model Settings {
   value String
 
   @@map("settings")
+}
+
+model RestaurantLocation {
+  id         Int      @id @default(autoincrement())
+  slug       String   @unique
+  name       String
+  active     Boolean  @default(true)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@map("restaurant_locations")
 }
 
 model ProductCustomizationRule {

@@ -162,7 +162,7 @@ export default function Payment() {
                 <p><strong>Téléphone:</strong> {formData.customer_phone}</p>
                 <p><strong>Type:</strong> {formData.order_type === "livraison" ? "Livraison" : formData.order_type === "sur_place" ? "Sur place" : "À emporter"}</p>
                 {formData.table_number && <p><strong>Table:</strong> {formData.table_number}</p>}
-                {formData.service_location && <p><strong>Lieu:</strong> {{ salon_principal: 'Salon principal', terrasse: 'Terrasse', vip: 'Espace VIP', bar: 'Bar' }[formData.service_location]}</p>}
+                {formData.service_location && <p><strong>Lieu:</strong> {formData.service_location_name || formData.service_location}</p>}
                 {isStaffOrder && <p><strong>Paiement prévu:</strong> {formData.payment_method}</p>}
                 {formData.order_type === "livraison" && <p><strong>Adresse:</strong> {formData.delivery_address}</p>}
               </CardContent>

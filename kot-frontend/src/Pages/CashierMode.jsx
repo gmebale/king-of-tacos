@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   DollarSign,
@@ -12,7 +12,9 @@ import {
   BarChart3,
   Lock,
   Unlock,
-  Calculator
+  Calculator,
+  Volume2,
+  VolumeX
 } from "lucide-react";
 import { Button } from "../Components/ui/button";
 import { Badge } from "../Components/ui/badge";
@@ -39,23 +41,114 @@ export default function CashierMode() {
   const [closingBalance, setClosingBalance] = useState('');
   const [closingNotes, setClosingNotes] = useState('');
   const [isDownloadingReport, setIsDownloadingReport] = useState(false);
+  const [isSoundEnabled, setIsSoundEnabled] = useState(false);
+  const [soundError, setSoundError] = useState('');
+  const audioContextRef = useRef(null);
+  const soundEnabledRef = useRef(false);
+  const notifiedOrderIdsRef = useRef(null);
 
   useEffect(() => {
     loadOrders();
     loadReports(selectedPeriod);
     loadCashRegisterSession();
+    const interval = setInterval(loadOrders, 30000);
+    return () => clearInterval(interval);
   }, [selectedPeriod]);
 
   const loadOrders = async () => {
     try {
       const response = await api.get('/cashier/orders');
-      setOrders(response.data);
+      const nextOrders = response.data;
+      const readyOrderIds = new Set(
+        nextOrders
+          .filter(order => (
+            order.order_type === 'sur_place'
+              ? order.status === 'servie'
+              : order.status === 'prete'
+          ))
+          .map(order => order.id)
+      );
+      const notifiedOrderIds = notifiedOrderIdsRef.current;
+
+      if (
+        notifiedOrderIds &&
+        soundEnabledRef.current &&
+        [...readyOrderIds].some(orderId => !notifiedOrderIds.has(orderId))
+      ) {
+        playOrderAlert();
+      }
+
+      notifiedOrderIdsRef.current = readyOrderIds;
+      setOrders(nextOrders);
     } catch (error) {
       console.error('Error loading cashier orders:', error);
     } finally {
       setIsLoading(false);
     }
   };
+
+  const playOrderAlert = async () => {
+    const audioContext = audioContextRef.current;
+    if (!audioContext) return;
+
+    try {
+      if (audioContext.state !== 'running') {
+        await audioContext.resume();
+      }
+
+      const oscillator = audioContext.createOscillator();
+      const volume = audioContext.createGain();
+      const now = audioContext.currentTime;
+
+      oscillator.frequency.setValueAtTime(880, now);
+      volume.gain.setValueAtTime(0.0001, now);
+      volume.gain.exponentialRampToValueAtTime(0.2, now + 0.02);
+      volume.gain.exponentialRampToValueAtTime(0.0001, now + 0.45);
+      oscillator.connect(volume);
+      volume.connect(audioContext.destination);
+      oscillator.start(now);
+      oscillator.stop(now + 0.45);
+      setSoundError('');
+    } catch (error) {
+      console.error('Error playing cashier order alert:', error);
+      soundEnabledRef.current = false;
+      setIsSoundEnabled(false);
+      setSoundError("Le son a été bloqué. Veuillez l'activer à nouveau.");
+    }
+  };
+
+  const toggleOrderSound = async () => {
+    if (soundEnabledRef.current) {
+      soundEnabledRef.current = false;
+      setIsSoundEnabled(false);
+      setSoundError('');
+      return;
+    }
+
+    if (!window.AudioContext) {
+      setSoundError("La lecture audio n'est pas prise en charge par ce navigateur.");
+      return;
+    }
+
+    try {
+      const audioContext = audioContextRef.current || new window.AudioContext();
+      await audioContext.resume();
+      audioContextRef.current = audioContext;
+      soundEnabledRef.current = true;
+      setIsSoundEnabled(true);
+      setSoundError('');
+    } catch (error) {
+      console.error('Error enabling cashier order alerts:', error);
+      setSoundError("Impossible d'activer le son. Vérifiez les réglages du navigateur.");
+    }
+  };
+
+  useEffect(() => () => {
+    soundEnabledRef.current = false;
+    if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+      audioContextRef.current.close();
+    }
+  }, []);
 
   const loadReports = async (period) => {
     try {
@@ -66,24 +159,25 @@ export default function CashierMode() {
     }
   };
 
-  const downloadReport = async () => {
+  const downloadReport = async (formatType = 'pdf') => {
     setIsDownloadingReport(true);
     try {
-      const response = await api.get(`/cashier/reports/${selectedPeriod}/pdf`, {
+      const response = await api.get(`/cashier/reports/${selectedPeriod}/${formatType === 'excel' ? 'excel' : 'pdf'}`, {
         responseType: 'blob'
       });
 
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', `rapport-ventes-${selectedPeriod}-${format(new Date(), 'yyyy-MM-dd-HH-mm')}.pdf`);
+      const extension = formatType === 'excel' ? 'xlsx' : 'pdf';
+      link.setAttribute('download', `rapport-ventes-${selectedPeriod}-${format(new Date(), 'yyyy-MM-dd-HH-mm')}.${extension}`);
       document.body.appendChild(link);
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Error downloading report:', error);
-      alert('Impossible de générer le rapport PDF.');
+      alert(`Impossible de générer le rapport ${formatType === 'excel' ? 'Excel' : 'PDF'}.`);
     } finally {
       setIsDownloadingReport(false);
     }
@@ -255,17 +349,35 @@ export default function CashierMode() {
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="mb-8"
+        className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"
       >
-        <div className="flex items-center gap-3 mb-2">
-          <DollarSign className="w-8 h-8 text-green-600" />
-          <h1 className="text-3xl md:text-4xl font-bold text-gray-900">
-            Mode Caisse
-          </h1>
+        <div>
+          <div className="flex items-center gap-3 mb-2">
+            <DollarSign className="w-8 h-8 text-green-600" />
+            <h1 className="text-3xl md:text-4xl font-bold text-gray-900">
+              Mode Caisse
+            </h1>
+          </div>
+          <p className="text-gray-600">
+            Gestion des factures et rapports de ventes
+          </p>
+          <p className="mt-1 text-sm text-gray-500">
+            Alertes : commandes sur place servies, autres commandes prêtes.
+          </p>
         </div>
-        <p className="text-gray-600">
-          Gestion des factures et rapports de ventes
-        </p>
+        <div className="flex flex-col items-start gap-2 sm:items-end">
+          <Button
+            type="button"
+            variant={isSoundEnabled ? 'default' : 'outline'}
+            aria-pressed={isSoundEnabled}
+            onClick={toggleOrderSound}
+            className={isSoundEnabled ? 'bg-green-600 text-white hover:bg-green-700' : ''}
+          >
+            {isSoundEnabled ? <Volume2 className="mr-2 h-4 w-4" /> : <VolumeX className="mr-2 h-4 w-4" />}
+            {isSoundEnabled ? 'Son activé' : 'Activer le son'}
+          </Button>
+          {soundError && <p role="alert" className="text-sm text-red-600">{soundError}</p>}
+        </div>
       </motion.div>
 
       {/* Cash Register Status */}
@@ -499,21 +611,21 @@ export default function CashierMode() {
           {/* Top Products */}
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center justify-between">
+              <CardTitle className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
                   <BarChart3 className="w-5 h-5" />
                   Top Produits
                 </div>
-                <Button
-                  onClick={downloadReport}
-                  variant="outline"
-                  size="sm"
-                  disabled={isDownloadingReport}
-                  className="flex items-center gap-2"
-                >
-                  <Download className="w-4 h-4" />
-                  {isDownloadingReport ? 'Génération...' : 'Imprimer Rapport'}
-                </Button>
+                <div className="flex gap-2">
+                  <Button onClick={() => downloadReport('pdf')} variant="outline" size="sm" disabled={isDownloadingReport} className="flex items-center gap-2">
+                    <Download className="w-4 h-4" />
+                    {isDownloadingReport ? 'Génération...' : 'Rapport PDF'}
+                  </Button>
+                  <Button onClick={() => downloadReport('excel')} variant="outline" size="sm" disabled={isDownloadingReport} className="flex items-center gap-2">
+                    <Download className="w-4 h-4" />
+                    {isDownloadingReport ? 'Génération...' : 'Rapport Excel'}
+                  </Button>
+                </div>
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -601,7 +713,7 @@ function OrderCard({ order, onGenerateInvoice, onMarkDelivered, onMarkPaid, onCl
         <div>
           <p className="font-medium text-gray-900">{order.customer_name}</p>
           {order.table_number && <p className="text-sm text-gray-600">Table {order.table_number}</p>}
-          {order.service_location && <p className="text-sm text-gray-600">Lieu : {{ salon_principal: 'Salon principal', terrasse: 'Terrasse', vip: 'Espace VIP', bar: 'Bar' }[order.service_location]}</p>}
+          {order.service_location && <p className="text-sm text-gray-600">Lieu : {order.service_location_name || order.service_location}</p>}
           <p className="text-sm text-gray-600">{order.customer_phone}</p>
           <p className="text-sm text-gray-600">Paiement : {order.payment_method || 'Non renseigné'} ({order.payment_status})</p>
           <p className="text-sm text-gray-600">Validé par : {order.validatedBy?.full_name || 'Client en ligne'}</p>

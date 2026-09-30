@@ -12,8 +12,6 @@ import {
   X
 } from "lucide-react";
 import {
-  LineChart,
-  Line,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -105,6 +103,7 @@ export default function AdminFinance() {
   const totalRevenue = revenueData.reduce((sum, day) => sum + day.actualRevenue, 0);
   const totalLostRevenue = revenueData.reduce((sum, day) => sum + day.lostRevenue, 0);
   const netRevenue = totalRevenue - totalLostRevenue;
+  const locationName = slug => filterOptions.locations.find(location => location.value === slug)?.label || slug;
 
   return (
     <div className="p-4 md:p-6 lg:p-8">
@@ -176,34 +175,16 @@ export default function AdminFinance() {
         </CardHeader>
         <CardContent>
           <ResponsiveContainer width="100%" height={400}>
-            <LineChart data={revenueData}>
+            <BarChart data={revenueData}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="date" />
               <YAxis />
               <Tooltip formatter={(value) => [`${value.toLocaleString()} FCFA`, '']} />
               <Legend />
-              <Line
-                type="monotone"
-                dataKey="actualRevenue"
-                stroke="#10b981"
-                strokeWidth={2}
-                name="Revenus réels"
-              />
-              <Line
-                type="monotone"
-                dataKey="lostRevenue"
-                stroke="#ef4444"
-                strokeWidth={2}
-                name="Manque à gagner"
-              />
-              <Line
-                type="monotone"
-                dataKey="netRevenue"
-                stroke="#3b82f6"
-                strokeWidth={2}
-                name="Revenus nets"
-              />
-            </LineChart>
+              <Bar dataKey="actualRevenue" fill="#10b981" name="Revenus réels" />
+              <Bar dataKey="lostRevenue" fill="#ef4444" name="Manque à gagner" />
+              <Bar dataKey="netRevenue" fill="#3b82f6" name="Revenus nets" />
+            </BarChart>
           </ResponsiveContainer>
         </CardContent>
       </Card>
@@ -359,7 +340,7 @@ export default function AdminFinance() {
               <TableBody>
                 {topLocations.map(location => (
                   <TableRow key={location.location}>
-                    <TableCell className="font-medium">{{ salon_principal: 'Salon principal', terrasse: 'Terrasse', vip: 'Espace VIP', bar: 'Bar', non_renseigne: 'Lieu non renseigné' }[location.location]}</TableCell>
+                    <TableCell className="font-medium">{location.location === 'non_renseigne' ? 'Lieu non renseigné' : locationName(location.location)}</TableCell>
                     <TableCell className="text-right">{location.orders}</TableCell>
                     <TableCell className="text-right">{location.revenue.toLocaleString()} FCFA</TableCell>
                     <TableCell className="text-right text-red-600">{location.lostRevenue.toLocaleString()} FCFA</TableCell>

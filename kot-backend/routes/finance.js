@@ -4,8 +4,6 @@ const { authenticateToken, requirePagePermission } = require('../middleware/auth
 
 const router = express.Router();
 const prisma = new PrismaClient();
-const SERVICE_LOCATIONS = ['salon_principal', 'terrasse', 'vip', 'bar'];
-
 function getFinanceFilters(query) {
   const where = {};
   if (query.start_date || query.end_date) {
@@ -17,7 +15,7 @@ function getFinanceFilters(query) {
       where.created_date.lt = endExclusive;
     }
   }
-  if (query.service_location && SERVICE_LOCATIONS.includes(query.service_location)) {
+  if (query.service_location) {
     where.service_location = query.service_location;
   }
   if (query.server_id && Number.isInteger(Number(query.server_id))) {
@@ -190,19 +188,17 @@ router.get('/top-customers', authenticateToken, requirePagePermission('finance',
 
 router.get('/filter-options', authenticateToken, requirePagePermission('finance', 'dashboard'), async (_req, res) => {
   try {
-    const servers = await prisma.user.findMany({
-      where: { role: 'serveur' },
-      select: { id: true, full_name: true },
-      orderBy: { full_name: 'asc' }
-    });
+    const [servers, locations] = await Promise.all([
+      prisma.user.findMany({
+        where: { role: 'serveur' },
+        select: { id: true, full_name: true },
+        orderBy: { full_name: 'asc' }
+      }),
+      prisma.restaurantLocation.findMany({ where: { active: true }, select: { slug: true, name: true }, orderBy: { name: 'asc' } })
+    ]);
     res.json({
       servers,
-      locations: [
-        { value: 'salon_principal', label: 'Salon principal' },
-        { value: 'terrasse', label: 'Terrasse' },
-        { value: 'vip', label: 'Espace VIP' },
-        { value: 'bar', label: 'Bar' }
-      ]
+      locations: locations.map(location => ({ value: location.slug, label: location.name }))
     });
   } catch (error) {
     console.error('Get finance filter options error:', error);

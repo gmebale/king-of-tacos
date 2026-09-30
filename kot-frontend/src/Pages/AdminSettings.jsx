@@ -26,10 +26,51 @@ const AdminSettings = () => {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savingPayments, setSavingPayments] = useState(false);
+  const [locations, setLocations] = useState([]);
+  const [newLocationName, setNewLocationName] = useState('');
+  const [savingLocation, setSavingLocation] = useState(false);
 
   useEffect(() => {
     loadSettings();
+    loadLocations();
   }, []);
+
+  const loadLocations = async () => {
+    try {
+      const response = await api.get('/settings/locations/manage');
+      setLocations(response.data || []);
+    } catch (error) {
+      console.error('Error loading restaurant locations:', error);
+      toast.error('Erreur lors du chargement des lieux');
+    }
+  };
+
+  const addLocation = async (event) => {
+    event.preventDefault();
+    const name = newLocationName.trim();
+    if (!name) return;
+    try {
+      setSavingLocation(true);
+      await api.post('/settings/locations', { name });
+      setNewLocationName('');
+      await loadLocations();
+      toast.success('Lieu ajouté');
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Impossible d’ajouter ce lieu');
+    } finally {
+      setSavingLocation(false);
+    }
+  };
+
+  const toggleLocation = async (location) => {
+    try {
+      const response = await api.patch(`/settings/locations/${location.id}`, { active: !location.active });
+      setLocations(current => current.map(item => item.id === location.id ? response.data : item));
+      toast.success(location.active ? 'Lieu désactivé' : 'Lieu réactivé');
+    } catch (error) {
+      toast.error('Impossible de modifier ce lieu');
+    }
+  };
 
   const loadSettings = async () => {
     try {
@@ -255,6 +296,38 @@ const AdminSettings = () => {
             <Button onClick={handlePaymentSubmit} disabled={savingPayments}>
               {savingPayments ? 'Sauvegarde...' : 'Sauvegarder'}
             </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="max-w-2xl mt-8">
+        <CardHeader>
+          <CardTitle>Lieux de service</CardTitle>
+          <p className="text-sm text-gray-500">Les lieux actifs sont proposés aux serveurs pour les commandes sur place.</p>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <form onSubmit={addLocation} className="flex gap-3">
+            <div className="flex-1">
+              <Label htmlFor="new-location">Ajouter un lieu</Label>
+              <Input id="new-location" value={newLocationName} onChange={event => setNewLocationName(event.target.value)} maxLength={80} placeholder="Ex. Jardin" />
+            </div>
+            <Button type="submit" disabled={savingLocation || !newLocationName.trim()} className="self-end">
+              {savingLocation ? 'Ajout...' : 'Ajouter'}
+            </Button>
+          </form>
+          <div className="divide-y rounded-lg border">
+            {locations.map(location => (
+              <div key={location.id} className="flex items-center justify-between gap-4 p-3">
+                <div>
+                  <p className="font-medium">{location.name}</p>
+                  <p className="text-xs text-gray-500">{location.active ? 'Actif' : 'Inactif'}</p>
+                </div>
+                <Button type="button" size="sm" variant="outline" onClick={() => toggleLocation(location)}>
+                  {location.active ? 'Désactiver' : 'Réactiver'}
+                </Button>
+              </div>
+            ))}
+            {!locations.length && <p className="p-4 text-sm text-gray-500">Aucun lieu configuré.</p>}
           </div>
         </CardContent>
       </Card>

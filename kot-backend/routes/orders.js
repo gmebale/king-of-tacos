@@ -5,8 +5,16 @@ const { authenticateToken, requireRole, requirePagePermission } = require('../mi
 
 const router = express.Router();
 const prisma = new PrismaClient();
-const SERVICE_LOCATIONS = ['salon_principal', 'terrasse', 'vip', 'bar'];
 
+async function attachServiceLocationNames(orders) {
+  const locations = await prisma.restaurantLocation.findMany({ select: { slug: true, name: true } });
+  const names = new Map(locations.map(location => [location.slug, location.name]));
+  const list = Array.isArray(orders) ? orders : [orders];
+  for (const order of list) {
+    if (order?.service_location) order.service_location_name = names.get(order.service_location) || order.service_location;
+  }
+  return orders;
+}
 function getPreparationStation(categoryName) {
   if (categoryName === 'boissons') return 'bar';
   if (categoryName === 'desserts') return 'cuisine_froide';
@@ -146,7 +154,7 @@ router.get('/', authenticateToken, requirePagePermission('orders', 'dashboard'),
       }
     }
 
-    res.json(orders);
+    res.json(await attachServiceLocationNames(orders));
   } catch (error) {
     console.error('Get orders error:', error);
     res.status(500).json({ message: 'Internal server error' });
@@ -183,7 +191,7 @@ router.get('/my-orders', authenticateToken, async (req, res) => {
       }
     }
 
-    res.json(orders);
+    res.json(await attachServiceLocationNames(orders));
   } catch (error) {
     console.error('Get my orders error:', error);
     res.status(500).json({ message: 'Internal server error' });
@@ -224,7 +232,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
       item.productCustomization = product?.customization || null;
     }
 
-    res.json(order);
+    res.json(await attachServiceLocationNames(order));
   } catch (error) {
     console.error('Get order error:', error);
     res.status(500).json({ message: 'Internal server error' });
@@ -249,7 +257,10 @@ router.post('/staff', authenticateToken, requireRole(['serveur']), async (req, r
     if (order_type === 'sur_place' && !table_number) {
       return res.status(400).json({ message: 'Le numéro de table est requis pour une commande sur place' });
     }
-    if (order_type === 'sur_place' && !SERVICE_LOCATIONS.includes(service_location)) {
+    const selectedLocation = order_type === 'sur_place' && service_location
+      ? await prisma.restaurantLocation.findFirst({ where: { slug: service_location, active: true } })
+      : null;
+    if (order_type === 'sur_place' && !selectedLocation) {
       return res.status(400).json({ message: 'Le lieu de service est requis pour une commande sur place' });
     }
     if (order_type === 'emporter' && !customer_name) {

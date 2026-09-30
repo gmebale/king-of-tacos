@@ -104,6 +104,8 @@ router.get('/orders', authenticateToken, async (req, res) => {
       include: { category: { select: { name: true } } }
     });
     const productsByName = new Map(products.map(product => [product.name, product]));
+    const locationNames = new Map((await prisma.restaurantLocation.findMany({ select: { slug: true, name: true } }))
+      .map(location => [location.slug, location.name]));
 
     for (const order of orders) {
       for (const item of order.items) {
@@ -123,6 +125,7 @@ router.get('/orders', authenticateToken, async (req, res) => {
         }
       }
       order.items = order.items.filter(item => item.preparation_station === station);
+      if (order.service_location) order.service_location_name = locationNames.get(order.service_location) || order.service_location;
     }
 
     res.json(orders.filter(order => order.items.length > 0));
@@ -246,6 +249,10 @@ router.get('/orders/:id', authenticateToken, async (req, res) => {
         preparation_station: item.preparation_station || stationForCategory(productsByName.get(item.product_name)?.category?.name),
         preparation_status: order.status === 'prete' ? 'prete' : item.preparation_status
       }));
+    if (order.service_location) {
+      const location = await prisma.restaurantLocation.findUnique({ where: { slug: order.service_location }, select: { name: true } });
+      order.service_location_name = location?.name || order.service_location;
+    }
 
     res.json(order);
   } catch (error) {

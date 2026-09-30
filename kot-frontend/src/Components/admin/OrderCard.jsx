@@ -102,7 +102,7 @@ export default function OrderCard({ order, onUpdateStatus }) {
                 {order.order_type === "livraison" && "Livraison"} {/* Updated for delivery type */}
               </Badge>
             </div>
-            {order.service_location && <p className="text-sm text-gray-600">Lieu : {{ salon_principal: "Salon principal", terrasse: "Terrasse", vip: "Espace VIP", bar: "Bar" }[order.service_location]}</p>}
+            {order.service_location && <p className="text-sm text-gray-600">Lieu : {order.service_location_name || order.service_location}</p>}
 
             <div className="rounded-lg bg-gray-50 p-3 text-sm text-gray-700 space-y-1">
               <p>Moyen de paiement : {order.payment_method || "Non renseigné"}</p>

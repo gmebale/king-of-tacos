@@ -283,7 +283,7 @@ function OrderCard({ order, onUpdateItemStatus, updatingOrder, getStatusColor, g
           <p className="font-medium text-gray-900">{order.customer_name}</p>
           <p className="text-sm text-gray-600">{order.customer_phone}</p>
           {order.table_number && <p className="text-sm text-gray-600">Table {order.table_number}</p>}
-          {order.service_location && <p className="text-sm text-gray-600">Lieu : {{ salon_principal: 'Salon principal', terrasse: 'Terrasse', vip: 'Espace VIP', bar: 'Bar' }[order.service_location]}</p>}
+          {order.service_location && <p className="text-sm text-gray-600">Lieu : {order.service_location_name || order.service_location}</p>}
         </div>
 
         <div className="space-y-2">

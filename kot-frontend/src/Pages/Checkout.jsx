@@ -12,12 +12,14 @@ import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "../utils";
 import { useCart } from "../hooks/useCart";
 import { formatCustomization } from "../utils/customization";
+import api from "../services/api.service";
 
 export default function Checkout() {
   const navigate = useNavigate();
   const { cart, getTotal, isLoading } = useCart();
 
   const [user, setUser] = useState(null);
+  const [serviceLocations, setServiceLocations] = useState([]);
   const isStaffOrder = user?.role === 'serveur' && sessionStorage.getItem('kot_staff_order_mode') === 'true';
   const [formData, setFormData] = useState({
     customer_name: "",
@@ -39,6 +41,12 @@ export default function Checkout() {
     loadUser();
   }, [cart, navigate, isLoading]);
 
+  useEffect(() => {
+    api.get('/settings/locations')
+      .then(response => setServiceLocations(response.data || []))
+      .catch(error => console.error('Error loading service locations:', error));
+  }, []);
+
   const loadCart = () => {
     // Cart is now managed by useCart hook
   };
@@ -48,6 +56,7 @@ export default function Checkout() {
       const currentUser = await User.me();
       setUser(currentUser);
       if (currentUser) {
+        if (currentUser.role === 'serveur') sessionStorage.setItem('kot_staff_order_mode', 'true');
         setFormData(prev => ({
           ...prev,
           customer_name: currentUser.full_name || "",
@@ -71,6 +80,7 @@ export default function Checkout() {
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    if (isStaffOrder && formData.order_type === 'sur_place' && !formData.service_location) return;
     navigate('/payment', {
       state: {
         cart,
@@ -210,12 +220,9 @@ export default function Checkout() {
                     <div className="mt-4 space-y-4">
                       <div>
                         <Label htmlFor="service-location">Lieu *</Label>
-                        <select id="service-location" required value={formData.service_location} onChange={(e) => setFormData({ ...formData, service_location: e.target.value })} className="mt-1 h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
+                        <select id="service-location" required value={formData.service_location} onChange={(e) => setFormData({ ...formData, service_location: e.target.value, service_location_name: serviceLocations.find(location => location.slug === e.target.value)?.name || '' })} className="mt-1 h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
                           <option value="">Choisir un lieu</option>
-                          <option value="salon_principal">Salon principal</option>
-                          <option value="terrasse">Terrasse</option>
-                          <option value="vip">Espace VIP</option>
-                          <option value="bar">Bar</option>
+                          {serviceLocations.map(location => <option key={location.slug} value={location.slug}>{location.name}</option>)}
                         </select>
                       </div>
                       <div>

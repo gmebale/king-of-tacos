@@ -7,12 +7,6 @@ const { format } = require('date-fns');
 
 const router = express.Router();
 const prisma = new PrismaClient();
-const SERVICE_LOCATION_LABELS = {
-  salon_principal: 'Salon principal',
-  terrasse: 'Terrasse',
-  vip: 'Espace VIP',
-  bar: 'Bar'
-};
 
 // Utility function to format customization details
 function formatCustomization(customization, productCustomization) {
@@ -335,6 +329,9 @@ async function buildSalesReport(period) {
 
   const userReport = Object.values(userSales).sort((a, b) => b.revenue - a.revenue);
 
+  const locationLabels = new Map((await prisma.restaurantLocation.findMany({ select: { slug: true, name: true } }))
+    .map(location => [location.slug, location.name]));
+
   return {
     period,
     startDate,
@@ -353,6 +350,7 @@ async function buildSalesReport(period) {
       status: order.status,
       order_type: order.order_type,
       service_location: order.service_location,
+      service_location_label: locationLabels.get(order.service_location) || order.service_location,
       total_amount: order.total_amount,
       payment_method: order.payment_method,
       payment_status: order.payment_status,
@@ -512,7 +510,6 @@ router.post('/session/close', authenticateToken, requirePagePermission('cashier'
         notes: notes || null
       }
     });
-
     res.json({
       message: 'Cash register closed successfully',
       session: updatedSession,
@@ -548,6 +545,8 @@ router.get('/orders', authenticateToken, requirePagePermission('cashier'), async
       },
       orderBy: { created_date: 'desc' }
     });
+    const locationNames = new Map((await prisma.restaurantLocation.findMany({ select: { slug: true, name: true } }))
+      .map(location => [location.slug, location.name]));
 
     // Process orders to include formatted customizations
     const processedOrders = await Promise.all(orders.map(async (order) => {
@@ -570,6 +569,7 @@ router.get('/orders', authenticateToken, requirePagePermission('cashier'), async
 
       return {
         ...order,
+        service_location_name: order.service_location ? locationNames.get(order.service_location) || order.service_location : null,
         items: processedItems,
         customer_address: order.delivery_address // Map for frontend compatibility
       };
@@ -602,6 +602,9 @@ router.get('/invoice/:orderId', authenticateToken, requirePagePermission('cashie
     if (!order) {
       return res.status(404).json({ message: 'Order not found' });
     }
+    const serviceLocation = order.service_location
+      ? await prisma.restaurantLocation.findUnique({ where: { slug: order.service_location }, select: { name: true } })
+      : null;
 
     // Build display code (new token / friendly id)
     const displayCode = order.order_code || `KOT-${order.id.substring(0, 8)}`;
@@ -638,7 +641,7 @@ router.get('/invoice/:orderId', authenticateToken, requirePagePermission('cashie
     doc.fontSize(12);
     doc.text(`Numéro de commande: ${displayCode}`);
     doc.text(`Date: ${new Date(order.created_date).toLocaleDateString('fr-FR')}`);
-    doc.text(`Type: ${order.order_type || '—'}${order.service_location ? ` · Lieu : ${SERVICE_LOCATION_LABELS[order.service_location] || order.service_location}` : ''}${order.table_number ? ` · Table ${order.table_number}` : ''}`);
+    doc.text(`Type: ${order.order_type || '—'}${order.service_location ? ` · Lieu : ${serviceLocation?.name || order.service_location}` : ''}${order.table_number ? ` · Table ${order.table_number}` : ''}`);
     doc.text(`Moyen de paiement: ${order.payment_method || 'Non renseigné'} · Paiement: ${order.payment_status}`);
     doc.text(`Validé par: ${order.validatedBy?.full_name || 'Client en ligne'}`);
     doc.text(`Clôturé par: ${order.closedBy?.full_name || 'Non clôturée'}`);
@@ -838,7 +841,7 @@ router.get('/reports/:period/pdf', authenticateToken, requirePagePermission('cas
       report.orders.forEach(order => {
         const code = order.order_code || order.id.slice(-8);
         doc.fontSize(9).fillColor(palette.text)
-          .text(`Commande #${code} — ${order.order_type || '—'}${order.service_location ? ` · ${SERVICE_LOCATION_LABELS[order.service_location] || order.service_location}` : ''} — ${order.status} — ${formatAmount(order.total_amount)}`);
+        .text(`Commande #${code} — ${order.order_type || '—'}${order.service_location ? ` · ${order.service_location_label || order.service_location}` : ''} — ${order.status} — ${formatAmount(order.total_amount)}`);
         doc.fontSize(8).fillColor(palette.muted)
           .text(`Paiement : ${order.payment_method || '—'} (${order.payment_status}) | Validé par : ${order.validated_by || 'Client en ligne'} | Clôturé par : ${order.closed_by || '—'}`);
         doc.moveDown(0.4);
@@ -851,6 +854,67 @@ router.get('/reports/:period/pdf', authenticateToken, requirePagePermission('cas
     if (error.message === 'Invalid period') {
       return res.status(400).json({ message: 'Invalid period' });
     }
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+router.get('/reports/:period/excel', authenticateToken, requirePagePermission('cashier'), async (req, res) => {
+  try {
+    const report = await buildSalesReport(req.params.period);
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'King of Tacos';
+    workbook.created = new Date();
+
+    const summary = workbook.addWorksheet('Synthèse');
+    summary.addRows([
+      ['Rapport de ventes'],
+      ['Période', format(report.startDate, 'dd/MM/yyyy'), format(report.endDate, 'dd/MM/yyyy')],
+      ["Chiffre d'affaires (FCFA)", report.totalRevenue],
+      ['Nombre de commandes', report.totalOrders],
+      ["Nombre d'articles vendus", report.totalItems],
+      ['Panier moyen (FCFA)', report.averageOrderValue],
+      [],
+      ['Moyen de paiement', 'Montant (FCFA)'],
+      ...Object.entries(report.paymentBreakdown).map(([method, amount]) => [method, amount])
+    ]);
+    summary.getRow(1).font = { bold: true, size: 16 };
+    summary.getRow(8).font = { bold: true };
+    summary.columns = [{ width: 32 }, { width: 22 }, { width: 22 }];
+
+    const products = workbook.addWorksheet('Produits');
+    products.addRow(['Produit', 'Catégorie', 'Quantité', 'Ventes (FCFA)']).font = { bold: true };
+    report.categoryReport.forEach(category => category.products.forEach(product => {
+      products.addRow([product.name, category.name, product.quantity, product.revenue]);
+    }));
+    products.columns = [{ width: 36 }, { width: 24 }, { width: 14 }, { width: 20 }];
+
+    const staff = workbook.addWorksheet('Ventes par utilisateur');
+    staff.addRow(['Utilisateur', 'Commandes', 'Articles', 'Ventes (FCFA)']).font = { bold: true };
+    report.userReport.forEach(user => staff.addRow([user.name, user.orders, user.quantity, user.revenue]));
+    staff.columns = [{ width: 32 }, { width: 14 }, { width: 14 }, { width: 20 }];
+
+    const orders = workbook.addWorksheet('Commandes clôturées');
+    orders.addRow(['N° commande', 'Date', 'Type', 'Lieu', 'Statut', 'Moyen de paiement', 'Paiement', 'Montant (FCFA)', 'Validé par', 'Clôturé par']).font = { bold: true };
+    report.orders.forEach(order => orders.addRow([
+      order.order_code || order.id, order.closed_at ? new Date(order.closed_at) : null,
+      order.order_type || '', order.service_location_label || '', order.status,
+      order.payment_method || '', order.payment_status, order.total_amount,
+      order.validated_by || 'Client en ligne', order.closed_by || ''
+    ]));
+    orders.columns = [
+      { width: 24 }, { width: 20, style: { numFmt: 'dd/mm/yyyy hh:mm' } }, { width: 18 },
+      { width: 24 }, { width: 16 }, { width: 20 }, { width: 18 }, { width: 20 }, { width: 28 }, { width: 28 }
+    ];
+    for (const sheet of [products, staff, orders]) sheet.views = [{ state: 'frozen', ySplit: 1 }];
+
+    const filename = `rapport-ventes-${req.params.period}-${format(new Date(), 'yyyy-MM-dd-HH-mm')}.xlsx`;
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (error) {
+    console.error('Generate sales Excel report error:', error);
+    if (error.message === 'Invalid period') return res.status(400).json({ message: 'Invalid period' });
     res.status(500).json({ message: 'Internal server error' });
   }
 });
@@ -1049,6 +1113,8 @@ router.get('/session/close-report', authenticateToken, requirePagePermission('ca
         closedBy: { select: { full_name: true } }
       }
     });
+    const locationNames = new Map((await prisma.restaurantLocation.findMany({ select: { slug: true, name: true } }))
+      .map(location => [location.slug, location.name]));
 
     // Compute payment breakdown from orders (centimes)
     const paymentTotals = {
@@ -1116,7 +1182,7 @@ router.get('/session/close-report', authenticateToken, requirePagePermission('ca
         `${index + 1}. Commande #${displayCode} - ${(order.total_amount / 100).toFixed(2)} FCFA - ${order.payment_method || 'cash'}`
       );
       doc.fontSize(8).text(`Validé par : ${order.validatedBy?.full_name || 'Client en ligne'} | Clôturé par : ${order.closedBy?.full_name || 'Non clôturée'}`);
-      if (order.service_location) doc.fontSize(8).text(`Lieu : ${SERVICE_LOCATION_LABELS[order.service_location] || order.service_location}${order.table_number ? ` · Table ${order.table_number}` : ''}`);
+      if (order.service_location) doc.fontSize(8).text(`Lieu : ${locationNames.get(order.service_location) || order.service_location}${order.table_number ? ` · Table ${order.table_number}` : ''}`);
       order.items.forEach(item => {
         doc.text(`   - ${item.quantity}x ${item.product_name}`, { indent: 20 });
       });
