@@ -46,10 +46,10 @@ export default function ProductCard({ product, onAddToCart, cartItem, onUpdateQu
 
   const handleCustomizationConfirm = (customizedProduct, qty) => {
     const { selectedRecommendations = [], ...configuredProduct } = customizedProduct;
-    for (let i = 0; i < qty; i++) onAddToCart(configuredProduct);
-    for (const suggested of selectedRecommendations) {
-      for (let i = 0; i < qty; i++) onAddToCart(suggested);
-    }
+    onAddToCart([
+      { product: configuredProduct, quantity: qty },
+      ...selectedRecommendations.map(product => ({ product, quantity: qty }))
+    ]);
   };
 
   return (
@@ -128,7 +128,19 @@ export default function ProductCard({ product, onAddToCart, cartItem, onUpdateQu
                 )}
               </div>
 
-              {quantity === 0 ? (
+              {isConfigurable ? (
+                <div className="flex flex-col items-end gap-1">
+                  <Button
+                    onClick={handleAddClick}
+                    disabled={loadingOptions}
+                    className="bg-gradient-to-r from-yellow-400 to-amber-600 hover:from-yellow-500 hover:to-amber-700 text-white rounded-xl shadow-lg"
+                  >
+                    <Plus className="w-4 h-4 mr-1" />
+                    {loadingOptions ? "Chargement…" : product.type === 'combo' ? "Composer le menu" : "Personnaliser"}
+                  </Button>
+                  {quantity > 0 && <span className="text-xs text-gray-500">{quantity} au panier</span>}
+                </div>
+              ) : quantity === 0 ? (
                 <Button
                   onClick={handleAddClick}
                   className="bg-gradient-to-r from-yellow-400 to-amber-600 hover:from-yellow-500 hover:to-amber-700 text-white rounded-xl shadow-lg"

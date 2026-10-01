@@ -19,13 +19,22 @@ export const useCart = () => {
             return item;
           } else {
             // Old format: migrate to new format
-            const { id, name, price, displayPrice, image_url, quantity, customizations, customizationSummary } = item;
-            return {
-              product: { id, name, price, displayPrice, image_url },
+            const {
               quantity,
-              customization: customizations || {},
+              subtotal,
+              customization,
+              customizations,
+              customizationConfig,
+              customizationSummary,
+              ...product
+            } = item;
+            return {
+              product,
+              quantity,
+              customization: customization ?? customizations ?? {},
+              customizationConfig: customizationConfig || null,
               customizationSummary: customizationSummary || '',
-              subtotal: quantity * (displayPrice || price || 0)
+              subtotal: subtotal ?? quantity * (product.displayPrice || product.price || 0)
             };
           }
         });

@@ -73,34 +73,35 @@ export default function Menu() {
     setFilteredProducts(filtered);
   };
 
-  const addToCart = (product) => {
-    const existingItem = cart.find(item =>
-      item.id === product.id &&
-      JSON.stringify(item.customization || {}) === JSON.stringify(product.customization || {})
-    );
-    let newCart;
+  const addToCart = (productOrBatch) => {
+    const additions = Array.isArray(productOrBatch)
+      ? productOrBatch
+      : [{ product: productOrBatch, quantity: 1 }];
+    const newCart = [...cart];
 
-    // Calculate final price with discount
-    const finalPrice = product.discount_percentage > 0
-      ? product.price * (1 - product.discount_percentage / 100)
-      : product.price;
-
-    const cartProduct = {
-      ...product,
-      displayPrice: product.displayPrice || finalPrice, // Use existing displayPrice if set (for customizations), else finalPrice
-      originalPrice: product.price
-    };
-
-    if (existingItem) {
-      newCart = cart.map(item =>
+    additions.forEach(({ product, quantity = 1 }) => {
+      const existingIndex = newCart.findIndex(item =>
         item.id === product.id &&
         JSON.stringify(item.customization || {}) === JSON.stringify(product.customization || {})
-          ? { ...item, quantity: item.quantity + 1 }
-          : item
       );
-    } else {
-      newCart = [...cart, { ...cartProduct, quantity: 1 }];
-    }
+
+      // Calculate final price with discount
+      const finalPrice = product.discount_percentage > 0
+        ? product.price * (1 - product.discount_percentage / 100)
+        : product.price;
+      const cartProduct = {
+        ...product,
+        displayPrice: product.displayPrice || finalPrice,
+        originalPrice: product.price
+      };
+
+      if (existingIndex >= 0) {
+        const existing = newCart[existingIndex];
+        newCart[existingIndex] = { ...existing, quantity: existing.quantity + quantity };
+      } else {
+        newCart.push({ ...cartProduct, quantity });
+      }
+    });
 
     setCart(newCart);
     localStorage.setItem('kingoftacos_cart', JSON.stringify(newCart));
@@ -220,7 +221,10 @@ export default function Menu() {
             >
               {filteredProducts.map((product) => {
                 // Find cart item for this product, considering customizations
-                const cartItem = cart.find(item => item.id === product.id);
+                const matchingCartItems = cart.filter(item => item.id === product.id);
+                const cartItem = matchingCartItems.length
+                  ? { quantity: matchingCartItems.reduce((sum, item) => sum + item.quantity, 0) }
+                  : null;
                 return (
                   <ProductCard
                     key={product.id}
