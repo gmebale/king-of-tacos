@@ -124,7 +124,11 @@ router.get('/admin/inventory', authenticateToken, requirePagePermission('stock')
   try {
     const products = await prisma.product.findMany({
       orderBy: { created_at: 'desc' },
-      include: { taxRates: { include: { taxRate: true } }, options: { select: { id: true }, take: 1 } }
+      include: {
+        category: true,
+        taxRates: { include: { taxRate: true } },
+        options: { select: { id: true }, take: 1 }
+      }
     });
     res.json(products);
   } catch (error) {
