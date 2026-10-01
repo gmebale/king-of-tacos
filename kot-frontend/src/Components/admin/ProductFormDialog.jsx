@@ -16,6 +16,7 @@ import { UploadFile } from "../../integrations/Core";
 import { Upload, X, Image as ImageIcon, Loader2 } from "lucide-react";
 import { Card } from "../ui/card";
 import { Product } from "../../Entities/Product";
+import ProductConfigurationEditor from './ProductConfigurationEditor';
 import api from "../../services/api.service";
 
 export default function ProductFormDialog({ open, onOpenChange, product, onSave }) {
@@ -23,6 +24,8 @@ export default function ProductFormDialog({ open, onOpenChange, product, onSave 
     name: "",
     description: "",
     price: 0,
+    type: 'simple',
+    customization: { isConfigurable: false, optionGroups: [], recommendations: [] },
     discount_percentage: 0,
     category: "",
     image: "",
@@ -33,25 +36,56 @@ export default function ProductFormDialog({ open, onOpenChange, product, onSave 
     tax_rate_ids: []
   });
   const [categories, setCategories] = useState([]);
+  const [catalogProducts, setCatalogProducts] = useState([]);
   const [taxRates, setTaxRates] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [imagePreview, setImagePreview] = useState(null);
 
   useEffect(() => {
     loadCategories();
+    Product.adminList().then(setCatalogProducts).catch(error => console.error('Error loading products for configuration:', error));
     api.get('/settings/tax-rates').then(response => setTaxRates(response.data || []))
       .catch(error => console.error('Error loading tax rates:', error));
   }, []);
 
   useEffect(() => {
     if (product) {
-      setFormData({ ...product, tax_rate_ids: (product.taxRates || []).map(entry => entry.tax_rate_id) });
+      const allowedTypes = ['simple', 'configurable', 'combo', 'modifier'];
+      setFormData({
+        ...product,
+        category: typeof product.category === 'object' ? product.category?.name || '' : product.category || '',
+        type: allowedTypes.includes(product.type) ? product.type : product.customization?.isConfigurable || product.options?.length ? 'configurable' : 'simple',
+        customization: product.customization || { isConfigurable: false, optionGroups: [], recommendations: [] },
+        tax_rate_ids: (product.taxRates || []).map(entry => entry.tax_rate_id)
+      });
       setImagePreview(product.image);
+      if (!product.customization?.optionGroups?.length && product.options?.length) {
+        Product.getOptions(product.id).then(response => {
+          const optionGroups = (response.optionGroups || []).map(group => ({
+            ...group,
+            minSelections: group.minSelections ?? (group.required ? 1 : 0),
+            maxSelections: group.maxSelections ?? group.maxQuantity ?? null,
+            options: (group.options || []).map(option => ({
+              ...option,
+              id: String(option.id),
+              productId: Number(option.productId ?? option.id),
+              priceModifier: Number(option.priceModifier ?? option.price) || 0
+            }))
+          }));
+          setFormData(current => current.id === product.id ? {
+            ...current,
+            type: ['combo', 'modifier'].includes(current.type) ? current.type : 'configurable',
+            customization: { ...(current.customization || {}), isConfigurable: true, optionGroups }
+          } : current);
+        }).catch(error => console.error('Error loading legacy product options:', error));
+      }
     } else {
       setFormData({
         name: "",
         description: "",
         price: 0,
+        type: 'simple',
+        customization: { isConfigurable: false, optionGroups: [], recommendations: [] },
         discount_percentage: 0,
         category: categories.length > 0 ? categories[0].name : "",
         image: "",
@@ -101,6 +135,9 @@ export default function ProductFormDialog({ open, onOpenChange, product, onSave 
   };
 
   const finalPrice = formData.price * (1 - formData.discount_percentage / 100);
+  const productKind = ['configurable', 'combo', 'modifier'].includes(formData.type)
+    ? formData.type
+    : formData.customization?.isConfigurable ? 'configurable' : 'simple';
   const selectedTaxes = taxRates.filter(rate => formData.tax_rate_ids?.includes(rate.id) && rate.active);
   const combinedRate = selectedTaxes.reduce((sum, rate) => sum + rate.percentage_basis_points, 0);
   const includedTax = finalPrice - (combinedRate ? Math.round(finalPrice * 10000 / (10000 + combinedRate)) : finalPrice);
@@ -202,6 +239,33 @@ export default function ProductFormDialog({ open, onOpenChange, product, onSave 
               rows={3}
             />
           </div>
+
+          <div className="space-y-2">
+            <Label>Type de fiche</Label>
+            <Select value={productKind} onValueChange={type => setFormData(current => ({
+              ...current,
+              type,
+              customization: { ...(current.customization || {}), isConfigurable: type === 'configurable' || type === 'combo' }
+            }))}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="simple">Produit simple</SelectItem>
+                <SelectItem value="configurable">Produit personnalisable</SelectItem>
+                <SelectItem value="combo">Menu composé</SelectItem>
+                <SelectItem value="modifier">Option interne</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-gray-500">Une option interne peut être utilisée dans les groupes de choix sans apparaître dans le menu client si sa catégorie est masquée.</p>
+          </div>
+
+          {(productKind === 'configurable' || productKind === 'combo') && (
+            <ProductConfigurationEditor
+              value={formData.customization}
+              onChange={customization => setFormData(current => ({ ...current, customization }))}
+              products={catalogProducts}
+              currentProductId={product?.id}
+            />
+          )}
 
           <div className="grid md:grid-cols-3 gap-4">
             <div className="space-y-2">

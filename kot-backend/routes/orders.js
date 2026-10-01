@@ -34,23 +34,133 @@ function calculatePromoDiscount(promo, amount, orderType, totalAmount = amount) 
 }
 
 async function buildOrderItems(items, { giftedProductId = null } = {}) {
+  const productIds = [...new Set(items.map(item => Number(item.product_id)).filter(id => Number.isInteger(id) && id > 0))];
+  const names = [...new Set(items.map(item => item.product_name).filter(Boolean))];
   const products = await prisma.product.findMany({
-    where: { name: { in: [...new Set(items.map(item => item.product_name))] } },
+    where: { OR: [
+      ...(productIds.length ? [{ id: { in: productIds } }] : []),
+      ...(names.length ? [{ name: { in: names } }] : [])
+    ] },
     include: {
       category: { select: { name: true, preparation_station: true } },
       taxRates: { include: { taxRate: true } }
     }
   });
   const productByName = new Map(products.map(product => [product.name, product]));
+  const productById = new Map(products.map(product => [product.id, product]));
+  const configuredProductIds = products.map(product => product.id);
+  const [legacyOptions, legacyRules] = configuredProductIds.length ? await Promise.all([
+    prisma.productOption.findMany({ where: { productId: { in: configuredProductIds } }, include: { optionProduct: { select: { id: true, name: true, price: true, available: true } } } }),
+    prisma.productCustomizationRule.findMany({ where: { productId: { in: configuredProductIds } } })
+  ]) : [[], []];
+  const legacyGroupsByProduct = new Map();
+  for (const option of legacyOptions) {
+    if (!legacyGroupsByProduct.has(option.productId)) legacyGroupsByProduct.set(option.productId, new Map());
+    const groups = legacyGroupsByProduct.get(option.productId);
+    if (!groups.has(option.optionType)) groups.set(option.optionType, []);
+    groups.get(option.optionType).push({
+      id: String(option.optionProduct.id),
+      productId: option.optionProduct.id,
+      name: option.optionProduct.name,
+      priceModifier: option.optionProduct.price,
+      available: option.optionProduct.available,
+      required: option.required,
+      maxQuantity: option.maxQuantity
+    });
+  }
+  const legacyRulesByProduct = new Map();
+  for (const rule of legacyRules) {
+    if (!legacyRulesByProduct.has(rule.productId)) legacyRulesByProduct.set(rule.productId, []);
+    legacyRulesByProduct.get(rule.productId).push(rule);
+  }
+  for (const [productId, groups] of legacyGroupsByProduct) {
+    for (const [groupId, optionsForGroup] of groups) {
+      const rule = legacyRulesByProduct.get(productId)?.find(item => item.optionType === groupId && !item.sizeOptionId);
+      groups.set(groupId, {
+        id: groupId,
+        name: ({ size: 'Taille', meat: 'Viandes', sauce: 'Sauces', extra: 'Suppléments', side: 'Accompagnements', 'goût': 'Goûts' })[groupId] || groupId,
+        type: optionsForGroup.some(option => option.required && option.maxQuantity === 1) ? 'single' : 'multiple',
+        required: optionsForGroup.some(option => option.required),
+        minSelections: optionsForGroup.some(option => option.required) ? 1 : 0,
+        maxSelections: rule?.maxQuantity ?? optionsForGroup.reduce((minimum, option) => option.maxQuantity == null ? minimum : Math.min(minimum, option.maxQuantity), Infinity),
+        includedCount: rule?.includedCount || 0,
+        extraPrice: rule?.extraPrice || 0,
+        options: optionsForGroup
+      });
+      const normalized = groups.get(groupId);
+      if (!Number.isFinite(normalized.maxSelections)) normalized.maxSelections = null;
+    }
+  }
+  const customizationGroups = product => Array.isArray(product.customization?.optionGroups) && product.customization.optionGroups.length
+    ? product.customization.optionGroups
+    : [...(legacyGroupsByProduct.get(product.id)?.values() || [])];
+  const optionProductIds = [...new Set(products.flatMap(product =>
+    customizationGroups(product).flatMap(group => group.options || []).map(option => Number(option.productId)).filter(id => Number.isInteger(id) && id > 0)
+  ))];
+  const availableOptionRows = optionProductIds.length
+    ? await prisma.product.findMany({ where: { id: { in: optionProductIds }, available: true }, select: { id: true } })
+    : [];
+  const availableOptionIds = new Set(availableOptionRows.map(option => option.id));
 
   return items.map(item => {
-    const product = productByName.get(item.product_name);
-    const price = parseInt(item.price, 10);
+    const requestedProductId = Number(item.product_id);
+    const product = (Number.isInteger(requestedProductId) && requestedProductId > 0
+      ? productById.get(requestedProductId)
+      : null) || productByName.get(item.product_name);
+    const quantity = Number(item.quantity);
+    if (!product) throw Object.assign(new Error(`Produit introuvable : ${item.product_name || item.product_id}`), { statusCode: 400 });
+    if (!product.available || product.type === 'modifier') throw Object.assign(new Error(`${product.name} n’est plus disponible.`), { statusCode: 409 });
+    if (!Number.isInteger(quantity) || quantity < 1 || quantity > 99) throw Object.assign(new Error('Quantité de produit invalide.'), { statusCode: 400 });
+
+    let price = Math.round(product.price * (1 - (product.discount_percentage || 0) / 100));
+    const optionGroups = customizationGroups(product);
+    if (['configurable', 'combo'].includes(product.type) && optionGroups.length === 0) throw Object.assign(new Error(`${product.name} n’a pas encore ses choix configurés.`), { statusCode: 409 });
+    const selection = item.customization && typeof item.customization === 'object' ? item.customization : {};
+    let generatedSummary = '';
+
+    if (optionGroups.length) {
+      const knownGroupIds = new Set(optionGroups.map(group => String(group.id)));
+      if (Object.keys(selection).some(groupId => !knownGroupIds.has(String(groupId)))) {
+        throw Object.assign(new Error(`Choix inconnus pour ${product.name}.`), { statusCode: 400 });
+      }
+      const summaryParts = [];
+      for (const group of optionGroups) {
+        const raw = selection[group.id];
+        const chosenIds = group.type === 'single'
+          ? (raw == null || raw === '' ? [] : [String(raw)])
+          : Array.isArray(raw) ? raw.map(String) : [];
+        const min = Math.max(0, Number(group.minSelections ?? (group.required ? 1 : 0)) || 0);
+        const max = group.type === 'single' ? 1 : (group.maxSelections ?? group.maxQuantity ?? null);
+        if (chosenIds.length < min || (max != null && chosenIds.length > Number(max))) {
+          throw Object.assign(new Error(`Vérifiez les choix du groupe « ${group.name} » pour ${product.name}.`), { statusCode: 400 });
+        }
+        if (new Set(chosenIds).size !== chosenIds.length) throw Object.assign(new Error(`Un choix est dupliqué dans « ${group.name} ».`), { statusCode: 400 });
+        const chosenOptions = chosenIds.map(id => group.options?.find(option => String(option.id ?? option.productId) === id));
+        if (chosenOptions.some(option => !option)) throw Object.assign(new Error(`Option indisponible dans « ${group.name} ».`), { statusCode: 400 });
+        if (chosenOptions.some(option => option.productId && !availableOptionIds.has(Number(option.productId)))) throw Object.assign(new Error(`Un choix de « ${group.name} » n’est plus disponible.`), { statusCode: 409 });
+
+        chosenOptions.forEach((option, index) => {
+          if (group.type === 'multiple' && Number(group.includedCount) > 0 && index < Number(group.includedCount)) return;
+          const modifier = group.type === 'multiple' && Number(group.includedCount) > 0 && Number(group.extraPrice) > 0
+            ? Number(group.extraPrice)
+            : Number(option.priceModifier ?? option.price) || 0;
+          if (!Number.isFinite(modifier) || modifier < 0) throw Object.assign(new Error('Supplément de personnalisation invalide.'), { statusCode: 400 });
+          price += Math.round(modifier);
+        });
+        if (chosenOptions.length) summaryParts.push(`${group.name}: ${chosenOptions.map(option => option.name).join(', ')}`);
+      }
+      generatedSummary = summaryParts.join(' · ');
+      const submittedPrice = Number(item.price);
+      if (!Number.isFinite(submittedPrice) || Math.round(submittedPrice) !== price) {
+        throw Object.assign(new Error(`Le prix de ${product.name} a changé. Actualisez le panier avant de valider.`), { statusCode: 409 });
+      }
+    }
+
     const tax = buildTaxSnapshot(price, product);
     return {
-      product_id: product?.id || null,
-      product_name: item.product_name,
-      quantity: parseInt(item.quantity, 10),
+      product_id: product.id,
+      product_name: product.name,
+      quantity,
       price,
       unit_tax_base: tax.unitTaxBase,
       unit_tax_total: tax.unitTaxTotal,
@@ -58,8 +168,8 @@ async function buildOrderItems(items, { giftedProductId = null } = {}) {
       unit_loyalty_points: product?.loyalty_points || 0,
       free_quantity: product?.id === giftedProductId ? 1 : 0,
       customization: item.customization || null,
-      customizationSummary: item.customizationSummary || null,
-      preparation_station: getPreparationStation(product?.category),
+      customizationSummary: generatedSummary || item.customizationSummary || null,
+      preparation_station: getPreparationStation(product.category),
       preparation_status: 'en_attente'
     };
   });
@@ -277,6 +387,9 @@ router.post('/staff', authenticateToken, requireRole(['serveur']), async (req, r
     if (!Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ message: 'La commande doit contenir au moins un produit' });
     }
+    const orderItems = await buildOrderItems(items);
+    const calculatedTotal = orderItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+    if (calculatedTotal !== Number(total_amount)) return res.status(409).json({ message: 'Le total du panier a changé. Actualisez-le avant de valider.' });
     if (!['sur_place', 'emporter'].includes(order_type)) {
       return res.status(400).json({ message: 'Type de commande du personnel invalide' });
     }
@@ -339,7 +452,7 @@ router.post('/staff', authenticateToken, requireRole(['serveur']), async (req, r
         validated_at: new Date(),
         status: 'en_preparation',
         items: {
-          create: await buildOrderItems(items)
+          create: orderItems
         }
       },
       include: { items: true }
@@ -348,6 +461,7 @@ router.post('/staff', authenticateToken, requireRole(['serveur']), async (req, r
     res.status(201).json(order);
   } catch (error) {
     console.error('Create staff order error:', error);
+    if (error.statusCode) return res.status(error.statusCode).json({ message: error.message });
     res.status(500).json({ message: 'Internal server error' });
   }
 });
@@ -358,6 +472,10 @@ router.post('/', async (req, res) => {
 
     if (order_type === 'sur_place') {
       return res.status(403).json({ message: 'Les commandes sur place doivent être saisies par un serveur' });
+    }
+
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ message: 'La commande doit contenir au moins un produit' });
     }
 
     console.log('Received order data:', { items, total_amount, customer_name });
@@ -382,10 +500,11 @@ router.post('/', async (req, res) => {
       }
     }
 
-    const baseTotal = Number(pre_discount_total ?? total_amount);
-    const promoBasis = Number(pre_discount_subtotal ?? baseTotal);
+    const orderItems = await buildOrderItems(items);
+    const promoBasis = orderItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+    const deliveryFee = order_type === 'livraison' ? 2000 : 0;
+    const baseTotal = promoBasis + deliveryFee;
     if (!Number.isFinite(baseTotal) || baseTotal < 0) return res.status(400).json({ message: 'Montant de commande invalide' });
-    if (!Number.isFinite(promoBasis) || promoBasis < 0 || promoBasis > baseTotal) return res.status(400).json({ message: 'Sous-total promo invalide' });
     if (promo_code && gifted_redemption_id) return res.status(400).json({ message: 'Un seul avantage peut être utilisé par commande.' });
     let promo = null;
     let loyaltyRedemption = null;
@@ -408,12 +527,15 @@ router.post('/', async (req, res) => {
       if (!userId) return res.status(401).json({ message: 'Connectez-vous pour utiliser cette récompense.' });
       loyaltyRedemption = await prisma.loyaltyRedemption.findFirst({ where: { id: gifted_redemption_id, user_id: userId, status: 'claimed', expires_at: { gt: new Date() } }, include: { reward: true } });
       if (!loyaltyRedemption || loyaltyRedemption.reward.type !== 'gifted_product') return res.status(400).json({ message: 'Cette récompense produit n’est plus disponible.' });
-      const rewardedProduct = await prisma.product.findUnique({ where: { id: loyaltyRedemption.reward.gifted_product_id }, select: { name: true } });
-      const matchingLine = items.find(item => Number(item.product_id) === loyaltyRedemption.reward.gifted_product_id || item.product_name === rewardedProduct?.name);
-      if (!matchingLine || Number(matchingLine.quantity) < 1) return res.status(400).json({ message: 'Ajoutez le produit offert à votre panier pour utiliser cette récompense.' });
-      discountAmount = Math.max(0, parseInt(matchingLine.price, 10) || 0);
+      const matchingLine = orderItems.find(item => item.product_id === loyaltyRedemption.reward.gifted_product_id && item.quantity > item.free_quantity);
+      if (!matchingLine) return res.status(400).json({ message: 'Ajoutez le produit offert à votre panier pour utiliser cette récompense.' });
+      discountAmount = Math.max(0, matchingLine.price);
+      matchingLine.free_quantity += 1;
     }
     const finalTotal = Math.max(0, baseTotal - discountAmount);
+    if (!Number.isInteger(Number(total_amount)) || Number(total_amount) !== finalTotal) {
+      return res.status(409).json({ message: 'Le total de la commande a changé. Revenez au panier pour actualiser les prix.' });
+    }
 
     // Create order
     const orderCode = await generateOrderCode();
@@ -434,7 +556,7 @@ router.post('/', async (req, res) => {
         pickup_time,
         notes,
         items: {
-          create: await buildOrderItems(items, { giftedProductId: loyaltyRedemption?.reward?.gifted_product_id || null })
+          create: orderItems
         }
       },
       include: {
@@ -459,6 +581,7 @@ router.post('/', async (req, res) => {
     res.status(201).json(order);
   } catch (error) {
     console.error('Create order error:', error);
+    if (error.statusCode) return res.status(error.statusCode).json({ message: error.message });
     res.status(500).json({ message: 'Internal server error' });
   }
 });

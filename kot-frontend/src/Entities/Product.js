@@ -47,6 +47,11 @@ class Product {
       throw new Error(error.response?.data?.message || 'Erreur de récupération des options');
     }
   }
+
+  static async getRecommendations(productId) {
+    const response = await api.get(`/products/${productId}/recommendations`);
+    return response.data;
+  }
 }
 
 export { Product };

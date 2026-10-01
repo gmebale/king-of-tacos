@@ -6,31 +6,36 @@ import { Card, CardContent } from '../ui/card';
 import { Badge } from '../ui/badge';
 import CustomizationDialog from './CustomizationDialog';
 import { Product } from '../../Entities/Product';
+import { toast } from 'react-hot-toast';
 
 export default function ProductCard({ product, onAddToCart, cartItem, onUpdateQuantity }) {
   const [showCustomization, setShowCustomization] = useState(false);
   const [productOptions, setProductOptions] = useState(null);
+  const [recommendations, setRecommendations] = useState([]);
   const [loadingOptions, setLoadingOptions] = useState(false);
   const quantity = cartItem?.quantity || 0;
   const hasDiscount = product.discount_percentage > 0;
   const finalPrice = hasDiscount
-    ? (product.price / 100) * (1 - product.discount_percentage / 100)
-    : (product.price / 100);
+    ? product.price * (1 - product.discount_percentage / 100)
+    : product.price;
 
-  // Check if product is configurable based on category
-  const isConfigurable = ['tacos', 'burritos', 'burger'].includes(product.category?.name);
+  const isConfigurable = ['configurable', 'combo'].includes(product.type) ||
+    product.customization?.isConfigurable === true;
 
   const handleAddClick = async () => {
     if (isConfigurable) {
       setLoadingOptions(true);
       try {
-        const options = await Product.getOptions(product.id);
+        const [options, suggested] = await Promise.all([
+          Product.getOptions(product.id),
+          Product.getRecommendations(product.id).catch(() => [])
+        ]);
         setProductOptions(options);
+        setRecommendations(suggested);
         setShowCustomization(true);
       } catch (error) {
         console.error('Error loading options:', error);
-        // Fallback to adding without customization
-        onAddToCart(product);
+        toast.error('Impossible de charger les choix de ce produit. Réessayez dans un instant.');
       } finally {
         setLoadingOptions(false);
       }
@@ -40,8 +45,10 @@ export default function ProductCard({ product, onAddToCart, cartItem, onUpdateQu
   };
 
   const handleCustomizationConfirm = (customizedProduct, qty) => {
-    for (let i = 0; i < qty; i++) {
-      onAddToCart(customizedProduct);
+    const { selectedRecommendations = [], ...configuredProduct } = customizedProduct;
+    for (let i = 0; i < qty; i++) onAddToCart(configuredProduct);
+    for (const suggested of selectedRecommendations) {
+      for (let i = 0; i < qty; i++) onAddToCart(suggested);
     }
   };
 
@@ -127,7 +134,7 @@ export default function ProductCard({ product, onAddToCart, cartItem, onUpdateQu
                   className="bg-gradient-to-r from-yellow-400 to-amber-600 hover:from-yellow-500 hover:to-amber-700 text-white rounded-xl shadow-lg"
                 >
                   <Plus className="w-4 h-4 mr-1" />
-                  {isConfigurable ? "Composer" : "Ajouter"}
+                  {product.type === 'combo' ? "Composer le menu" : isConfigurable ? "Personnaliser" : "Ajouter"}
                 </Button>
               ) : (
                 <div className="flex items-center gap-2">
@@ -162,6 +169,7 @@ export default function ProductCard({ product, onAddToCart, cartItem, onUpdateQu
           onOpenChange={setShowCustomization}
           product={product}
           optionGroups={productOptions.optionGroups}
+          recommendations={recommendations}
           onConfirm={handleCustomizationConfirm}
         />
       )}
