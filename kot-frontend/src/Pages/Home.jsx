@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "../utils";
 import { useAuthContext } from "../contexts/AuthContext";
@@ -6,12 +6,17 @@ import { motion } from "framer-motion";
 import { ArrowRight, Star, Clock, Heart, Sparkles } from "lucide-react";
 import { Button } from "../Components/ui/button";
 import { Card } from "../Components/ui/card";
+import api from "../services/api.service";
 
 export default function Home() {
   const { isAuthenticated } = useAuthContext();
+  const [heroMedia, setHeroMedia] = useState({ media_url: '', media_type: '', overlay_opacity: 85 });
+  const [reviews, setReviews] = useState({ data: [], total: 0, average_rating: 0 });
 
   useEffect(() => {
     window.scrollTo(0, 0);
+    api.get('/settings/homepage').then(response => setHeroMedia(response.data)).catch(() => {});
+    api.get('/reviews/public').then(response => setReviews(response.data)).catch(() => {});
   }, []);
 
   const features = [
@@ -36,7 +41,30 @@ export default function Home() {
     <div className="min-h-screen">
       {/* Hero Section */}
       <section className="relative overflow-hidden bg-gradient-to-br from-amber-50 via-yellow-50 to-orange-50">
-        <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1565299507177-b0ac66763828?w=1200')] bg-cover bg-center opacity-5" />
+        {heroMedia.media_url && (heroMedia.media_type === 'video' ? (
+          <video
+            key={heroMedia.media_url}
+            src={heroMedia.media_url}
+            autoPlay
+            muted
+            loop
+            playsInline
+            controls
+            aria-label="Vidéo de présentation du restaurant"
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+        ) : (
+          <img
+            src={heroMedia.media_url}
+            alt=""
+            className="absolute inset-0 h-full w-full object-cover"
+            onError={(event) => { event.currentTarget.style.display = 'none'; }}
+          />
+        ))}
+        <div
+          className="pointer-events-none absolute inset-0 bg-gradient-to-br from-amber-50 via-yellow-50 to-orange-100"
+          style={{ opacity: Math.max(0, Math.min(100, Number(heroMedia.overlay_opacity ?? 85))) / 100 }}
+        />
         
         <div className="relative max-w-7xl mx-auto px-6 py-20 md:py-32">
           <motion.div
@@ -153,6 +181,65 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      {reviews.data.length > 0 && (
+        <section className="relative overflow-hidden bg-gradient-to-b from-amber-50 to-white py-20">
+          <div className="mx-auto max-w-7xl px-6">
+            <div className="mb-12 flex flex-col items-center justify-between gap-6 text-center md:flex-row md:text-left">
+              <div>
+                <p className="mb-3 text-sm font-bold uppercase tracking-[0.2em] text-amber-700">Ils en parlent mieux que nous</p>
+                <h2 className="text-4xl font-black text-slate-900 md:text-5xl">Les avis de nos clients</h2>
+                <p className="mt-3 text-lg text-slate-600">Des expériences partagées après leur commande.</p>
+              </div>
+              <div className="rounded-2xl border border-amber-100 bg-white px-6 py-4 shadow-sm">
+                <div className="flex items-center justify-center gap-1" aria-label={`Note moyenne ${reviews.average_rating} sur 5`}>
+                  {[1, 2, 3, 4, 5].map(star => (
+                    <Star key={star} className={`h-5 w-5 ${star <= Math.round(reviews.average_rating) ? 'fill-amber-400 text-amber-400' : 'text-slate-200'}`} />
+                  ))}
+                </div>
+                <p className="mt-1 text-center text-sm text-slate-600">
+                  <strong className="text-slate-900">{reviews.average_rating.toFixed(1)}/5</strong> · {reviews.total} avis publiés
+                </p>
+              </div>
+            </div>
+
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+              {reviews.data.map((review, index) => (
+                <motion.div
+                  key={review.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true, amount: 0.2 }}
+                  transition={{ delay: index * 0.08 }}
+                >
+                  <Card className="flex h-full flex-col rounded-3xl border border-amber-100 bg-white p-7 shadow-sm transition-shadow hover:shadow-xl">
+                    <div className="mb-5 flex items-center justify-between">
+                      <div className="flex gap-1" aria-label={`Note ${review.rating} sur 5`}>
+                        {[1, 2, 3, 4, 5].map(star => (
+                          <Star key={star} className={`h-4 w-4 ${star <= review.rating ? 'fill-amber-400 text-amber-400' : 'text-slate-200'}`} />
+                        ))}
+                      </div>
+                      <span className="text-xs font-medium text-slate-400">
+                        {new Intl.DateTimeFormat('fr-GA', { month: 'long', year: 'numeric' }).format(new Date(review.created_at))}
+                      </span>
+                    </div>
+                    <p className="flex-1 text-lg leading-relaxed text-slate-700">“{review.comment}”</p>
+                    <div className="mt-6 flex items-center gap-3 border-t border-slate-100 pt-5">
+                      <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-yellow-400 to-amber-600 font-bold text-white">
+                        {(review.customer_name || 'C').charAt(0).toUpperCase()}
+                      </div>
+                      <div>
+                        <p className="font-bold text-slate-900">{review.customer_name}</p>
+                        <p className="text-xs text-slate-500">Commande vérifiée</p>
+                      </div>
+                    </div>
+                  </Card>
+                </motion.div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* CTA Section */}
       <section className="py-20 bg-gradient-to-r from-amber-600 to-yellow-500 text-white relative overflow-hidden">

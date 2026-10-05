@@ -5,15 +5,16 @@ const { authenticateToken, requirePagePermission } = require('../middleware/auth
 
 const router = express.Router();
 const prisma = new PrismaClient();
-function getFinanceFilters(query) {
+function getFinanceFilters(query, dateField = 'closed_at') {
   const where = {};
+  if (dateField === 'closed_at') where.closed_at = { not: null };
   if (query.start_date || query.end_date) {
-    where.created_date = {};
-    if (query.start_date) where.created_date.gte = new Date(`${query.start_date}T00:00:00.000Z`);
+    where[dateField] = { ...(dateField === 'closed_at' ? { not: null } : {}) };
+    if (query.start_date) where[dateField].gte = new Date(`${query.start_date}T00:00:00.000Z`);
     if (query.end_date) {
       const endExclusive = new Date(`${query.end_date}T00:00:00.000Z`);
       endExclusive.setUTCDate(endExclusive.getUTCDate() + 1);
-      where.created_date.lt = endExclusive;
+      where[dateField].lt = endExclusive;
     }
   }
   if (query.service_location) {
@@ -32,37 +33,46 @@ function isLostOrder(order) {
 function getNonLostOrderFilter(filters) {
   return {
     ...filters,
-    status: { not: 'annulee' },
-    payment_status: { not: 'refunded' }
+    status: { in: ['livree', 'servie', 'recuperee'] },
+    payment_status: 'paid',
+    closed_at: { ...(filters.closed_at || {}), not: null }
+  };
+}
+
+function getLostOrderFilter(query) {
+  return {
+    ...getFinanceFilters(query, 'created_date'),
+    OR: [{ status: 'annulee' }, { payment_status: 'refunded' }]
   };
 }
 
 // Get revenue data aggregated by date (admin only)
 router.get('/revenue', authenticateToken, requirePagePermission('finance', 'dashboard'), async (req, res) => {
   try {
-    const orders = await prisma.order.findMany({
-      where: getFinanceFilters(req.query),
-      select: {
-        created_date: true,
-        total_amount: true,
-        status: true,
-        payment_status: true
-      }
-    });
+    const [sales, lostOrders] = await Promise.all([
+      prisma.order.findMany({
+        where: getNonLostOrderFilter(getFinanceFilters(req.query)),
+        select: { closed_at: true, total_amount: true }
+      }),
+      prisma.order.findMany({
+        where: getLostOrderFilter(req.query),
+        select: { created_date: true, total_amount: true }
+      })
+    ]);
 
     // Aggregate by date
     const revenueByDate = {};
-    orders.forEach(order => {
-      const date = order.created_date.toISOString().split('T')[0]; // YYYY-MM-DD
+    sales.forEach(order => {
+      const date = order.closed_at.toISOString().split('T')[0];
       if (!revenueByDate[date]) {
         revenueByDate[date] = { actual: 0, lost: 0 };
       }
-
-      if (isLostOrder(order)) {
-        revenueByDate[date].lost += order.total_amount;
-      } else {
-        revenueByDate[date].actual += order.total_amount;
-      }
+      revenueByDate[date].actual += order.total_amount;
+    });
+    lostOrders.forEach(order => {
+      const date = order.created_date.toISOString().split('T')[0];
+      if (!revenueByDate[date]) revenueByDate[date] = { actual: 0, lost: 0 };
+      revenueByDate[date].lost += order.total_amount;
     });
 
     // Convert to array format for frontend
@@ -201,12 +211,18 @@ router.get('/filter-options', authenticateToken, requirePagePermission('finance'
 
 router.get('/top-locations', authenticateToken, requirePagePermission('finance', 'dashboard'), async (req, res) => {
   try {
-    const orders = await prisma.order.findMany({
-      where: { ...getFinanceFilters(req.query), order_type: 'sur_place' },
-      select: { service_location: true, total_amount: true, status: true, payment_status: true }
-    });
+    const [orders, lostOrders] = await Promise.all([
+      prisma.order.findMany({
+        where: { ...getNonLostOrderFilter(getFinanceFilters(req.query)), order_type: 'sur_place' },
+        select: { service_location: true, total_amount: true, status: true, payment_status: true }
+      }),
+      prisma.order.findMany({
+        where: { ...getLostOrderFilter(req.query), order_type: 'sur_place' },
+        select: { service_location: true, total_amount: true, status: true, payment_status: true }
+      })
+    ]);
     const locationStats = {};
-    for (const order of orders) {
+    for (const order of [...orders, ...lostOrders]) {
       const key = order.service_location || 'non_renseigne';
       if (!locationStats[key]) locationStats[key] = { location: key, revenue: 0, orders: 0, lostRevenue: 0, lostOrders: 0 };
       if (isLostOrder(order)) {
@@ -226,20 +242,20 @@ router.get('/top-locations', authenticateToken, requirePagePermission('finance',
 
 router.get('/top-servers', authenticateToken, requirePagePermission('finance', 'dashboard'), async (req, res) => {
   try {
-    const where = getFinanceFilters(req.query);
-    if (!where.validated_by) where.validated_by = { not: null };
-    const orders = await prisma.order.findMany({
-      where,
-      select: {
-        validated_by: true,
-        total_amount: true,
-        status: true,
-        payment_status: true,
-        validatedBy: { select: { full_name: true, role: true } }
-      }
-    });
+    const baseFilter = getFinanceFilters(req.query);
+    if (!baseFilter.validated_by) baseFilter.validated_by = { not: null };
+    const [orders, lostOrders] = await Promise.all([
+      prisma.order.findMany({
+        where: getNonLostOrderFilter(baseFilter),
+        select: { validated_by: true, total_amount: true, status: true, payment_status: true, validatedBy: { select: { full_name: true, role: true } } }
+      }),
+      prisma.order.findMany({
+        where: { ...getLostOrderFilter(req.query), validated_by: baseFilter.validated_by },
+        select: { validated_by: true, total_amount: true, status: true, payment_status: true, validatedBy: { select: { full_name: true, role: true } } }
+      })
+    ]);
     const serverStats = {};
-    for (const order of orders) {
+    for (const order of [...orders, ...lostOrders]) {
       if (order.validatedBy?.role !== 'serveur') continue;
       const id = order.validated_by;
       if (!serverStats[id]) serverStats[id] = { id, name: order.validatedBy?.full_name || 'Serveur', revenue: 0, orders: 0, lostRevenue: 0, lostOrders: 0 };
@@ -261,12 +277,12 @@ router.get('/top-servers', authenticateToken, requirePagePermission('finance', '
 router.get('/profit-summary', authenticateToken, requirePagePermission('finance', 'dashboard'), async (req, res) => {
   try {
     const dateFilter = getFinanceFilters({ start_date: req.query.start_date, end_date: req.query.end_date });
+    const expenseDateFilter = getFinanceFilters({ start_date: req.query.start_date, end_date: req.query.end_date }, 'expense_date').expense_date || {};
     const [orders, expenses] = await Promise.all([
       prisma.order.findMany({
         where: {
           ...dateFilter,
-          status: { in: ['livree', 'servie', 'recuperee'] },
-          payment_status: { not: 'refunded' }
+          ...getNonLostOrderFilter(dateFilter)
         },
         select: {
           total_amount: true,
@@ -287,7 +303,7 @@ router.get('/profit-summary', authenticateToken, requirePagePermission('finance'
         }
       }),
       prisma.expense.findMany({
-        where: dateFilter.created_date ? { expense_date: dateFilter.created_date } : {},
+        where: expenseDateFilter,
         select: { expense_type: true, amount: true }
       })
     ]);
@@ -341,9 +357,9 @@ router.get('/profit-summary', authenticateToken, requirePagePermission('finance'
 
 router.get('/expenses', authenticateToken, requirePagePermission('finance', 'dashboard'), async (req, res) => {
   try {
-    const filters = getFinanceFilters({ start_date: req.query.start_date, end_date: req.query.end_date });
+    const filters = getFinanceFilters({ start_date: req.query.start_date, end_date: req.query.end_date }, 'expense_date');
     const expenses = await prisma.expense.findMany({
-      where: filters.created_date ? { expense_date: filters.created_date } : {},
+      where: filters,
       include: {
         createdBy: { select: { full_name: true } },
         items: { include: { product: { select: { id: true, name: true } } } }

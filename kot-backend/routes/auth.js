@@ -30,6 +30,7 @@ async (accessToken, refreshToken, profile, done) => {
       });
 
       if (existingUser) {
+        if (!existingUser.is_active) return done(null, false);
         // Lier le compte Google existant
         user = await prisma.user.update({
           where: { id: existingUser.id },
@@ -47,6 +48,7 @@ async (accessToken, refreshToken, profile, done) => {
         });
       }
     }
+    if (!user.is_active) return done(null, false);
     return done(null, user);
   } catch (error) {
     return done(error, null);
@@ -76,12 +78,17 @@ router.get('/google/callback',
 router.post('/apple', async (req, res) => {
   try {
     const { identityToken, authorizationCode } = req.body;
+    if (!identityToken) return res.status(400).json({ message: 'Jeton Apple requis.' });
 
-    // Vérifier le token Apple
-    const appleUser = await appleSignin.verifyIdToken(identityToken, {
-      audience: process.env.APPLE_CLIENT_ID,
-      ignoreExpiration: true, // Pour développement
-    });
+    // Vérifier le jeton Apple et son expiration
+    let appleUser;
+    try {
+      appleUser = await appleSignin.verifyIdToken(identityToken, {
+        audience: process.env.APPLE_CLIENT_ID,
+      });
+    } catch (_tokenError) {
+      return res.status(401).json({ message: 'Jeton Apple invalide ou expiré.' });
+    }
 
     // Recherche ou création utilisateur
     let user = await prisma.user.findUnique({
@@ -94,6 +101,7 @@ router.post('/apple', async (req, res) => {
       });
 
       if (existingUser) {
+        if (!existingUser.is_active) return res.status(403).json({ message: 'Ce compte est désactivé.' });
         user = await prisma.user.update({
           where: { id: existingUser.id },
           data: { apple_id: appleUser.sub }
@@ -109,6 +117,7 @@ router.post('/apple', async (req, res) => {
         });
       }
     }
+    if (!user.is_active) return res.status(403).json({ message: 'Ce compte est désactivé.' });
 
     // Générer token JWT
     const token = jwt.sign(
@@ -135,7 +144,23 @@ router.post('/apple', async (req, res) => {
 // Register
 router.post('/register', async (req, res) => {
   try {
-    const { email, password, full_name, phone } = req.body;
+    const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+    const password = typeof req.body?.password === 'string' ? req.body.password : '';
+    const full_name = typeof req.body?.full_name === 'string' ? req.body.full_name.trim() : '';
+    const phone = typeof req.body?.phone === 'string' ? req.body.phone.trim() : '';
+
+    if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ message: 'Adresse e-mail invalide.' });
+    }
+    if (password.length < 8 || Buffer.byteLength(password, 'utf8') > 72) {
+      return res.status(400).json({ message: 'Le mot de passe doit contenir au moins 8 caractères et ne pas dépasser 72 octets.' });
+    }
+    if (full_name.length < 2 || full_name.length > 100 || /[\u0000-\u001f\u007f]/.test(full_name)) {
+      return res.status(400).json({ message: 'Le nom doit contenir entre 2 et 100 caractères.' });
+    }
+    if (phone && (phone.length > 25 || !/^\+?[0-9][0-9 ()-]{5,22}$/.test(phone))) {
+      return res.status(400).json({ message: 'Numéro de téléphone invalide.' });
+    }
 
     // Check if user exists
     const existingUser = await prisma.user.findUnique({
@@ -177,6 +202,7 @@ router.post('/register', async (req, res) => {
       }
     });
   } catch (error) {
+    if (error.code === 'P2002') return res.status(409).json({ message: 'Cette adresse e-mail est déjà utilisée.' });
     console.error('Register error:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
@@ -200,6 +226,9 @@ router.post('/login', async (req, res) => {
     const validPassword = await bcrypt.compare(password, user.password);
     if (!validPassword) {
       return res.status(401).json({ message: 'Invalid credentials' });
+    }
+    if (!user.is_active) {
+      return res.status(403).json({ message: 'Ce compte est désactivé.' });
     }
 
     // Generate token

@@ -4,7 +4,7 @@ const { authenticateToken, requirePagePermission } = require('../middleware/auth
 const PDFDocument = require('pdfkit');
 const ExcelJS = require('exceljs');
 const { format } = require('date-fns');
-const { recordOrderStockSale } = require('../utils/inventory');
+const { recognizeOrderStockSale } = require('../utils/inventory');
 const { awardOrderPoints, reverseOrderPoints } = require('../utils/loyalty');
 const { getPaidItemTaxMultiplier, getOrderItemTaxQuantity } = require('../utils/orderTaxAdjustment');
 
@@ -176,7 +176,7 @@ async function buildSalesReport(period) {
 
   const orders = await prisma.order.findMany({
     where: {
-      created_date: {
+      closed_at: {
         gte: startDate,
         lte: endDate
       },
@@ -242,6 +242,7 @@ async function buildSalesReport(period) {
   };
   const productSales = {};
   const userSales = {};
+  const locationSales = {};
 
   for (const order of orders) {
     const taxMultiplier = getPaidItemTaxMultiplier(order);
@@ -251,9 +252,16 @@ async function buildSalesReport(period) {
     );
     const orderRevenue = order.total_amount ?? orderItemsTotal;
     totalRevenue += orderRevenue;
+    const locationKey = order.order_type === 'sur_place'
+      ? (order.service_location || 'non_renseigne')
+      : order.order_type === 'emporter' ? 'a_emporter' : order.order_type === 'livraison' ? 'livraison' : 'non_renseigne';
+    if (!locationSales[locationKey]) locationSales[locationKey] = { orders: 0, revenue: 0, items: 0 };
+    locationSales[locationKey].orders += 1;
+    locationSales[locationKey].revenue += orderRevenue;
 
     const orderQuantity = order.items.reduce((sum, item) => sum + item.quantity, 0);
     totalItems += orderQuantity;
+    locationSales[locationKey].items += orderQuantity;
 
     const paymentMethod = order.payment_method || 'cash';
     if (paymentBreakdown[paymentMethod] === undefined) {
@@ -348,6 +356,16 @@ async function buildSalesReport(period) {
 
   const locationLabels = new Map((await prisma.restaurantLocation.findMany({ select: { slug: true, name: true } }))
     .map(location => [location.slug, location.name]));
+  const locationReport = Object.entries(locationSales)
+    .map(([slug, stats]) => ({
+      location: locationLabels.get(slug) || ({
+        non_renseigne: 'Lieu non renseigné',
+        a_emporter: 'À emporter',
+        livraison: 'Livraison'
+      }[slug] || slug),
+      ...stats
+    }))
+    .sort((a, b) => b.revenue - a.revenue);
 
   return {
     period,
@@ -361,6 +379,7 @@ async function buildSalesReport(period) {
     totalItems,
     averageOrderValue: totalOrders > 0 ? totalRevenue / totalOrders : 0,
     paymentBreakdown,
+    locationReport,
     topProducts,
     categoryReport,
     userReport,
@@ -485,14 +504,16 @@ router.post('/session/close', authenticateToken, requirePagePermission('cashier'
       return res.status(400).json({ message: 'No open cash register session found' });
     }
 
-    // Calculate session totals from orders (amounts are stored in centimes)
+    // Calculate the session totals from fulfilled, paid orders closed during this session.
+    const sessionClosedAt = new Date();
     const orders = await prisma.order.findMany({
       where: {
-        created_date: {
-          gte: session.opened_at
+        closed_at: {
+          gte: session.opened_at,
+          lte: sessionClosedAt
         },
         payment_status: 'paid',
-        status: { not: 'annulee' }
+        status: { in: ['livree', 'servie', 'recuperee'] }
       },
       include: { items: true }
     });
@@ -520,7 +541,7 @@ router.post('/session/close', authenticateToken, requirePagePermission('cashier'
     const updatedSession = await prisma.cashRegisterSession.update({
       where: { id: session.id },
       data: {
-        closed_at: new Date(),
+        closed_at: sessionClosedAt,
         closing_balance: closing_balance,
         total_revenue: totalRevenueCents,
         cash_payments: paymentMethods.cash,
@@ -809,6 +830,16 @@ router.get('/reports/:period/pdf', authenticateToken, requirePagePermission('cas
     });
     doc.moveDown();
 
+    sectionTitle(doc, 'Ventes par lieu');
+    if (!report.locationReport.length) {
+      doc.fontSize(10).fillColor(palette.muted).text('Aucune vente par lieu sur la période.');
+    } else {
+      report.locationReport.forEach(location => {
+        metricRow(doc, `${location.location} · ${location.orders} commande(s) · ${location.items} article(s)`, formatAmount(location.revenue));
+      });
+    }
+    doc.moveDown();
+
     sectionTitle(doc, 'Taxes collectées par taux');
     if (!report.taxBreakdown.length) {
       doc.fontSize(10).fillColor(palette.muted).text('Aucune taxe enregistrée sur la période.');
@@ -912,6 +943,11 @@ router.get('/reports/:period/excel', authenticateToken, requirePagePermission('c
     summary.getRow(1).font = { bold: true, size: 16 };
     summary.getRow(10).font = { bold: true };
     summary.columns = [{ width: 32 }, { width: 22 }, { width: 22 }];
+
+    const locations = workbook.addWorksheet('Ventes par lieu');
+    locations.addRow(['Lieu', 'Commandes', 'Articles', 'Ventes (FCFA)']).font = { bold: true };
+    report.locationReport.forEach(location => locations.addRow([location.location, location.orders, location.items, location.revenue]));
+    locations.columns = [{ width: 32 }, { width: 16 }, { width: 16 }, { width: 22 }];
 
     const taxes = workbook.addWorksheet('Taxes');
     taxes.addRow(['Taux', 'Pourcentage', 'Montant collecté (FCFA)']).font = { bold: true };
@@ -1090,18 +1126,20 @@ router.put('/orders/:id/deliver', authenticateToken, requirePagePermission('cash
     if (order.order_type !== 'livraison') return res.status(400).json({ message: 'Cette commande n’est pas une livraison' });
     if (order.status !== 'en_livraison') return res.status(400).json({ message: 'La commande doit être en livraison' });
 
-    const updatedOrder = await prisma.order.update({
-      where: { id },
-      data: { status: 'livree' },
-      include: {
-        user: {
-          select: { id: true, full_name: true, email: true, phone: true, loyalty_points: true }
-        },
-        items: true
-      }
+    const updatedOrder = await prisma.$transaction(async tx => {
+      const updated = await tx.order.update({
+        where: { id },
+        data: { status: 'livree' },
+        include: {
+          user: {
+            select: { id: true, full_name: true, email: true, phone: true, loyalty_points: true }
+          },
+          items: true
+        }
+      });
+      await recognizeOrderStockSale(tx, id);
+      return updated;
     });
-
-    await recordOrderStockSale(prisma, id);
 
     if (updatedOrder.user_id) {
       await prisma.user.update({
@@ -1124,6 +1162,7 @@ router.put('/orders/:id/deliver', authenticateToken, requirePagePermission('cash
       paymentUpdated // Indicate if payment was also processed
     });
   } catch (error) {
+    if (error.statusCode) return res.status(error.statusCode).json({ message: error.message });
     console.error('Deliver order error:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
@@ -1156,13 +1195,11 @@ router.get('/session/close-report', authenticateToken, requirePagePermission('ca
     // Fetch orders in the session window
     const orders = await prisma.order.findMany({
       where: {
-        created_date: {
+        closed_at: {
           gte: session.opened_at,
           lte: reportEndDate
         },
-        status: {
-          not: 'annulee'
-        },
+        status: { in: ['livree', 'servie', 'recuperee'] },
         payment_status: 'paid'
       },
       include: {

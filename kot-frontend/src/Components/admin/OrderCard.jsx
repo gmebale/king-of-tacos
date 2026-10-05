@@ -9,6 +9,14 @@ import { fr } from "date-fns/locale";
 import { formatCustomization } from "../../utils/customization";
 
 export default function OrderCard({ order, onUpdateStatus, onCancel }) {
+  const formatPickupTime = value => {
+    if (!value) return '';
+    const date = new Date(value);
+    if (!Number.isNaN(date.getTime()) && /^\d{4}-\d{2}-\d{2}T.*(?:Z|[+-]\d{2}:\d{2})$/.test(value)) {
+      return new Intl.DateTimeFormat('fr-GA', { timeZone: 'Africa/Libreville', dateStyle: 'medium', timeStyle: 'short' }).format(date);
+    }
+    return value;
+  };
   const getStatusColor = (status) => {
     const colors = {
       en_attente: "bg-yellow-100 text-yellow-800 border-yellow-300",
@@ -122,7 +130,7 @@ export default function OrderCard({ order, onUpdateStatus, onCancel }) {
             {order.pickup_time && (
               <div className="flex items-center gap-3 text-sm text-amber-600">
                 <Clock className="w-4 h-4" />
-                Heure souhaitée: {order.pickup_time}
+                Heure souhaitée: {formatPickupTime(order.pickup_time)}
               </div>
             )}
           </div>

@@ -177,6 +177,7 @@ export default function AdminFinance() {
       <Card className="mb-8">
         <CardHeader>
           <CardTitle>Évolution des revenus</CardTitle>
+          <p className="text-sm text-gray-500">Les ventes payées sont datées à la clôture de la commande ; le manque à gagner est daté à la création des commandes annulées ou remboursées.</p>
         </CardHeader>
         <CardContent>
           <ResponsiveContainer width="100%" height={400}>

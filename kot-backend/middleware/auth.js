@@ -57,6 +57,9 @@ const authenticateToken = async (req, res, next) => {
     if (!user) {
       return res.status(401).json({ message: 'Invalid token' });
     }
+    if (!user.is_active) {
+      return res.status(403).json({ message: 'Ce compte est désactivé.' });
+    }
 
     const roleValue = normalizeRole(user);
     const permissionMap = {};

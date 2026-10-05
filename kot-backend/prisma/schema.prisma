@@ -291,6 +291,7 @@ model OrderItem {
   quantity             Int
   price                Int // Prix unitaire en centimes
   customization        Json? // Détails de personnalisation du produit
+  inventory_components Json? // Snapshot des produits choisis à débiter du stock
   customizationSummary String? // Résumé textuel des personnalisations
   preparation_station PreparationStation?
   preparation_status PreparationStatus @default(en_attente)

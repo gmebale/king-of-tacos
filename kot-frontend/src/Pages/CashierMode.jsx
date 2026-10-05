@@ -608,6 +608,27 @@ export default function CashierMode() {
             </Card>
           </div>
 
+          <Card>
+            <CardHeader>
+              <CardTitle>Ventes par lieu</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {currentReport.locationReport?.length ? (
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                  {currentReport.locationReport.map(location => (
+                    <div key={location.location} className="rounded-xl border border-amber-100 bg-amber-50/60 p-4">
+                      <p className="font-semibold text-gray-900">{location.location}</p>
+                      <p className="mt-1 text-xl font-bold text-amber-700">{location.revenue.toLocaleString()} FCFA</p>
+                      <p className="text-sm text-gray-600">{location.orders} commande(s) · {location.items} article(s)</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-500">Aucune vente par lieu pour cette période.</p>
+              )}
+            </CardContent>
+          </Card>
+
           {/* Top Products */}
           <Card>
             <CardHeader>

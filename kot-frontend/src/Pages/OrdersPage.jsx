@@ -24,6 +24,7 @@ import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "../utils";
 import api from "../services/api.service";
 import { Order } from '../Entities/Order';
+import { Review } from '../Entities/Review';
 import { Product } from '../Entities/Product';
 import { User } from '../Entities/User';
 import { useCart } from '../hooks/useCart';
@@ -39,6 +40,8 @@ export default function OrdersPage() {
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [reviewText, setReviewText] = useState("");
   const [reviewRating, setReviewRating] = useState(5);
+  const [reviewError, setReviewError] = useState("");
+  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
   const [editingOrder, setEditingOrder] = useState(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [products, setProducts] = useState([]);
@@ -103,11 +106,12 @@ export default function OrdersPage() {
     }
   };
 
-  const submitReview = async (orderId, productId) => {
+  const submitReview = async (orderId) => {
+    setReviewError("");
+    setIsSubmittingReview(true);
     try {
-      await api.post('/orders/review', {
-        order_id: orderId,
-        product_id: productId,
+      await Review.create({
+        orderId,
         rating: reviewRating,
         comment: reviewText
       });
@@ -118,7 +122,17 @@ export default function OrdersPage() {
       await loadOrders(); // Refresh orders
     } catch (error) {
       console.error('Error submitting review:', error);
+      setReviewError(error.response?.data?.message || 'Impossible d’envoyer votre avis. Réessayez.');
+    } finally {
+      setIsSubmittingReview(false);
     }
+  };
+
+  const openReviewDialog = (order) => {
+    setReviewError("");
+    setReviewText("");
+    setReviewRating(5);
+    setSelectedOrder(order);
   };
 
   const handleEditOrder = (order) => {
@@ -191,8 +205,9 @@ export default function OrdersPage() {
     }
   };
 
-  const activeOrders = orders.filter(order => !['livree', 'annulee'].includes(order.status));
-  const completedOrders = orders.filter(order => order.status === 'livree');
+  const fulfilledStatuses = ['livree', 'servie', 'recuperee'];
+  const activeOrders = orders.filter(order => !fulfilledStatuses.includes(order.status) && order.status !== 'annulee');
+  const completedOrders = orders.filter(order => fulfilledStatuses.includes(order.status));
   const cancelledOrders = orders.filter(order => order.status === 'annulee');
 
   // Check if user is authenticated
@@ -287,14 +302,14 @@ export default function OrdersPage() {
                 key={order.id}
                 order={order}
                 onReorder={reorder}
-                onReview={(order) => setSelectedOrder(order)}
+                onReview={openReviewDialog}
                 onEdit={handleEditOrder}
                 onCancel={handleCancelOrder}
                 getStatusColor={getStatusColor}
                 getStatusText={getStatusText}
                 getStatusIcon={getStatusIcon}
                 showReorder={true}
-                showReview={true}
+                showReview={order.payment_status === 'paid' && !order.reviews?.length}
                 showEdit={false}
                 showCancel={false}
               />
@@ -365,16 +380,19 @@ export default function OrdersPage() {
                 value={reviewText}
                 onChange={(e) => setReviewText(e.target.value)}
                 placeholder="Partagez votre expérience..."
+                maxLength={800}
                 className="mt-1"
               />
             </div>
+            {reviewError && <p className="text-sm text-red-600" role="alert">{reviewError}</p>}
             <div className="flex gap-2">
               <Button
-                onClick={() => submitReview(selectedOrder.id, selectedOrder.items[0]?.product_id)}
+                onClick={() => submitReview(selectedOrder.id)}
+                disabled={isSubmittingReview || !reviewText.trim()}
                 className="flex-1"
               >
                 <MessageSquare className="w-4 h-4 mr-2" />
-                Publier l'avis
+                {isSubmittingReview ? 'Envoi…' : 'Publier l’avis'}
               </Button>
               <Button
                 variant="outline"
@@ -523,7 +541,7 @@ function OrderCard({
           </Button>
         )}
 
-        {showReview && (
+        {showReview && order.payment_status === 'paid' && !order.reviews?.length && (
           <Button
             onClick={() => onReview(order)}
             size="sm"

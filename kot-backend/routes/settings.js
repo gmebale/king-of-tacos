@@ -17,6 +17,8 @@ const DEFAULT_LOCATIONS = [
   { slug: 'vip', name: 'Espace VIP' },
   { slug: 'bar', name: 'Bar' }
 ];
+const ORDERING_WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const EMPTY_ORDERING_SCHEDULE = Object.fromEntries(ORDERING_WEEKDAYS.map(day => [day, { active: false, open_time: '11:00', last_order_time: '21:30' }]));
 
 async function ensureDefaultLocations() {
   await prisma.restaurantLocation.createMany({ data: DEFAULT_LOCATIONS, skipDuplicates: true });
@@ -41,6 +43,61 @@ function toBoolean(value, fallback = false) {
   if (typeof value === 'number') return value !== 0;
   return String(value).toLowerCase() === 'true';
 }
+
+function parseOnlineOrderingConfig(value) {
+  try {
+    const parsed = JSON.parse(value || '{}');
+    return {
+      enabled: parsed.enabled !== false,
+      outside_hours_mode: parsed.outside_hours_mode === 'next_opening' ? 'next_opening' : 'closed',
+      weekly: { ...EMPTY_ORDERING_SCHEDULE, ...(parsed.weekly || {}) }
+    };
+  } catch (_error) {
+    return { enabled: true, outside_hours_mode: 'closed', weekly: EMPTY_ORDERING_SCHEDULE };
+  }
+}
+
+router.get('/online-ordering', async (_req, res) => {
+  try {
+    const row = await prisma.settings.findUnique({ where: { key: 'online_ordering_config' }, select: { value: true } });
+    const { getOnlineOrderingState } = require('../utils/onlineOrdering');
+    const config = parseOnlineOrderingConfig(row?.value);
+    res.json({ ...config, ...getOnlineOrderingState(row?.value) });
+  } catch (error) {
+    console.error('Get online ordering settings error:', error);
+    res.status(500).json({ message: 'Impossible de charger les horaires de commande' });
+  }
+});
+
+router.put('/online-ordering', authenticateToken, requirePagePermission('settings'), async (req, res) => {
+  try {
+    const { enabled, outside_hours_mode, weekly } = req.body || {};
+    if (typeof enabled !== 'boolean' || !['closed', 'next_opening'].includes(outside_hours_mode) || !weekly || typeof weekly !== 'object') {
+      return res.status(400).json({ message: 'Configuration des commandes en ligne invalide' });
+    }
+    const normalizedWeekly = {};
+    for (const dayName of ORDERING_WEEKDAYS) {
+      const day = weekly[dayName];
+      if (!day || typeof day.active !== 'boolean' || !/^([01]\d|2[0-3]):[0-5]\d$/.test(day.open_time || '') || !/^([01]\d|2[0-3]):[0-5]\d$/.test(day.last_order_time || '')) {
+        return res.status(400).json({ message: `Horaires invalides pour ${dayName}` });
+      }
+      if (day.active && day.open_time === day.last_order_time) {
+        return res.status(400).json({ message: `L’ouverture et l’heure limite ne peuvent pas être identiques (${dayName})` });
+      }
+      normalizedWeekly[dayName] = { active: day.active, open_time: day.open_time, last_order_time: day.last_order_time };
+    }
+    const config = { enabled, outside_hours_mode, weekly: normalizedWeekly };
+    await prisma.settings.upsert({
+      where: { key: 'online_ordering_config' },
+      update: { value: JSON.stringify(config) },
+      create: { key: 'online_ordering_config', value: JSON.stringify(config) }
+    });
+    res.json({ ...config, configured: true });
+  } catch (error) {
+    console.error('Update online ordering settings error:', error);
+    res.status(500).json({ message: 'Impossible d’enregistrer les horaires de commande' });
+  }
+});
 
 // Active restaurant locations are available to the server checkout.
 router.get('/locations', async (_req, res) => {
@@ -167,6 +224,65 @@ router.patch('/tax-rates/:id', authenticateToken, requireRole(['admin']), async 
 });
 
 // Get restaurant settings
+router.get('/homepage', async (_req, res) => {
+  try {
+    const rows = await prisma.settings.findMany({ where: { key: { in: ['hero_media_url', 'hero_media_type', 'hero_overlay_opacity'] } } });
+    const settings = mapSettings(rows);
+    const overlayOpacity = Number(settings.hero_overlay_opacity);
+    res.json({
+      media_url: settings.hero_media_url || '',
+      media_type: settings.hero_media_type || '',
+      overlay_opacity: Number.isInteger(overlayOpacity) && overlayOpacity >= 0 && overlayOpacity <= 100 ? overlayOpacity : 85
+    });
+  } catch (error) {
+    console.error('Get homepage settings error:', error);
+    res.status(500).json({ message: 'Impossible de charger la bannière' });
+  }
+});
+
+router.put('/homepage', authenticateToken, requirePagePermission('settings'), async (req, res) => {
+  try {
+    const mediaUrl = typeof req.body?.media_url === 'string' ? req.body.media_url.trim() : '';
+    const mediaType = typeof req.body?.media_type === 'string' ? req.body.media_type : '';
+    const overlayOpacity = Number(req.body?.overlay_opacity);
+    if (!Number.isInteger(overlayOpacity) || overlayOpacity < 0 || overlayOpacity > 100) {
+      return res.status(400).json({ message: 'L’opacité doit être un pourcentage entre 0 et 100.' });
+    }
+    if (!mediaUrl) {
+      await prisma.$transaction([
+        prisma.settings.deleteMany({ where: { key: { in: ['hero_media_url', 'hero_media_type'] } } }),
+        prisma.settings.upsert({ where: { key: 'hero_overlay_opacity' }, update: { value: String(overlayOpacity) }, create: { key: 'hero_overlay_opacity', value: String(overlayOpacity) } })
+      ]);
+      return res.json({ media_url: '', media_type: '', overlay_opacity: overlayOpacity });
+    }
+    if (!['image', 'video'].includes(mediaType) || mediaUrl.length > 2048) {
+      return res.status(400).json({ message: 'Média de bannière invalide.' });
+    }
+    let pathname;
+    try {
+      pathname = new URL(mediaUrl, 'https://kingoftacos.com').pathname;
+    } catch (_error) {
+      return res.status(400).json({ message: 'Adresse du média invalide.' });
+    }
+    const extension = pathname.match(/\.([a-z0-9]+)$/i)?.[1]?.toLowerCase();
+    const imageExtensions = ['jpg', 'jpeg', 'png', 'webp'];
+    const videoExtensions = ['mp4', 'webm', 'mov'];
+    const allowedExtensions = mediaType === 'image' ? imageExtensions : videoExtensions;
+    if (!pathname.startsWith('/uploads/') || !allowedExtensions.includes(extension)) {
+      return res.status(400).json({ message: 'La bannière doit être un média téléversé dans un format pris en charge.' });
+    }
+    await prisma.$transaction([
+      prisma.settings.upsert({ where: { key: 'hero_media_url' }, update: { value: mediaUrl }, create: { key: 'hero_media_url', value: mediaUrl } }),
+      prisma.settings.upsert({ where: { key: 'hero_media_type' }, update: { value: mediaType }, create: { key: 'hero_media_type', value: mediaType } }),
+      prisma.settings.upsert({ where: { key: 'hero_overlay_opacity' }, update: { value: String(overlayOpacity) }, create: { key: 'hero_overlay_opacity', value: String(overlayOpacity) } })
+    ]);
+    res.json({ media_url: mediaUrl, media_type: mediaType, overlay_opacity: overlayOpacity });
+  } catch (error) {
+    console.error('Update homepage settings error:', error);
+    res.status(500).json({ message: 'Impossible de sauvegarder la bannière' });
+  }
+});
+
 router.get('/restaurant', authenticateToken, requirePagePermission('settings'), async (req, res) => {
   try {
     const settings = await prisma.settings.findMany();

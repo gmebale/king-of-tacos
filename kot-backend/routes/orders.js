@@ -4,8 +4,9 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { authenticateToken, requireRole, requirePagePermission } = require('../middleware/auth');
 const { buildTaxSnapshot } = require('../utils/orderItemPricing');
-const { recordOrderStockSale } = require('../utils/inventory');
+const { recognizeOrderStockSale } = require('../utils/inventory');
 const { awardOrderPoints } = require('../utils/loyalty');
+const { getOnlineOrderingState } = require('../utils/onlineOrdering');
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -118,6 +119,7 @@ async function buildOrderItems(items, { giftedProductId = null } = {}) {
     if (['configurable', 'combo'].includes(product.type) && optionGroups.length === 0) throw Object.assign(new Error(`${product.name} n’a pas encore ses choix configurés.`), { statusCode: 409 });
     const selection = item.customization && typeof item.customization === 'object' ? item.customization : {};
     let generatedSummary = '';
+    const inventoryComponentQuantities = new Map();
 
     if (optionGroups.length) {
       const knownGroupIds = new Set(optionGroups.map(group => String(group.id)));
@@ -141,6 +143,10 @@ async function buildOrderItems(items, { giftedProductId = null } = {}) {
         if (chosenOptions.some(option => option.productId && !availableOptionIds.has(Number(option.productId)))) throw Object.assign(new Error(`Un choix de « ${group.name} » n’est plus disponible.`), { statusCode: 409 });
 
         chosenOptions.forEach((option, index) => {
+          const componentId = Number(option.productId);
+          if (Number.isInteger(componentId) && componentId > 0) {
+            inventoryComponentQuantities.set(componentId, (inventoryComponentQuantities.get(componentId) || 0) + 1);
+          }
           if (group.type === 'multiple' && Number(group.includedCount) > 0 && index < Number(group.includedCount)) return;
           const modifier = group.type === 'multiple' && Number(group.includedCount) > 0 && Number(group.extraPrice) > 0
             ? Number(group.extraPrice)
@@ -160,6 +166,7 @@ async function buildOrderItems(items, { giftedProductId = null } = {}) {
     const tax = buildTaxSnapshot(price, product);
     return {
       product_id: product.id,
+      inventory_components: [...inventoryComponentQuantities].map(([product_id, component_quantity]) => ({ product_id, quantity: component_quantity })),
       product_name: product.name,
       quantity,
       price,
@@ -306,7 +313,8 @@ router.get('/my-orders', authenticateToken, async (req, res) => {
       where: { user_id: req.user.id },
       include: {
         items: true,
-        cancellation: { include: { reason: true } }
+        cancellation: { include: { reason: true } },
+        reviews: { where: { user_id: req.user.id }, select: { id: true, status: true } }
       },
       orderBy: { created_date: 'desc' }
     });
@@ -495,6 +503,21 @@ router.post('/', async (req, res) => {
       return res.status(503).json({ message: 'Le paiement Mobile Money en ligne est momentanément indisponible.' });
     }
 
+    const orderingConfig = await prisma.settings.findUnique({ where: { key: 'online_ordering_config' }, select: { value: true } });
+    const orderingState = getOnlineOrderingState(orderingConfig?.value);
+    let acceptedPickupTime = pickup_time || null;
+    if (orderingState.configured) {
+      if (!orderingState.enabled) {
+        return res.status(503).json({ message: 'Les commandes en ligne sont temporairement suspendues.' });
+      }
+      if (!orderingState.accepting_now) {
+        if (orderingState.mode !== 'next_opening' || !orderingState.next_opening_at) {
+          return res.status(403).json({ message: 'Les commandes en ligne sont fermées pour le moment.', next_opening_at: orderingState.next_opening_at });
+        }
+        acceptedPickupTime = orderingState.next_opening_at;
+      }
+    }
+
     if (order_type === 'sur_place') {
       return res.status(403).json({ message: 'Les commandes sur place doivent être saisies par un serveur' });
     }
@@ -578,7 +601,7 @@ router.post('/', async (req, res) => {
         order_type,
         service_location: null,
         delivery_address,
-        pickup_time,
+        pickup_time: acceptedPickupTime,
         notes,
         payment_method: payment_method || null,
         items: {
@@ -791,20 +814,22 @@ router.put('/:id', authenticateToken, async (req, res) => {
       }
     }
 
-    const updatedOrder = await prisma.order.update({
-      where: { id },
-      data: updateData,
-      include: {
-        user: {
-          select: { id: true, full_name: true, email: true, loyalty_points: true }
-        },
-        items: true
+    const updatedOrder = await prisma.$transaction(async tx => {
+      const updated = await tx.order.update({
+        where: { id },
+        data: updateData,
+        include: {
+          user: {
+            select: { id: true, full_name: true, email: true, loyalty_points: true }
+          },
+          items: true
+        }
+      });
+      if (status && ['livree', 'servie', 'recuperee'].includes(status)) {
+        await recognizeOrderStockSale(tx, id);
       }
+      return updated;
     });
-
-    if (status && ['livree', 'servie', 'recuperee'].includes(status)) {
-      await recordOrderStockSale(prisma, id);
-    }
 
     // Log status change when admin/staff update status
     if (isAdminOrStaff && status) {
@@ -824,6 +849,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
 
     res.json(updatedOrder);
   } catch (error) {
+    if (error.statusCode) return res.status(error.statusCode).json({ message: error.message });
     if (error.code === 'P2025') {
       return res.status(404).json({ message: 'Order not found' });
     }
@@ -897,15 +923,17 @@ router.post('/:id/close', authenticateToken, requireRole(['caissier','admin']), 
       if (!['servie', 'recuperee', 'livree'].includes(order.status)) {
         return res.status(400).json({ message: 'La commande doit être servie, récupérée ou livrée avant clôture' });
       }
-      await recordOrderStockSale(prisma, id);
     }
 
-    const updated = await prisma.order.update({
-      where: { id },
-      data: {
-        closed_by: req.user.id,
-        closed_at: new Date()
-      }
+    const updated = await prisma.$transaction(async tx => {
+      if (order.status !== 'annulee') await recognizeOrderStockSale(tx, id);
+      return tx.order.update({
+        where: { id },
+        data: {
+          closed_by: req.user.id,
+          closed_at: new Date()
+        }
+      });
     });
     await awardOrderPoints(prisma, id);
 
@@ -925,6 +953,7 @@ router.post('/:id/close', authenticateToken, requireRole(['caissier','admin']), 
 
     res.json(updated);
   } catch (error) {
+    if (error.statusCode) return res.status(error.statusCode).json({ message: error.message });
     console.error('Close order error:', error);
     res.status(500).json({ message: 'Internal server error' });
   }

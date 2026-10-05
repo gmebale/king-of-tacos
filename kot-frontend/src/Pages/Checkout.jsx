@@ -21,6 +21,7 @@ export default function Checkout() {
 
   const [user, setUser] = useState(null);
   const [serviceLocations, setServiceLocations] = useState([]);
+  const [onlineOrdering, setOnlineOrdering] = useState(null);
   const [linkedCustomer, setLinkedCustomer] = useState(null);
   const [searchingLoyaltyCustomer, setSearchingLoyaltyCustomer] = useState(false);
   const [promoInput, setPromoInput] = useState('');
@@ -52,6 +53,9 @@ export default function Checkout() {
     api.get('/settings/locations')
       .then(response => setServiceLocations(response.data || []))
       .catch(error => console.error('Error loading service locations:', error));
+    api.get('/settings/online-ordering')
+      .then(response => setOnlineOrdering(response.data))
+      .catch(error => console.error('Error loading online ordering availability:', error));
   }, []);
 
   const loadCart = () => {
@@ -166,6 +170,15 @@ export default function Checkout() {
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    if (onlineOrdering?.configured && !onlineOrdering.enabled) {
+      return toast.error('Les commandes en ligne sont temporairement suspendues.');
+    }
+    if (onlineOrdering?.configured && !onlineOrdering.accepting_now && onlineOrdering.mode !== 'next_opening') {
+      const nextOpening = onlineOrdering.next_opening_at
+        ? new Intl.DateTimeFormat('fr-GA', { timeZone: 'Africa/Libreville', dateStyle: 'short', timeStyle: 'short' }).format(new Date(onlineOrdering.next_opening_at))
+        : null;
+      return toast.error(nextOpening ? `Les commandes sont fermées. Prochaine ouverture : ${nextOpening}.` : 'Les commandes en ligne sont fermées pour le moment.');
+    }
     if (isStaffOrder && formData.order_type === 'sur_place' && !formData.service_location) return;
     navigate('/payment', {
       state: {
@@ -205,6 +218,15 @@ export default function Checkout() {
 
         <div className="grid lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2">
+            {onlineOrdering?.configured && (!onlineOrdering.enabled || !onlineOrdering.accepting_now) && (
+              <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                {!onlineOrdering.enabled ? 'Les commandes en ligne sont temporairement suspendues.' : onlineOrdering.mode === 'next_opening' && onlineOrdering.next_opening_at
+                  ? `Votre commande sera préparée à partir du prochain créneau : ${new Intl.DateTimeFormat('fr-GA', { timeZone: 'Africa/Libreville', dateStyle: 'medium', timeStyle: 'short' }).format(new Date(onlineOrdering.next_opening_at))}.`
+                  : onlineOrdering.next_opening_at
+                    ? `Les commandes sont fermées. Prochaine ouverture : ${new Intl.DateTimeFormat('fr-GA', { timeZone: 'Africa/Libreville', dateStyle: 'medium', timeStyle: 'short' }).format(new Date(onlineOrdering.next_opening_at))}.`
+                    : 'Aucun prochain créneau de commande n’est configuré.'}
+              </div>
+            )}
             <form onSubmit={handleSubmit} className="space-y-6">
               <Card>
                 <CardHeader>

@@ -11,23 +11,61 @@ function isValidRating(rating) {
   return Number.isInteger(value) && value >= 1 && value <= 5;
 }
 
+// Public homepage feed: only reviews approved by an administrator are exposed.
+router.get('/public', async (_req, res) => {
+  try {
+    const where = { status: ReviewStatus.published };
+    const [total, aggregate, rows] = await Promise.all([
+      prisma.review.count({ where }),
+      prisma.review.aggregate({ where, _avg: { rating: true } }),
+      prisma.review.findMany({
+        where,
+        take: 6,
+        orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
+        select: {
+          id: true,
+          rating: true,
+          comment: true,
+          created_at: true,
+          user: { select: { full_name: true } }
+        }
+      })
+    ]);
+    res.json({
+      total,
+      average_rating: aggregate._avg.rating ? Number(aggregate._avg.rating.toFixed(1)) : 0,
+      data: rows.map(({ user, ...review }) => {
+        const [firstName, ...familyNames] = String(user?.full_name || '').trim().split(/\s+/).filter(Boolean);
+        const customerName = firstName
+          ? `${firstName}${familyNames.length ? ` ${familyNames[0].charAt(0).toUpperCase()}.` : ''}`
+          : 'Client King Of Tacos';
+        return { ...review, customer_name: customerName };
+      })
+    });
+  } catch (error) {
+    console.error('Get public reviews error:', error);
+    res.status(500).json({ message: 'Impossible de charger les avis' });
+  }
+});
+
 // Create a review (user, linked to an order)
 router.post('/', authenticateToken, async (req, res) => {
   try {
     const { orderId, rating, comment } = req.body;
+    const normalizedComment = typeof comment === 'string' ? comment.trim() : '';
 
-    if (!orderId || !isValidRating(rating) || !comment) {
+    if (typeof orderId !== 'string' || !orderId.trim() || !isValidRating(rating) || !normalizedComment) {
       return res.status(400).json({ message: 'orderId, rating (1-5) et commentaire sont requis' });
     }
 
-    if (comment.length > 800) {
+    if (normalizedComment.length > 800) {
       return res.status(400).json({ message: 'Commentaire trop long (800 caractères max)' });
     }
 
     // Check order ownership
     const order = await prisma.order.findUnique({
-      where: { id: orderId },
-      select: { id: true, user_id: true }
+      where: { id: orderId.trim() },
+      select: { id: true, user_id: true, status: true, payment_status: true }
     });
 
     if (!order) {
@@ -37,10 +75,13 @@ router.post('/', authenticateToken, async (req, res) => {
     if (order.user_id !== req.user.id) {
       return res.status(403).json({ message: 'Cette commande ne vous appartient pas' });
     }
+    if (!['livree', 'servie', 'recuperee'].includes(order.status) || order.payment_status !== 'paid') {
+      return res.status(409).json({ message: 'Un avis est possible après le service et la confirmation du paiement.' });
+    }
 
     // One review per order per user
     const existing = await prisma.review.findFirst({
-      where: { order_id: orderId, user_id: req.user.id }
+      where: { order_id: order.id, user_id: req.user.id }
     });
 
     if (existing) {
@@ -49,10 +90,10 @@ router.post('/', authenticateToken, async (req, res) => {
 
     const created = await prisma.review.create({
       data: {
-        order_id: orderId,
+        order_id: order.id,
         user_id: req.user.id,
         rating: Number(rating),
-        comment,
+        comment: normalizedComment,
         status: ReviewStatus.pending
       }
     });
