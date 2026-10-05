@@ -9,6 +9,7 @@ import { createPageUrl } from "../utils";
 import { formatCustomization } from "../utils/customization";
 import { useAuthContext } from "../contexts/AuthContext";
 import { Input } from "../Components/ui/input";
+import { Label } from "../Components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "../Components/ui/dialog";
 import { toast } from 'react-hot-toast';
 import api from "../services/api.service";
