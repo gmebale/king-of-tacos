@@ -97,6 +97,14 @@ successful payment.
 ### Base de données
 Assurez-vous que XAMPP est démarré et que la base `king_of_tacos` existe.
 
+### Migrations de schéma en production
+Le démarrage de l’API ne lance aucune migration SQL. La fonctionnalité de motifs d’annulation ajoute
+les tables `order_cancellation_reasons` et `order_cancellations` ainsi que quatre motifs initiaux.
+Avant son déploiement, sauvegardez la base puis appliquez explicitement, une seule fois, le fichier
+`prisma/migrations/20261005130000_order_cancellations/migration.sql` à la base `king_of_tacos`.
+Cette migration est additive : elle ne modifie ni ne supprime les commandes existantes. Déployez le
+nouveau code seulement après confirmation de son application.
+
 ## 📡 API Endpoints
 
 ### Authentification

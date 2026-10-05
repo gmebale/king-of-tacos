@@ -16,8 +16,10 @@ import { Tabs, TabsList, TabsTrigger } from "../Components/ui/tabs";
 import { Card, CardContent } from "../Components/ui/card";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
+import api from "../services/api.service";
 
 import OrderCard from "../Components/admin/OrderCard";
+import OrderCancellationDialog from "../Components/OrderCancellationDialog";
 
 export default function AdminOrders() {
   const [orders, setOrders] = useState([]);
@@ -25,6 +27,9 @@ export default function AdminOrders() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [isLoading, setIsLoading] = useState(true);
+  const [cancellationReasons, setCancellationReasons] = useState([]);
+  const [cancellationOrder, setCancellationOrder] = useState(null);
+  const [isCancelling, setIsCancelling] = useState(false);
 
   useEffect(() => {
     loadOrders();
@@ -36,9 +41,18 @@ export default function AdminOrders() {
 
   const loadOrders = async () => {
     setIsLoading(true);
-    const data = await Order.list("-created_date");
-    setOrders(data);
-    setIsLoading(false);
+    try {
+      const [data, reasonsResponse] = await Promise.all([
+        Order.list("-created_date"),
+        api.get('/orders/cancellation-reasons')
+      ]);
+      setOrders(data);
+      setCancellationReasons(reasonsResponse.data);
+    } catch (error) {
+      console.error('Error loading orders and cancellation reasons:', error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const filterOrders = () => {
@@ -65,6 +79,20 @@ export default function AdminOrders() {
     loadOrders();
   };
 
+  const confirmCancelOrder = async ({ reasonId, reasonText }) => {
+    if (!cancellationOrder) return;
+    setIsCancelling(true);
+    try {
+      await api.post(`/orders/${cancellationOrder.id}/cancel`, { reasonId, reasonText });
+      setCancellationOrder(null);
+      await loadOrders();
+    } catch (error) {
+      alert(error.response?.data?.message || 'Erreur lors de l’annulation de la commande.');
+    } finally {
+      setIsCancelling(false);
+    }
+  };
+
   const statusCounts = {
     all: orders.length,
     en_attente: orders.filter(o => o.status === "en_attente").length,
@@ -77,6 +105,11 @@ export default function AdminOrders() {
     annulee: orders.filter(o => o.status === "annulee").length,
     cloturees: orders.filter(o => Boolean(o.closed_at)).length
   };
+  const cancellationCounts = cancellationReasons.map(reason => ({
+    ...reason,
+    count: orders.filter(order => order.status === 'annulee' && order.cancellation?.reason_id === reason.id).length
+  }));
+  const cancellationsWithoutReason = orders.filter(order => order.status === 'annulee' && !order.cancellation).length;
 
   return (
     <div className="p-4 md:p-6 lg:p-8">
@@ -92,6 +125,24 @@ export default function AdminOrders() {
           Suivez et gérez toutes les commandes en temps réel
         </p>
       </motion.div>
+
+      <section className="mb-6 rounded-xl border bg-white p-4 shadow-sm" aria-label="Statistiques des motifs d’annulation">
+        <h2 className="mb-3 text-lg font-semibold text-gray-900">Motifs d’annulation</h2>
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          {cancellationCounts.map(reason => (
+            <div key={reason.id} className="rounded-lg bg-amber-50 p-3">
+              <p className="text-sm text-gray-600">{reason.label}</p>
+              <p className="text-2xl font-bold text-amber-700">{reason.count}</p>
+            </div>
+          ))}
+          {cancellationsWithoutReason > 0 && (
+            <div className="rounded-lg bg-gray-50 p-3">
+              <p className="text-sm text-gray-600">Anciennes annulations sans motif</p>
+              <p className="text-2xl font-bold text-gray-700">{cancellationsWithoutReason}</p>
+            </div>
+          )}
+        </div>
+      </section>
 
       {/* Search & Filters */}
       <div className="mb-6 space-y-4">
@@ -179,11 +230,21 @@ export default function AdminOrders() {
                 key={order.id}
                 order={order}
                 onUpdateStatus={updateOrderStatus}
+                onCancel={setCancellationOrder}
               />
             ))}
           </motion.div>
         )}
       </AnimatePresence>
+      <OrderCancellationDialog
+        open={Boolean(cancellationOrder)}
+        order={cancellationOrder}
+        reasons={cancellationReasons}
+        isAdmin
+        onOpenChange={open => { if (!open) setCancellationOrder(null); }}
+        onConfirm={confirmCancelOrder}
+        isSubmitting={isCancelling}
+      />
     </div>
   );
 }

@@ -28,6 +28,7 @@ import { Product } from '../Entities/Product';
 import { User } from '../Entities/User';
 import { useCart } from '../hooks/useCart';
 import EditOrderDialog from "../Components/EditOrderDialog";
+import OrderCancellationDialog from "../Components/OrderCancellationDialog";
 import { formatCustomization } from "../utils/customization";
 
 export default function OrdersPage() {
@@ -41,10 +42,14 @@ export default function OrdersPage() {
   const [editingOrder, setEditingOrder] = useState(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [products, setProducts] = useState([]);
+  const [cancellationReasons, setCancellationReasons] = useState([]);
+  const [cancellationOrder, setCancellationOrder] = useState(null);
+  const [isCancelling, setIsCancelling] = useState(false);
 
   useEffect(() => {
     loadOrders();
     loadProducts();
+    loadCancellationReasons();
   }, []);
 
   const loadOrders = async () => {
@@ -64,6 +69,15 @@ export default function OrdersPage() {
       setProducts(response);
     } catch (error) {
       console.error('Error loading products:', error);
+    }
+  };
+
+  const loadCancellationReasons = async () => {
+    try {
+      const response = await api.get('/orders/cancellation-reasons');
+      setCancellationReasons(response.data);
+    } catch (error) {
+      console.error('Error loading cancellation reasons:', error);
     }
   };
 
@@ -112,15 +126,21 @@ export default function OrdersPage() {
     setIsEditDialogOpen(true);
   };
 
-  const handleCancelOrder = async (orderId) => {
-    if (window.confirm('Êtes-vous sûr de vouloir annuler cette commande ?')) {
-      try {
-        await Order.update(orderId, { status: 'annulee' });
-        await loadOrders(); // Refresh orders
-      } catch (error) {
-        console.error('Error canceling order:', error);
-        alert('Erreur lors de l\'annulation de la commande');
-      }
+  const handleCancelOrder = (order) => {
+    setCancellationOrder(order);
+  };
+
+  const confirmCancelOrder = async ({ reasonId, reasonText }) => {
+    if (!cancellationOrder) return;
+    setIsCancelling(true);
+    try {
+      await api.post(`/orders/${cancellationOrder.id}/cancel`, { reasonId, reasonText });
+      setCancellationOrder(null);
+      await loadOrders();
+    } catch (error) {
+      alert(error.response?.data?.message || 'Erreur lors de l’annulation de la commande.');
+    } finally {
+      setIsCancelling(false);
     }
   };
 
@@ -248,7 +268,7 @@ export default function OrdersPage() {
                 showReorder={false}
                 showReview={false}
                 showEdit={order.status === 'en_attente'}
-                showCancel={order.status === 'en_attente'}
+                showCancel={order.status === 'en_attente' && order.payment_status !== 'paid'}
               />
             ))}
           </AnimatePresence>
@@ -374,6 +394,14 @@ export default function OrdersPage() {
         onClose={handleEditDialogClose}
         onSave={handleEditDialogSave}
       />
+      <OrderCancellationDialog
+        open={Boolean(cancellationOrder)}
+        order={cancellationOrder}
+        reasons={cancellationReasons}
+        onOpenChange={open => { if (!open) setCancellationOrder(null); }}
+        onConfirm={confirmCancelOrder}
+        isSubmitting={isCancelling}
+      />
     </div>
   );
 }
@@ -431,6 +459,13 @@ function OrderCard({
         </div>
       </div>
 
+      {order.cancellation && (
+        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-900">
+          <p><span className="font-semibold">Motif d’annulation :</span> {order.cancellation.reason?.label || 'Motif enregistré'}</p>
+          {order.cancellation.reason_text && <p className="mt-1">{order.cancellation.reason_text}</p>}
+        </div>
+      )}
+
       {/* Order Items */}
       <div className="space-y-2 mb-4">
         {order.items.map((item, index) => (
@@ -466,7 +501,7 @@ function OrderCard({
 
         {showCancel && (
           <Button
-            onClick={() => onCancel(order.id)}
+            onClick={() => onCancel(order)}
             variant="destructive"
             size="sm"
             className="flex items-center gap-2"

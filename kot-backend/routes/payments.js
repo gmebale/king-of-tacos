@@ -367,7 +367,6 @@ async function reconcileEbillingOrder(orderId) {
   if (!details?.billId) return { error: 'Aucune facture E-Billing n’est associée à cette commande.' };
   const response = await ebilling.getInvoice(details.billId);
   const invoice = getInvoicePayload(response);
-  const result = await applyEbillingInvoiceState(order, invoice, details);
   let pushState = details.pushState;
   if (details.ussdPushId) {
     try {
@@ -376,6 +375,22 @@ async function reconcileEbillingOrder(orderId) {
     } catch (_error) {
       // Invoice state remains authoritative if the optional push enquiry is unavailable.
     }
+  }
+
+  let result = await applyEbillingInvoiceState(order, invoice, details);
+  const terminalPushFailure = ['failed', 'cancelled', 'expired'].includes(String(pushState || '').toLowerCase());
+  if (terminalPushFailure && result.paymentStatus !== 'paid') {
+    await prisma.order.updateMany({
+      where: {
+        id: order.id,
+        payment_method: 'mobile_money',
+        payment_provider_id: order.payment_provider_id,
+        payment_status: { in: ['pending', 'requires_action'] }
+      },
+      data: { payment_status: 'failed' }
+    });
+    const refreshed = await prisma.order.findUnique({ where: { id: order.id }, select: { payment_status: true } });
+    result = { ...result, paymentStatus: refreshed?.payment_status || result.paymentStatus };
   }
   return { ...result, pushState, amount: invoice.amount, orderCode: order.order_code };
 }

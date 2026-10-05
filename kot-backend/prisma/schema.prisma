@@ -155,6 +155,7 @@ model User {
   loyaltyRedemptions LoyaltyRedemption[]
   loyaltyPointEntries LoyaltyPointEntry[] @relation("loyaltyPointOwner")
   loyaltyPointActions LoyaltyPointEntry[] @relation("loyaltyPointActor")
+  orderCancellations OrderCancellation[] @relation("orderCancellationActor")
   promoCodes PromoCode[]
   reviews            Review[]
   logs               Log[]
@@ -235,10 +236,41 @@ model Order {
   items   OrderItem[]
   reviews Review[]
   loyaltyPointEntries LoyaltyPointEntry[]
+  cancellation OrderCancellation?
 
   @@index([promo_code_id])
 
   @@map("orders")
+}
+
+model OrderCancellationReason {
+  id             Int                 @id @default(autoincrement())
+  code           String              @unique @db.VarChar(64)
+  label          String              @db.VarChar(191)
+  is_active      Boolean             @default(true)
+  display_order  Int                 @default(0)
+  created_at     DateTime            @default(now())
+  updated_at     DateTime            @updatedAt
+  cancellations OrderCancellation[]
+
+  @@map("order_cancellation_reasons")
+}
+
+model OrderCancellation {
+  id                   Int                     @id @default(autoincrement())
+  order_id             String                  @unique
+  order                Order                   @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  reason_id            Int?
+  reason               OrderCancellationReason? @relation(fields: [reason_id], references: [id], onDelete: SetNull)
+  reason_text          String?                 @db.VarChar(500)
+  cancelled_by_user_id Int?
+  cancelledBy          User?                   @relation("orderCancellationActor", fields: [cancelled_by_user_id], references: [id], onDelete: SetNull)
+  actor_role           String                  @db.VarChar(64)
+  cancelled_at         DateTime                @default(now())
+
+  @@index([reason_id, cancelled_at])
+  @@index([cancelled_by_user_id, cancelled_at])
+  @@map("order_cancellations")
 }
 
 model OrderCodeSequence {

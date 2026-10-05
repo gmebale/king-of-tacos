@@ -11,6 +11,7 @@ export default function OrderSuccess() {
   const ebillingPayment = location.state?.ebillingPayment;
   const [paymentStatus, setPaymentStatus] = useState(ebillingPayment ? 'requires_action' : 'paid');
   const [providerState, setProviderState] = useState('');
+  const [pushState, setPushState] = useState('');
   const [statusMessage, setStatusMessage] = useState(ebillingPayment?.initiationError || '');
   const [paymentConflict, setPaymentConflict] = useState(false);
   const [retrying, setRetrying] = useState(false);
@@ -29,7 +30,8 @@ export default function OrderSuccess() {
         });
         if (!active) return;
         setPaymentStatus(response.data.paymentStatus);
-        setProviderState(response.data.providerState || response.data.pushState || '');
+        setProviderState(response.data.providerState || '');
+        setPushState(response.data.pushState || '');
         setPaymentConflict(Boolean(response.data.conflict));
         setStatusMessage(response.data.conflict ? 'Le paiement est reçu, mais la commande est clôturée ou annulée. Contactez le restaurant.' : '');
         if (!['paid', 'failed'].includes(response.data.paymentStatus) && attempts++ < 24) {
@@ -127,7 +129,7 @@ export default function OrderSuccess() {
                   ? 'Demande transmise au simulateur E-Billing. Aucun appel ne sera envoyé à un téléphone réel.'
                   : `Une demande ${ebillingPayment.paymentSystemName === 'moovmoney' ? 'Moov Money' : 'Airtel Money'} a été envoyée au téléphone associé à la commande.`}
         </p>
-        {ebillingPayment && !isPaid && !isFailed && <p className="mb-4 text-sm text-gray-500">État opérateur : {providerState || 'en attente de confirmation'} · La commande ne partira en préparation qu’après confirmation du paiement.</p>}
+        {ebillingPayment && !isPaid && !isFailed && <p className="mb-4 text-sm text-gray-500">État facture : {providerState || 'en attente'}{pushState ? ` · Push USSD : ${pushState}` : ''} · La commande ne partira en préparation qu’après confirmation du paiement.</p>}
         {statusMessage && <p className="mb-5 rounded-lg bg-amber-50 p-3 text-sm text-amber-900" role="status">{statusMessage}</p>}
         {ebillingPayment && !isPaid && !isFailed && !statusMessage && <p className="mb-5 flex items-center justify-center gap-2 text-sm text-gray-500"><Loader2 className="h-4 w-4 animate-spin" />Vérification du paiement…</p>}
 

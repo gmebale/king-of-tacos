@@ -267,6 +267,7 @@ router.get('/', authenticateToken, requirePagePermission('orders', 'dashboard'),
         },
         validatedBy: { select: { id: true, full_name: true, role: true } },
         closedBy: { select: { id: true, full_name: true, role: true } },
+        cancellation: { include: { reason: true, cancelledBy: { select: { id: true, full_name: true, role: true } } } },
         items: true
       },
       orderBy: { created_date: 'desc' }
@@ -304,7 +305,8 @@ router.get('/my-orders', authenticateToken, async (req, res) => {
     const orders = await prisma.order.findMany({
       where: { user_id: req.user.id },
       include: {
-        items: true
+        items: true,
+        cancellation: { include: { reason: true } }
       },
       orderBy: { created_date: 'desc' }
     });
@@ -335,6 +337,20 @@ router.get('/my-orders', authenticateToken, async (req, res) => {
   }
 });
 
+router.get('/cancellation-reasons', authenticateToken, async (_req, res) => {
+  try {
+    const reasons = await prisma.orderCancellationReason.findMany({
+      where: { is_active: true },
+      orderBy: [{ display_order: 'asc' }, { id: 'asc' }],
+      select: { id: true, code: true, label: true }
+    });
+    res.json(reasons);
+  } catch (error) {
+    console.error('Get order cancellation reasons error:', error);
+    res.status(500).json({ message: 'Impossible de charger les motifs d’annulation.' });
+  }
+});
+
 // Get order by ID
 router.get('/:id', authenticateToken, async (req, res) => {
   try {
@@ -347,6 +363,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
         },
         validatedBy: { select: { id: true, full_name: true, role: true } },
         closedBy: { select: { id: true, full_name: true, role: true } },
+        cancellation: { include: { reason: true, cancelledBy: { select: { id: true, full_name: true, role: true } } } },
         items: true
       }
     });
@@ -604,6 +621,88 @@ router.post('/', async (req, res) => {
   }
 });
 
+router.post('/:id/cancel', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const reasonId = Number(req.body.reasonId);
+    const reasonText = typeof req.body.reasonText === 'string' ? req.body.reasonText.trim() : '';
+    if (!Number.isInteger(reasonId) || reasonId <= 0) {
+      return res.status(400).json({ message: 'Choisissez un motif d’annulation.' });
+    }
+
+    const reason = await prisma.orderCancellationReason.findFirst({ where: { id: reasonId, is_active: true } });
+    if (!reason) return res.status(400).json({ message: 'Ce motif d’annulation n’est plus disponible.' });
+    if (reason.code === 'other' && (reasonText.length < 3 || reasonText.length > 500)) {
+      return res.status(400).json({ message: 'Précisez le motif en 3 à 500 caractères.' });
+    }
+    if (reason.code !== 'other' && reasonText.length > 500) {
+      return res.status(400).json({ message: 'Le complément du motif ne peut pas dépasser 500 caractères.' });
+    }
+
+    const order = await prisma.order.findUnique({ where: { id } });
+    if (!order) return res.status(404).json({ message: 'Commande introuvable.' });
+    const isAdminOrStaff = ['admin', 'staff'].includes(req.user.role) || req.user.pagePermissions?.orders === true;
+    const isOwner = order.user_id === req.user.id;
+    if (!isAdminOrStaff && !isOwner) return res.status(403).json({ message: 'Accès refusé.' });
+    if (order.closed_at || !['en_attente', 'en_preparation', 'prete', 'en_livraison'].includes(order.status)) {
+      return res.status(409).json({ message: 'Cette commande ne peut plus être annulée.' });
+    }
+    if (!isAdminOrStaff && order.status !== 'en_attente') {
+      return res.status(409).json({ message: 'Vous ne pouvez annuler que les commandes encore en attente.' });
+    }
+    if (!isAdminOrStaff && order.payment_status === 'paid') {
+      return res.status(409).json({ message: 'Cette commande est déjà payée. Contactez le restaurant pour demander son annulation.' });
+    }
+
+    const cancellation = await prisma.$transaction(async tx => {
+      const updated = await tx.order.updateMany({
+        where: {
+          id,
+          status: order.status,
+          closed_at: null,
+          ...(isAdminOrStaff ? {} : { payment_status: { not: 'paid' } })
+        },
+        data: { status: 'annulee' }
+      });
+      if (!updated.count) throw Object.assign(new Error('La commande a changé d’état. Actualisez la page avant de réessayer.'), { statusCode: 409 });
+
+      const record = await tx.orderCancellation.create({
+        data: {
+          order_id: id,
+          reason_id: reason.id,
+          reason_text: reasonText || null,
+          cancelled_by_user_id: req.user.id,
+          actor_role: req.user.role || 'client'
+        }
+      });
+      await tx.log.create({
+        data: {
+          user_id: req.user.id,
+          role: req.user.role || 'client',
+          action: 'cancel_order',
+          details: `Commande ${order.order_code || id} annulée. Motif : ${reason.label}${reasonText ? ` — ${reasonText}` : ''}`
+        }
+      });
+      return record;
+    });
+
+    res.json({
+      status: 'annulee',
+      cancellation: {
+        ...cancellation,
+        reason,
+        cancelledBy: { id: req.user.id, full_name: req.user.full_name, role: req.user.role }
+      },
+      refundRequired: order.payment_status === 'paid'
+    });
+  } catch (error) {
+    if (error.statusCode) return res.status(error.statusCode).json({ message: error.message });
+    if (error.code === 'P2002') return res.status(409).json({ message: 'Cette commande possède déjà un motif d’annulation.' });
+    console.error('Cancel order error:', error);
+    res.status(500).json({ message: 'Impossible d’annuler la commande.' });
+  }
+});
+
 // Update order (users can update their own orders if en_attente, admins/staff can update status)
 router.put('/:id', authenticateToken, async (req, res) => {
   try {
@@ -627,13 +726,16 @@ router.put('/:id', authenticateToken, async (req, res) => {
     if (status === 'cloturee') {
       return res.status(400).json({ message: 'Utilisez la procédure de clôture de caisse pour clôturer une commande' });
     }
+    if (status === 'annulee') {
+      return res.status(400).json({ message: 'Utilisez la procédure d’annulation avec motif.' });
+    }
 
     if (status && status !== order.status) {
       const allowedTransitions = {
-        en_attente: ['en_preparation', 'annulee'],
-        en_preparation: ['prete', 'en_livraison', 'annulee'],
-        prete: ['servie', 'recuperee', 'annulee'],
-        en_livraison: ['livree', 'annulee']
+        en_attente: ['en_preparation'],
+        en_preparation: ['prete', 'en_livraison'],
+        prete: ['servie', 'recuperee'],
+        en_livraison: ['livree']
       };
       if (!allowedTransitions[order.status]?.includes(status)) {
         return res.status(400).json({ message: `Transition de commande invalide : ${order.status} → ${status}` });

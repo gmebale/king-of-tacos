@@ -8,7 +8,7 @@ import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { formatCustomization } from "../../utils/customization";
 
-export default function OrderCard({ order, onUpdateStatus }) {
+export default function OrderCard({ order, onUpdateStatus, onCancel }) {
   const getStatusColor = (status) => {
     const colors = {
       en_attente: "bg-yellow-100 text-yellow-800 border-yellow-300",
@@ -164,6 +164,16 @@ export default function OrderCard({ order, onUpdateStatus }) {
             </div>
           )}
 
+          {order.cancellation && (
+            <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-900">
+              <p><span className="font-semibold">Motif d’annulation :</span> {order.cancellation.reason?.label || 'Motif supprimé'}</p>
+              {order.cancellation.reason_text && <p className="mt-1">Précision : {order.cancellation.reason_text}</p>}
+              <p className="mt-1 text-xs text-red-700">
+                Par {order.cancellation.cancelledBy?.full_name || 'Compte supprimé'} · {format(new Date(order.cancellation.cancelled_at), "d MMM yyyy 'à' HH:mm", { locale: fr })}
+              </p>
+            </div>
+          )}
+
           <div className="flex justify-between items-center pt-4 border-t mb-4">
             <span className="font-semibold text-lg">Total</span>
             <span className="text-2xl font-bold text-amber-600">
@@ -173,15 +183,17 @@ export default function OrderCard({ order, onUpdateStatus }) {
 
           {!["livree", "servie", "recuperee", "annulee"].includes(order.status) && !order.closed_at && (
             <div className="space-y-2">
-              <Button
-                onClick={() => onUpdateStatus(order.id, getNextStatus(order.status))}
-                className="w-full bg-gradient-to-r from-yellow-400 to-amber-600 hover:from-yellow-500 hover:to-amber-700 text-white rounded-xl"
-              >
-                {getNextStatusLabel(order.status)}
-              </Button>
-              {order.status === "en_attente" && (
+              {getNextStatus(order.status) && (
                 <Button
-                  onClick={() => onUpdateStatus(order.id, "annulee")}
+                  onClick={() => onUpdateStatus(order.id, getNextStatus(order.status))}
+                  className="w-full bg-gradient-to-r from-yellow-400 to-amber-600 hover:from-yellow-500 hover:to-amber-700 text-white rounded-xl"
+                >
+                  {getNextStatusLabel(order.status)}
+                </Button>
+              )}
+              {onCancel && ["en_attente", "en_preparation", "prete", "en_livraison"].includes(order.status) && (
+                <Button
+                  onClick={() => onCancel(order)}
                   variant="outline"
                   className="w-full border-2 border-red-300 text-red-600 hover:bg-red-50 rounded-xl"
                 >
