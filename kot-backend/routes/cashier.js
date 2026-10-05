@@ -980,36 +980,53 @@ router.put('/orders/:id/pay', authenticateToken, requirePagePermission('cashier'
       return res.status(400).json({ message: 'Cannot pay cancelled order' });
     }
     if (order.closed_at) return res.status(400).json({ message: 'La commande est déjà clôturée' });
-    if (order.payment_status === 'paid') {
-      return res.status(400).json({ message: 'La commande est déjà payée' });
+    if (!['pending', 'failed'].includes(order.payment_status)) {
+      return res.status(400).json({ message: 'Cette commande ne peut pas être encaissée dans son état actuel.' });
     }
 
-    const updatedOrder = await prisma.order.update({
-      where: { id },
-      data: { payment_method, payment_status: 'paid' },
-      include: { items: true }
-    });
-    await awardOrderPoints(prisma, id);
+    const paymentResult = await prisma.$transaction(async tx => {
+      const session = await tx.cashRegisterSession.findFirst({ where: { closed_at: null }, orderBy: { opened_at: 'desc' } });
+      if (!session) return { error: 'Aucune session de caisse ouverte. Ouvrez la caisse avant d’encaisser.' };
 
-    const session = await prisma.cashRegisterSession.findFirst({ where: { closed_at: null } });
-    if (session) {
+      const payment = await tx.order.updateMany({
+        where: {
+          id,
+          status: order.status,
+          closed_at: null,
+          payment_status: order.payment_status
+        },
+        data: { payment_method, payment_status: 'paid' }
+      });
+      if (!payment.count) return { error: 'La commande a changé d’état. Actualisez-la avant de réessayer.' };
+
       const methodField = { cash: 'cash_payments', card: 'card_payments', mobile_money: 'mobile_payments' }[payment_method];
       const sessionUpdate = {
-        total_revenue: (session.total_revenue || 0) + order.total_amount
+        total_revenue: session.total_revenue == null ? order.total_amount : { increment: order.total_amount }
       };
-      if (payment_method === 'cash') sessionUpdate.current_balance = session.current_balance + order.total_amount;
+      if (payment_method === 'cash') sessionUpdate.current_balance = { increment: order.total_amount };
       if (methodField && methodField in session) {
-        sessionUpdate[methodField] = (session[methodField] || 0) + order.total_amount;
+        sessionUpdate[methodField] = session[methodField] == null ? order.total_amount : { increment: order.total_amount };
       }
-        await prisma.cashRegisterSession.update({
-          where: { id: session.id },
-          data: sessionUpdate
-        });
-    }
+      const updatedSession = await tx.cashRegisterSession.updateMany({
+        where: { id: session.id, closed_at: null },
+        data: sessionUpdate
+      });
+      if (!updatedSession.count) {
+        const error = new Error('La session de caisse vient d’être clôturée. Paiement annulé.');
+        error.statusCode = 409;
+        throw error;
+      }
+      return { order: await tx.order.findUnique({ where: { id }, include: { items: true } }) };
+    });
+
+    if (paymentResult.error) return res.status(409).json({ message: paymentResult.error });
+    const updatedOrder = paymentResult.order;
+    await awardOrderPoints(prisma, id);
 
     res.json(updatedOrder);
   } catch (error) {
     console.error('Pay order error:', error);
+    if (error.statusCode) return res.status(error.statusCode).json({ message: error.message });
     res.status(500).json({ message: 'Internal server error' });
   }
 });

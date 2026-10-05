@@ -239,7 +239,7 @@ export default function Checkout() {
                       value={formData.customer_phone}
                       onChange={(e) => { setLinkedCustomer(null); setFormData(current => ({...current, customer_phone: e.target.value, loyalty_customer_id: ''})); }}
                       className="rounded-xl border-2 focus:border-amber-400"
-                      placeholder="06 12 34 56 78"
+                      placeholder="Ex. : 074452464 (Gabon)"
                     />
                   </div>
 

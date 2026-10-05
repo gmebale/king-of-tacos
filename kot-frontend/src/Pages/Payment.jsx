@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Order } from "../Entities/Order";
 import { motion } from "framer-motion";
 import { Button } from "../Components/ui/button";
@@ -11,6 +11,7 @@ import { useAuthContext } from "../contexts/AuthContext";
 import { Input } from "../Components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "../Components/ui/dialog";
 import { toast } from 'react-hot-toast';
+import api from "../services/api.service";
 
 export default function Payment() {
   const navigate = useNavigate();
@@ -21,7 +22,33 @@ export default function Payment() {
   const [serverCode, setServerCode] = useState("");
   const [serverCodeError, setServerCodeError] = useState("");
   const [isCodeDialogOpen, setIsCodeDialogOpen] = useState(false);
+  const [paymentSettings, setPaymentSettings] = useState(null);
+  const [paymentSystemName, setPaymentSystemName] = useState('airtelmoney');
+  const [simuMsisdn, setSimuMsisdn] = useState('077000001');
+  const [createdOrder, setCreatedOrder] = useState(null);
   const isStaffOrder = user?.role === "serveur" && sessionStorage.getItem("kot_staff_order_mode") === "true";
+  const availableOperators = [
+    ...(paymentSettings?.mobile_money_airtel_enabled ? [{ value: 'airtelmoney', label: 'Airtel Money' }] : []),
+    ...(paymentSettings?.mobile_money_moov_enabled ? [{ value: 'moovmoney', label: 'Moov Money' }] : []),
+    ...(paymentSettings?.ebilling_test_mode ? [{ value: 'SIMU', label: 'SIMU · test Lab' }] : [])
+  ];
+  const ebillingAvailable = Boolean(paymentSettings?.ebilling_enabled && paymentSettings.mobile_money_enabled && availableOperators.length);
+
+  useEffect(() => {
+    let active = true;
+    api.get('/settings/payment')
+      .then(response => {
+        if (!active) return;
+        setPaymentSettings(response.data);
+        const firstAvailable = response.data.mobile_money_airtel_enabled
+          ? 'airtelmoney'
+          : response.data.mobile_money_moov_enabled ? 'moovmoney' : '';
+        if (response.data.ebilling_test_mode) setPaymentSystemName('SIMU');
+        else if (firstAvailable) setPaymentSystemName(firstAvailable);
+      })
+      .catch(() => { if (active) setPaymentSettings({ ebilling_enabled: false }); });
+    return () => { active = false; };
+  }, []);
 
   if (!cart || total == null) {
     navigate(createPageUrl("Checkout"));
@@ -78,13 +105,48 @@ export default function Payment() {
           server_code: serverCode
         });
         sessionStorage.removeItem("kot_staff_order_mode");
+        localStorage.removeItem('kingoftacos_cart');
+        window.dispatchEvent(new Event('storage'));
+        navigate(createPageUrl("OrderSuccess"));
       } else {
-        await Order.create(orderData);
-      }
+        const useEbilling = ebillingAvailable;
+        const order = createdOrder || await Order.create({
+          ...orderData,
+          ...(useEbilling ? { payment_method: 'mobile_money' } : {})
+        });
+        if (useEbilling && !createdOrder) setCreatedOrder(order);
 
-      localStorage.removeItem('kingoftacos_cart');
-      window.dispatchEvent(new Event('storage'));
-      navigate(createPageUrl("OrderSuccess"));
+        localStorage.removeItem('kingoftacos_cart');
+        window.dispatchEvent(new Event('storage'));
+
+        if (useEbilling) {
+          let initiationError = null;
+          try {
+            await api.post('/payments/ebilling/ussd-push', {
+              orderId: order.id,
+              paymentStatusToken: order.payment_status_token,
+              paymentSystemName,
+              ...(paymentSystemName === 'SIMU' ? { payerMsisdn: simuMsisdn } : {})
+            });
+          } catch (error) {
+            initiationError = error.response?.data?.message || 'Le démarrage du paiement n’a pas pu être confirmé.';
+          }
+          navigate(createPageUrl("OrderSuccess"), {
+            state: {
+              ebillingPayment: {
+                orderId: order.id,
+                orderCode: order.order_code,
+                paymentStatusToken: order.payment_status_token,
+                paymentSystemName,
+                payerMsisdn: paymentSystemName === 'SIMU' ? simuMsisdn : undefined,
+                initiationError
+              }
+            }
+          });
+        } else {
+          navigate(createPageUrl("OrderSuccess"));
+        }
+      }
     } catch (error) {
       console.error("Error creating order:", error);
       if (isStaffOrder) setServerCodeError(error.response?.data?.message || "Impossible de valider le code serveur.");
@@ -148,6 +210,34 @@ export default function Payment() {
                   </div>
                   {loyalty_discount > 0 && <p className="mt-2 text-right text-sm text-green-700">Avantage fidélité / promo : −{loyalty_discount.toLocaleString()} FCFA</p>}
                 </div>
+                {!isStaffOrder && paymentSettings && (
+                  <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4">
+                    {ebillingAvailable ? (
+                      <>
+                        <Label htmlFor="mobile-money-operator">Paiement Mobile Money</Label>
+                        <select
+                          id="mobile-money-operator"
+                          value={paymentSystemName}
+                          onChange={event => setPaymentSystemName(event.target.value)}
+                          className="mt-2 h-11 w-full rounded-md border border-input bg-white px-3 text-sm"
+                        >
+                          {availableOperators.map(operator => <option key={operator.value} value={operator.value}>{operator.label}</option>)}
+                        </select>
+                        {paymentSystemName === 'SIMU' ? (
+                          <>
+                            <Label htmlFor="simu-msisdn" className="mt-3 block">Numéro de scénario SIMU</Label>
+                            <Input id="simu-msisdn" value={simuMsisdn} onChange={event => setSimuMsisdn(event.target.value)} placeholder="077000001" />
+                            <p className="mt-2 text-sm text-gray-600">Le simulateur ne déclenche pas d’appel sur un téléphone réel. Utilisez l’un des numéros de scénario du guide E-Billing.</p>
+                          </>
+                        ) : (
+                          <p className="mt-2 text-sm text-gray-600">Un message de confirmation sera envoyé au {formData.customer_phone}. La commande ne sera confirmée qu’après validation du paiement par E-Billing.</p>
+                        )}
+                      </>
+                    ) : (
+                      <p className="text-sm text-gray-600">Le paiement Mobile Money en ligne n’est pas encore activé. Vous pouvez confirmer la commande et régler au retrait ou à la livraison.</p>
+                    )}
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -156,7 +246,7 @@ export default function Payment() {
               disabled={isSubmitting}
               className="w-full mt-6 bg-gradient-to-r from-yellow-400 to-amber-600 hover:from-yellow-500 hover:to-amber-700 text-white py-6 rounded-2xl text-lg font-semibold shadow-lg"
             >
-              {isSubmitting ? "Traitement..." : isStaffOrder ? "Confirmer la commande" : "Payer maintenant"}
+              {isSubmitting ? "Traitement..." : isStaffOrder ? "Confirmer la commande" : ebillingAvailable ? "Continuer avec Mobile Money" : "Confirmer la commande"}
               <CreditCard className="ml-2 w-5 h-5" />
             </Button>
           </div>

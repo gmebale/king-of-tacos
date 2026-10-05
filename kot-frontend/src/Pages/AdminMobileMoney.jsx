@@ -7,12 +7,14 @@ import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 
 const STATUS_LABELS = {
+  pending: "En traitement",
   requires_action: "À vérifier",
   paid: "Validé",
   failed: "Rejeté"
 };
 
 const STATUS_STYLES = {
+  pending: "bg-blue-100 text-blue-800 border-blue-200",
   requires_action: "bg-yellow-100 text-yellow-800 border-yellow-200",
   paid: "bg-green-100 text-green-800 border-green-200",
   failed: "bg-red-100 text-red-800 border-red-200"
@@ -69,11 +71,24 @@ export default function AdminMobileMoney() {
     }
   };
 
+  const handleReconcile = async (id) => {
+    try {
+      setActionLoading(id);
+      await api.post(`/payments/ebilling/orders/${id}/reconcile`);
+      await loadOrders();
+    } catch (error) {
+      console.error('Error reconciling E-Billing payment:', error);
+      alert(error.response?.data?.message || 'Impossible de vérifier le paiement auprès d’E-Billing.');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900">Paiements Mobile Money</h1>
-        <p className="text-gray-600 mt-2">Validez manuellement les paiements par Airtel Money ou Mobicash</p>
+        <p className="text-gray-600 mt-2">Suivez les paiements E-Billing et traitez les anciennes demandes non automatisées.</p>
       </div>
 
       <Card className="mb-6">
@@ -86,6 +101,7 @@ export default function AdminMobileMoney() {
             onChange={(e) => setStatusFilter(e.target.value)}
             className="rounded-md border border-gray-200 px-3 py-2"
           >
+            <option value="pending">En traitement</option>
             <option value="requires_action">À vérifier</option>
             <option value="paid">Validé</option>
             <option value="failed">Rejeté</option>
@@ -102,6 +118,15 @@ export default function AdminMobileMoney() {
           {orders.map((order) => {
             const statusLabel = STATUS_LABELS[order.payment_status] || order.payment_status;
             const statusStyle = STATUS_STYLES[order.payment_status] || "bg-gray-100 text-gray-800 border-gray-200";
+            let ebillingDetails = null;
+            try {
+              const parsed = JSON.parse(order.payment_provider_id || 'null');
+              if (parsed?.provider === 'ebilling') ebillingDetails = parsed;
+              else if (parsed?.p === 'ebilling') ebillingDetails = {
+                paymentSystemName: parsed.s,
+                pushState: parsed.t
+              };
+            } catch (_error) { /* Legacy/manual Mobile Money order. */ }
             return (
               <Card key={order.id} className="border-2">
                 <CardHeader className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
@@ -111,6 +136,8 @@ export default function AdminMobileMoney() {
                       {format(new Date(order.created_date), "d MMM yyyy 'à' HH:mm", { locale: fr })}
                     </p>
                   </div>
+
+                  {ebillingDetails && <p className="text-sm text-gray-600">Paiement automatisé · {ebillingDetails.paymentSystemName === 'moovmoney' ? 'Moov Money' : ebillingDetails.paymentSystemName === 'SIMU' ? 'SIMU (Lab)' : 'Airtel Money'} · État opérateur : {ebillingDetails.pushState || 'en attente'}</p>}
                   <Badge className={`border ${statusStyle}`}>{statusLabel}</Badge>
                 </CardHeader>
                 <CardContent className="space-y-3">
@@ -166,7 +193,13 @@ export default function AdminMobileMoney() {
                     );
                   })()}
 
-                  {order.payment_status === "requires_action" && (
+                  {['pending', 'requires_action'].includes(order.payment_status) && ebillingDetails && (
+                    <Button onClick={() => handleReconcile(order.id)} disabled={actionLoading === order.id} variant="outline">
+                      {actionLoading === order.id ? "Vérification..." : "Actualiser auprès d’E-Billing"}
+                    </Button>
+                  )}
+
+                  {order.payment_status === "requires_action" && !ebillingDetails && (
                     <div className="flex flex-col md:flex-row gap-2">
                       <Button
                         onClick={() => handleApprove(order.id)}

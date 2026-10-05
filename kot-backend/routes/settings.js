@@ -8,6 +8,7 @@ const prisma = new PrismaClient();
 const PAYMENT_SETTING_KEYS = [
   'mobile_money_enabled',
   'mobile_money_airtel_enabled',
+  'mobile_money_moov_enabled',
   'mobile_money_mobicash_enabled'
 ];
 const DEFAULT_LOCATIONS = [
@@ -221,13 +222,22 @@ router.get('/payment', async (req, res) => {
     const settingsObj = mapSettings(settings, {
       mobile_money_enabled: 'true',
       mobile_money_airtel_enabled: 'true',
-      mobile_money_mobicash_enabled: 'true'
+      mobile_money_moov_enabled: settings.find(setting => setting.key === 'mobile_money_mobicash_enabled')?.value || 'true'
     });
 
     res.json({
       mobile_money_enabled: toBoolean(settingsObj.mobile_money_enabled, true),
       mobile_money_airtel_enabled: toBoolean(settingsObj.mobile_money_airtel_enabled, true),
-      mobile_money_mobicash_enabled: toBoolean(settingsObj.mobile_money_mobicash_enabled, true)
+      mobile_money_moov_enabled: toBoolean(settingsObj.mobile_money_moov_enabled, true),
+      ebilling_enabled: process.env.EBILLING_ENABLED === 'true',
+      ebilling_test_mode: (() => {
+        try {
+          const apiBase = process.env.EBILLING_API_BASE || 'https://lab.billing-easy.net/api';
+          return new URL(apiBase).hostname === 'lab.billing-easy.net';
+        } catch (_error) {
+          return false;
+        }
+      })()
     });
   } catch (error) {
     console.error('Get payment settings error:', error);
@@ -241,13 +251,13 @@ router.put('/payment', authenticateToken, requirePagePermission('settings'), asy
     const {
       mobile_money_enabled,
       mobile_money_airtel_enabled,
-      mobile_money_mobicash_enabled
+      mobile_money_moov_enabled
     } = req.body;
 
     const updates = {
       mobile_money_enabled,
       mobile_money_airtel_enabled,
-      mobile_money_mobicash_enabled
+      mobile_money_moov_enabled
     };
 
     const updatedSettings = {};

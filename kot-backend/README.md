@@ -75,7 +75,24 @@ L'API sera accessible sur `http://localhost:5000`
 DATABASE_URL="mysql://root:@localhost:3306/king_of_tacos"
 JWT_SECRET="your-super-secret-jwt-key-change-this-in-production"
 PORT=5000
+
+# E-Billing PAYIN (LAB defaults; never commit real credentials)
+EBILLING_ENABLED=false
+EBILLING_API_BASE=https://lab.billing-easy.net/api
+EBILLING_TOKEN_URL=https://lab.billing-easy.net/oauth/token
+EBILLING_CLIENT_ID=
+EBILLING_CLIENT_SECRET=
+EBILLING_WEBHOOK_KEY_ID=
+EBILLING_WEBHOOK_SIGNING_KEY=
 ```
+
+E-Billing production URLs from the merchant guide are `https://stg.billing-easy.com/api` and
+`https://billing-easy.com/oauth/token`. Enable `EBILLING_ENABLED` only after the merchant credentials
+and merchant credentials are configured. Register `https://<site>/api/payments/ebilling/webhook` as the
+merchant notification URL. When the signed-callback key is configured, signatures are verified; every
+callback is then reconciled against the authenticated invoice API. The customer status endpoint also
+checks the invoice directly. A USSD `202 Accepted` or an intermediate `ready` state is not treated as a
+successful payment.
 
 ### Base de données
 Assurez-vous que XAMPP est démarré et que la base `king_of_tacos` existe.

@@ -42,6 +42,10 @@ app.use(passport.session());
 // Middleware
 app.use(cors());
 app.use('/api/payments/stripe/webhook', express.raw({ type: 'application/json' }));
+app.use('/api/payments/ebilling/webhook', express.urlencoded({
+  extended: false,
+  verify: (req, res, buffer) => { req.rawBody = Buffer.from(buffer); }
+}));
 app.use((req, res, next) => {
   if (req.originalUrl === '/api/payments/stripe/webhook') {
     return next();

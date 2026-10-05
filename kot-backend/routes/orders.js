@@ -1,6 +1,7 @@
 const express = require('express');
 const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 const { authenticateToken, requireRole, requirePagePermission } = require('../middleware/auth');
 const { buildTaxSnapshot } = require('../utils/orderItemPricing');
 const { recordOrderStockSale } = require('../utils/inventory');
@@ -468,7 +469,14 @@ router.post('/staff', authenticateToken, requireRole(['serveur']), async (req, r
 
 router.post('/', async (req, res) => {
   try {
-    const { items, total_amount, pre_discount_total, pre_discount_subtotal, promo_code, gifted_redemption_id, customer_name, customer_phone, customer_email, order_type, delivery_address, pickup_time, notes } = req.body;
+    const { items, total_amount, pre_discount_total, pre_discount_subtotal, promo_code, gifted_redemption_id, customer_name, customer_phone, customer_email, order_type, delivery_address, pickup_time, notes, payment_method } = req.body;
+
+    if (payment_method && payment_method !== 'mobile_money') {
+      return res.status(400).json({ message: 'Moyen de paiement en ligne invalide.' });
+    }
+    if (payment_method === 'mobile_money' && process.env.EBILLING_ENABLED !== 'true') {
+      return res.status(503).json({ message: 'Le paiement Mobile Money en ligne est momentanément indisponible.' });
+    }
 
     if (order_type === 'sur_place') {
       return res.status(403).json({ message: 'Les commandes sur place doivent être saisies par un serveur' });
@@ -555,6 +563,7 @@ router.post('/', async (req, res) => {
         delivery_address,
         pickup_time,
         notes,
+        payment_method: payment_method || null,
         items: {
           create: orderItems
         }
@@ -578,7 +587,16 @@ router.post('/', async (req, res) => {
 
     console.log('Created order:', order.id, 'with items:', order.items.length);
 
-    res.status(201).json(order);
+    res.status(201).json({
+      ...order,
+      ...(payment_method === 'mobile_money' ? {
+        payment_status_token: jwt.sign(
+          { orderId: order.id },
+          process.env.JWT_SECRET,
+          { expiresIn: '24h', audience: 'ebilling-payment' }
+        )
+      } : {})
+    });
   } catch (error) {
     console.error('Create order error:', error);
     if (error.statusCode) return res.status(error.statusCode).json({ message: error.message });

@@ -8,7 +8,8 @@ kot-frontend/.cache/
 kot-frontend/node_modules/.cache/
 
 # Deploy secrets
-.deploy.envkot-backend/.env.production
+.deploy.env
+kot-backend/.env.production
 kot-backend/env.production
 *.backup-*
 temp_query.sql

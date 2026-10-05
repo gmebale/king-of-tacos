@@ -23,7 +23,7 @@ const AdminSettings = () => {
   const [paymentSettings, setPaymentSettings] = useState({
     mobile_money_enabled: true,
     mobile_money_airtel_enabled: true,
-    mobile_money_mobicash_enabled: true
+    mobile_money_moov_enabled: true
   });
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -153,7 +153,7 @@ const AdminSettings = () => {
       setPaymentSettings({
         mobile_money_enabled: paymentResponse.data.mobile_money_enabled ?? true,
         mobile_money_airtel_enabled: paymentResponse.data.mobile_money_airtel_enabled ?? true,
-        mobile_money_mobicash_enabled: paymentResponse.data.mobile_money_mobicash_enabled ?? true
+        mobile_money_moov_enabled: paymentResponse.data.mobile_money_moov_enabled ?? true
       });
     } catch (error) {
       console.error('Error loading settings:', error);
@@ -345,10 +345,10 @@ const AdminSettings = () => {
               />
             </div>
             <div className="flex items-center justify-between">
-              <Label className="text-base">Mobicash</Label>
+              <Label className="text-base">Moov Money</Label>
               <Switch
-                checked={paymentSettings.mobile_money_mobicash_enabled}
-                onCheckedChange={() => handlePaymentToggle('mobile_money_mobicash_enabled')}
+                checked={paymentSettings.mobile_money_moov_enabled}
+                onCheckedChange={() => handlePaymentToggle('mobile_money_moov_enabled')}
                 disabled={!paymentSettings.mobile_money_enabled}
               />
             </div>
