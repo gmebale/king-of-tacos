@@ -212,13 +212,22 @@ router.post('/ebilling/ussd-push', async (req, res) => {
       return res.status(403).json({ message: 'Autorisation de paiement invalide ou expirée.' });
     }
     const testMode = new URL(config.apiBase).hostname === 'lab.billing-easy.net';
-    if (!['airtelmoney', 'moovmoney'].includes(paymentSystemName) && !(paymentSystemName === 'SIMU' && testMode)) {
+    if (!['airtelmoney', 'moovmoney', 'SIMU'].includes(paymentSystemName)) {
       return res.status(400).json({ message: 'Opérateur Mobile Money invalide.' });
     }
 
-    const order = await prisma.order.findUnique({ where: { id: orderId } });
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+      include: { user: { select: { role: true } } }
+    });
     if (!order) return res.status(404).json({ message: 'Commande introuvable.' });
     if (order.payment_method !== 'mobile_money') return res.status(409).json({ message: 'Cette commande ne prévoit pas un paiement Mobile Money.' });
+    if (testMode && paymentSystemName !== 'SIMU') {
+      return res.status(409).json({ message: 'En mode Lab, seuls les paiements SIMU sont autorisés.' });
+    }
+    if (paymentSystemName === 'SIMU' && (!testMode || order.user?.role !== 'admin')) {
+      return res.status(403).json({ message: 'Le paiement SIMU est réservé aux commandes de test créées par un administrateur.' });
+    }
     if (order.status === 'annulee' || order.closed_at || order.payment_status === 'paid' || order.payment_status === 'refunded') {
       return res.status(409).json({ message: 'Cette commande ne peut plus être payée.' });
     }

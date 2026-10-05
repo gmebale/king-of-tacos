@@ -28,11 +28,12 @@ export default function Payment() {
   const [simuMsisdn, setSimuMsisdn] = useState('077000001');
   const [createdOrder, setCreatedOrder] = useState(null);
   const isStaffOrder = user?.role === "serveur" && sessionStorage.getItem("kot_staff_order_mode") === "true";
-  const availableOperators = [
-    ...(paymentSettings?.mobile_money_airtel_enabled ? [{ value: 'airtelmoney', label: 'Airtel Money' }] : []),
-    ...(paymentSettings?.mobile_money_moov_enabled ? [{ value: 'moovmoney', label: 'Moov Money' }] : []),
-    ...(paymentSettings?.ebilling_test_mode ? [{ value: 'SIMU', label: 'SIMU · test Lab' }] : [])
-  ];
+  const availableOperators = paymentSettings?.ebilling_test_mode
+    ? (user?.role === 'admin' ? [{ value: 'SIMU', label: 'SIMU · test Lab' }] : [])
+    : [
+      ...(paymentSettings?.mobile_money_airtel_enabled ? [{ value: 'airtelmoney', label: 'Airtel Money' }] : []),
+      ...(paymentSettings?.mobile_money_moov_enabled ? [{ value: 'moovmoney', label: 'Moov Money' }] : [])
+    ];
   const ebillingAvailable = Boolean(paymentSettings?.ebilling_enabled && paymentSettings.mobile_money_enabled && availableOperators.length);
 
   useEffect(() => {
