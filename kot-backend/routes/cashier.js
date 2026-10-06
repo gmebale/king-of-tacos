@@ -65,22 +65,32 @@ function formatCustomization(customization, productCustomization) {
 // Normalize period dates helper
 function getPeriodRange(period) {
   const now = new Date();
-  let startDate;
+  const timeZone = 'Africa/Libreville';
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).formatToParts(now);
+  const localDate = Object.fromEntries(parts.map(part => [part.type, part.value]));
+  const localMidnight = new Date(`${localDate.year}-${localDate.month}-${localDate.day}T00:00:00+01:00`);
+  let startDate = localMidnight;
 
   switch (period) {
-    case 'day':
-      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    case 'day': {
       break;
+    }
     case 'week': {
-      const weekStart = now.getDate() - now.getDay();
-      startDate = new Date(now.getFullYear(), now.getMonth(), weekStart);
+      const weekday = new Intl.DateTimeFormat('en-US', { timeZone, weekday: 'short' }).format(now);
+      const daysSinceMonday = ({ Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5, Sun: 6 })[weekday];
+      startDate = new Date(localMidnight.getTime() - daysSinceMonday * 24 * 60 * 60 * 1000);
       break;
     }
     case 'month':
-      startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+      startDate = new Date(`${localDate.year}-${localDate.month}-01T00:00:00+01:00`);
       break;
     case 'year':
-      startDate = new Date(now.getFullYear(), 0, 1);
+      startDate = new Date(`${localDate.year}-01-01T00:00:00+01:00`);
       break;
     default:
       throw new Error('Invalid period');
@@ -178,9 +188,9 @@ async function buildSalesReport(period) {
     where: {
       closed_at: {
         gte: startDate,
-        lte: endDate
+        lte: endDate,
+        not: null
       },
-      closed_at: { not: null },
       payment_status: 'paid',
       status: { in: ['livree', 'servie', 'recuperee'] }
     },
@@ -948,6 +958,14 @@ router.get('/reports/:period/excel', authenticateToken, requirePagePermission('c
     locations.addRow(['Lieu', 'Commandes', 'Articles', 'Ventes (FCFA)']).font = { bold: true };
     report.locationReport.forEach(location => locations.addRow([location.location, location.orders, location.items, location.revenue]));
     locations.columns = [{ width: 32 }, { width: 16 }, { width: 16 }, { width: 22 }];
+    locations.views = [{ state: 'frozen', ySplit: 1 }];
+    const summaryLocationHeaderRow = summary.rowCount + 2;
+    summary.addRows([
+      [],
+      ['Ventes par lieu', 'Commandes', 'Articles', 'Ventes (FCFA)'],
+      ...report.locationReport.map(location => [location.location, location.orders, location.items, location.revenue])
+    ]);
+    summary.getRow(summaryLocationHeaderRow).font = { bold: true };
 
     const taxes = workbook.addWorksheet('Taxes');
     taxes.addRow(['Taux', 'Pourcentage', 'Montant collecté (FCFA)']).font = { bold: true };
