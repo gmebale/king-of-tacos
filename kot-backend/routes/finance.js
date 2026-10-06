@@ -277,7 +277,7 @@ router.get('/top-servers', authenticateToken, requirePagePermission('finance', '
 router.get('/profit-summary', authenticateToken, requirePagePermission('finance', 'dashboard'), async (req, res) => {
   try {
     const dateFilter = getFinanceFilters({ start_date: req.query.start_date, end_date: req.query.end_date });
-    const expenseDateFilter = getFinanceFilters({ start_date: req.query.start_date, end_date: req.query.end_date }, 'expense_date').expense_date || {};
+    const expenseDateFilter = getFinanceFilters({ start_date: req.query.start_date, end_date: req.query.end_date }, 'expense_date');
     const [orders, expenses] = await Promise.all([
       prisma.order.findMany({
         where: {
