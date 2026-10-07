@@ -55,6 +55,8 @@ app.use((req, res, next) => {
 
 // Serve static files from uploads directory
 app.use('/uploads', express.static('uploads'));
+// The reverse proxy forwards /api/* to this container; expose uploaded media there too.
+app.use('/api/uploads', express.static('uploads'));
 app.use(session({
   secret: process.env.SESSION_SECRET || 'your-secret-key',
   resave: false,

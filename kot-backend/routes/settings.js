@@ -268,15 +268,16 @@ router.put('/homepage', authenticateToken, requirePagePermission('settings'), as
     const imageExtensions = ['jpg', 'jpeg', 'png', 'webp'];
     const videoExtensions = ['mp4', 'webm', 'mov'];
     const allowedExtensions = mediaType === 'image' ? imageExtensions : videoExtensions;
-    if (!pathname.startsWith('/uploads/') || !allowedExtensions.includes(extension)) {
+    if (!['/uploads/', '/api/uploads/'].some(prefix => pathname.startsWith(prefix)) || !allowedExtensions.includes(extension)) {
       return res.status(400).json({ message: 'La bannière doit être un média téléversé dans un format pris en charge.' });
     }
+    const normalizedMediaUrl = pathname.startsWith('/uploads/') ? `/api${pathname}` : pathname;
     await prisma.$transaction([
-      prisma.settings.upsert({ where: { key: 'hero_media_url' }, update: { value: mediaUrl }, create: { key: 'hero_media_url', value: mediaUrl } }),
+      prisma.settings.upsert({ where: { key: 'hero_media_url' }, update: { value: normalizedMediaUrl }, create: { key: 'hero_media_url', value: normalizedMediaUrl } }),
       prisma.settings.upsert({ where: { key: 'hero_media_type' }, update: { value: mediaType }, create: { key: 'hero_media_type', value: mediaType } }),
       prisma.settings.upsert({ where: { key: 'hero_overlay_opacity' }, update: { value: String(overlayOpacity) }, create: { key: 'hero_overlay_opacity', value: String(overlayOpacity) } })
     ]);
-    res.json({ media_url: mediaUrl, media_type: mediaType, overlay_opacity: overlayOpacity });
+    res.json({ media_url: normalizedMediaUrl, media_type: mediaType, overlay_opacity: overlayOpacity });
   } catch (error) {
     console.error('Update homepage settings error:', error);
     res.status(500).json({ message: 'Impossible de sauvegarder la bannière' });

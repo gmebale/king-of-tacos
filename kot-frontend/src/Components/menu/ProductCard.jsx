@@ -7,6 +7,7 @@ import { Badge } from '../ui/badge';
 import CustomizationDialog from './CustomizationDialog';
 import { Product } from '../../Entities/Product';
 import { toast } from 'react-hot-toast';
+import { resolveMediaUrl } from '../../utils/media';
 
 export default function ProductCard({ product, onAddToCart, cartItem, onUpdateQuantity }) {
   const [showCustomization, setShowCustomization] = useState(false);
@@ -64,7 +65,7 @@ export default function ProductCard({ product, onAddToCart, cartItem, onUpdateQu
           <div className="relative h-48 bg-gradient-to-br from-amber-50 to-yellow-100 overflow-hidden">
             {product.image ? (
               <img
-                src={product.image}
+                src={resolveMediaUrl(product.image)}
                 alt={product.name}
                 className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
               />

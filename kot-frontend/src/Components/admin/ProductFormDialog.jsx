@@ -13,6 +13,7 @@ import { Textarea } from "../ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { Switch } from "../ui/switch";
 import { UploadFile } from "../../integrations/Core";
+import { resolveMediaUrl } from "../../utils/media";
 import { Upload, X, Image as ImageIcon, Loader2 } from "lucide-react";
 import { Card } from "../ui/card";
 import { Product } from "../../Entities/Product";
@@ -157,7 +158,7 @@ export default function ProductFormDialog({ open, onOpenChange, product, onSave 
             {imagePreview ? (
               <Card className="relative overflow-hidden">
                 <img
-                  src={imagePreview}
+                  src={resolveMediaUrl(imagePreview)}
                   alt="Preview"
                   className="w-full h-48 object-cover"
                 />

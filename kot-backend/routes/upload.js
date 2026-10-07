@@ -84,7 +84,7 @@ router.post('/', authenticateToken, requirePagePermission('stock', 'settings'), 
     }
 
     // Return the file URL
-    const fileUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
+    const fileUrl = `/api/uploads/${req.file.filename}`;
     res.json({ file_url: fileUrl, media_type: mediaType });
   })().catch(async error => {
     if (req.file?.path) await fs.unlink(req.file.path).catch(() => {});

@@ -6,6 +6,7 @@ import { Card, CardContent } from "../Components/ui/card";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "../utils";
 import { useCart } from "../hooks/useCart";
+import { resolveMediaUrl } from "../utils/media";
 
 export default function Cart() {
   const navigate = useNavigate();
@@ -79,7 +80,7 @@ export default function Cart() {
                       <div className="w-24 h-24 bg-gradient-to-br from-amber-50 to-yellow-100 rounded-2xl flex items-center justify-center flex-shrink-0">
                         {item.product.image_url ? (
                           <img
-                            src={item.product.image_url}
+                            src={resolveMediaUrl(item.product.image_url)}
                             alt={item.product.name}
                             className="w-full h-full object-cover rounded-2xl"
                           />

@@ -3,6 +3,7 @@ import { Check, ChevronLeft, ChevronRight, Minus, Plus, ShoppingBag } from 'luci
 import { Button } from '../ui/button.jsx';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog.jsx';
 import { Badge } from '../ui/badge.jsx';
+import { resolveMediaUrl } from '../../utils/media';
 
 const money = value => `${Math.round(Number(value) || 0).toLocaleString()} FCFA`;
 
@@ -172,7 +173,7 @@ export default function CustomizationDialog({ open, onOpenChange, product, optio
                     const checked = selectedRecommendations.includes(item.id);
                     const price = Math.round(item.price * (1 - (item.discount_percentage || 0) / 100));
                     return <button key={item.id} type="button" onClick={() => setSelectedRecommendations(current => checked ? current.filter(id => id !== item.id) : [...current, item.id])} className={`flex items-center gap-3 rounded-xl border p-3 text-left ${checked ? 'border-amber-500 bg-amber-50 ring-1 ring-amber-300' : 'border-gray-200 bg-white hover:border-amber-300'}`}>
-                      {item.image ? <img src={item.image} alt="" className="h-14 w-14 rounded-lg object-cover" /> : <span className="h-14 w-14 rounded-lg bg-amber-50" />}
+                      {item.image ? <img src={resolveMediaUrl(item.image)} alt="" className="h-14 w-14 rounded-lg object-cover" /> : <span className="h-14 w-14 rounded-lg bg-amber-50" />}
                       <span className="min-w-0 flex-1"><span className="block font-medium">{item.name}</span><span className="text-sm text-amber-700">{money(price)}</span></span>
                       <span className={`flex h-5 w-5 items-center justify-center rounded border ${checked ? 'border-amber-600 bg-amber-500 text-white' : 'border-gray-300'}`}>{checked && <Check className="h-3.5 w-3.5" />}</span>
                     </button>;

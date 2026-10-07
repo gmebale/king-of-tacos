@@ -7,6 +7,7 @@ import { ArrowRight, Star, Clock, Heart, Sparkles } from "lucide-react";
 import { Button } from "../Components/ui/button";
 import { Card } from "../Components/ui/card";
 import api from "../services/api.service";
+import { resolveMediaUrl } from "../utils/media";
 
 export default function Home() {
   const { isAuthenticated } = useAuthContext();
@@ -44,7 +45,7 @@ export default function Home() {
         {heroMedia.media_url && (heroMedia.media_type === 'video' ? (
           <video
             key={heroMedia.media_url}
-            src={heroMedia.media_url}
+            src={resolveMediaUrl(heroMedia.media_url)}
             autoPlay
             muted
             loop
@@ -55,7 +56,7 @@ export default function Home() {
           />
         ) : (
           <img
-            src={heroMedia.media_url}
+            src={resolveMediaUrl(heroMedia.media_url)}
             alt=""
             className="absolute inset-0 h-full w-full object-cover"
             onError={(event) => { event.currentTarget.style.display = 'none'; }}

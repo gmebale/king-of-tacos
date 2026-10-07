@@ -9,6 +9,7 @@ import { toast } from 'react-hot-toast';
 import api from '../services/api.service';
 import { useAuthContext } from '../contexts/AuthContext';
 import { UploadFile } from '../integrations/Core';
+import { resolveMediaUrl } from '../utils/media';
 
 const ORDERING_DAYS = [
   ['Mon', 'Lundi'], ['Tue', 'Mardi'], ['Wed', 'Mercredi'], ['Thu', 'Jeudi'],
@@ -443,9 +444,9 @@ const AdminSettings = () => {
           {heroMedia.media_url && (
             <div className="relative aspect-video overflow-hidden rounded-xl border bg-gray-950">
               {heroMedia.media_type === 'video' ? (
-                <video key={heroMedia.media_url} src={heroMedia.media_url} controls muted playsInline className="h-full w-full object-cover" />
+                <video key={heroMedia.media_url} src={resolveMediaUrl(heroMedia.media_url)} controls muted playsInline className="h-full w-full object-cover" />
               ) : (
-                <img src={heroMedia.media_url} alt="Aperçu de la bannière" className="h-full w-full object-cover" />
+                <img src={resolveMediaUrl(heroMedia.media_url)} alt="Aperçu de la bannière" className="h-full w-full object-cover" />
               )}
               <div
                 className="pointer-events-none absolute inset-0 bg-gradient-to-br from-amber-50 via-yellow-50 to-orange-100"

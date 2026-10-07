@@ -17,6 +17,7 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "../Components/ui/tabs";
 
 import ProductFormDialog from "../Components/admin/ProductFormDialog";
+import { resolveMediaUrl } from "../utils/media";
 import CategoryManagementDialog from "../Components/admin/CategoryManagementDialog";
 
 export default function AdminStock() {
@@ -330,7 +331,7 @@ export default function AdminStock() {
                           <div className="flex items-center gap-3">
                             {product.image ? (
                               <img
-                                src={product.image}
+                                src={resolveMediaUrl(product.image)}
                                 alt={product.name}
                                 className="w-16 h-16 rounded-xl object-cover border-2 border-gray-200"
                               />
@@ -485,7 +486,7 @@ export default function AdminStock() {
                           <div className="flex gap-3 sm:gap-4 mb-3">
                             {product.image ? (
                               <img
-                                src={product.image}
+                                src={resolveMediaUrl(product.image)}
                                 alt={product.name}
                                 className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl object-cover border-2 border-gray-200 flex-shrink-0"
                               />
