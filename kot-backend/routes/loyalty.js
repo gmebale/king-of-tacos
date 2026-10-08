@@ -276,10 +276,29 @@ router.put('/admin/tiers', authenticateToken, requireRole(['admin']), async (req
     if (configuredCount !== 0 && (configuredCount !== 3 || thresholds.some(value => !Number.isInteger(value) || value <= 0) || !(thresholds[0] < thresholds[1] && thresholds[1] < thresholds[2]))) {
       return res.status(400).json({ message: 'Renseignez les trois seuils avec des nombres entiers croissants.' });
     }
-    await prisma.$transaction(normalized.map(tier => prisma.loyaltyTier.update({
-      where: { level: tier.level },
-      data: { title: tier.title, icon: tier.icon, threshold_points: tier.threshold_points }
-    })));
+    const existingRewards = await prisma.loyaltyReward.groupBy({
+      by: ['tier_level'],
+      where: { tier_level: { in: [1, 2, 3] } },
+      _count: { _all: true }
+    });
+    const rewardsByLevel = new Map(existingRewards.map(group => [group.tier_level, group._count._all]));
+    if (normalized.some(tier => tier.threshold_points === null && (rewardsByLevel.get(tier.level) || 0) > 0)) {
+      return res.status(400).json({ message: 'Un palier associé à des récompenses ne peut pas être désactivé. Réaffectez ou supprimez d’abord ses récompenses.' });
+    }
+    await prisma.$transaction(async tx => {
+      for (const tier of normalized) {
+        await tx.loyaltyTier.update({
+          where: { level: tier.level },
+          data: { title: tier.title, icon: tier.icon, threshold_points: tier.threshold_points }
+        });
+        if (tier.threshold_points !== null) {
+          await tx.loyaltyReward.updateMany({
+            where: { tier_level: tier.level },
+            data: { points_required: tier.threshold_points }
+          });
+        }
+      }
+    });
     res.json(await prisma.loyaltyTier.findMany({ include: { _count: { select: { rewards: true } } }, orderBy: { level: 'asc' } }));
   } catch (error) {
     console.error('Update loyalty tiers error:', error);
@@ -306,17 +325,18 @@ router.get('/admin/rewards', authenticateToken, requirePagePermission('loyalty')
 router.post('/admin/rewards', authenticateToken, requireRole(['admin']), async (req, res) => {
   try {
     const { name, description, type, points_required, quantity_limit, expires_at, discount_percent, gifted_product_id, tier_level } = req.body;
-    const points = Number(points_required);
     const limit = Number(quantity_limit);
     const expiry = new Date(expires_at);
+    const tierLevel = tier_level === '' || tier_level === null || tier_level === undefined ? null : Number(tier_level);
+    if (tierLevel !== null && (!Number.isInteger(tierLevel) || tierLevel < 1 || tierLevel > 3)) return res.status(400).json({ message: 'Palier de récompense invalide.' });
+    const selectedTier = tierLevel === null ? null : await prisma.loyaltyTier.findUnique({ where: { level: tierLevel } });
+    if (tierLevel !== null && !Number.isInteger(selectedTier?.threshold_points)) return res.status(400).json({ message: 'Configurez le seuil du niveau choisi avant d’y rattacher une récompense.' });
+    const points = selectedTier ? selectedTier.threshold_points : Number(points_required);
     if (!name?.trim() || !['free_delivery', 'gifted_product', 'discount'].includes(type) || !Number.isInteger(points) || points <= 0 || !Number.isInteger(limit) || limit <= 0 || Number.isNaN(expiry.getTime()) || expiry <= new Date()) {
       return res.status(400).json({ message: 'Nom, type, coût en points, quantité limitée et date d’expiration future sont obligatoires.' });
     }
     if (type === 'discount' && (!Number.isInteger(Number(discount_percent)) || Number(discount_percent) < 1 || Number(discount_percent) > 100)) return res.status(400).json({ message: 'La remise doit être comprise entre 1 et 100 %.' });
     if (type === 'gifted_product' && !(await prisma.product.findFirst({ where: { id: Number(gifted_product_id), available: true } }))) return res.status(400).json({ message: 'Sélectionnez un produit disponible à offrir.' });
-    const tierLevel = tier_level === '' || tier_level === null || tier_level === undefined ? null : Number(tier_level);
-    if (tierLevel !== null && (!Number.isInteger(tierLevel) || tierLevel < 1 || tierLevel > 3 || !(await prisma.loyaltyTier.findFirst({ where: { level: tierLevel, threshold_points: { not: null } } })))) return res.status(400).json({ message: 'Configurez le seuil du niveau choisi avant d’y rattacher une récompense.' });
-
     const reward = await prisma.loyaltyReward.create({
       data: {
         name,
@@ -353,11 +373,14 @@ router.put('/admin/rewards/:id', authenticateToken, requireRole(['admin']), asyn
     if (!['free_delivery', 'gifted_product', 'discount'].includes(nextType)) return res.status(400).json({ message: 'Type de récompense invalide.' });
     const nextPercent = discount_percent === undefined ? current.discount_percent : Number(discount_percent);
     const nextGift = gifted_product_id === undefined ? current.gifted_product_id : Number(gifted_product_id);
-    if (points_required !== undefined && (!Number.isInteger(Number(points_required)) || Number(points_required) <= 0)) return res.status(400).json({ message: 'Les points requis doivent être un entier supérieur à zéro.' });
     if (nextType === 'discount' && (!Number.isInteger(nextPercent) || nextPercent < 1 || nextPercent > 100)) return res.status(400).json({ message: 'La remise doit être comprise entre 1 et 100 %.' });
     if (nextType === 'gifted_product' && !(await prisma.product.findFirst({ where: { id: nextGift, available: true } }))) return res.status(400).json({ message: 'Sélectionnez un produit disponible à offrir.' });
     const tierLevel = tier_level === undefined ? current.tier_level : (tier_level === '' || tier_level === null ? null : Number(tier_level));
-    if (tierLevel !== null && (!Number.isInteger(tierLevel) || tierLevel < 1 || tierLevel > 3 || !(await prisma.loyaltyTier.findFirst({ where: { level: tierLevel, threshold_points: { not: null } } })))) return res.status(400).json({ message: 'Configurez le seuil du niveau choisi avant d’y rattacher une récompense.' });
+    if (tierLevel !== null && (!Number.isInteger(tierLevel) || tierLevel < 1 || tierLevel > 3)) return res.status(400).json({ message: 'Palier de récompense invalide.' });
+    const selectedTier = tierLevel === null ? null : await prisma.loyaltyTier.findUnique({ where: { level: tierLevel } });
+    if (tierLevel !== null && !Number.isInteger(selectedTier?.threshold_points)) return res.status(400).json({ message: 'Configurez le seuil du niveau choisi avant d’y rattacher une récompense.' });
+    const points = selectedTier ? selectedTier.threshold_points : (points_required === undefined ? current.points_required : Number(points_required));
+    if (!Number.isInteger(points) || points <= 0) return res.status(400).json({ message: 'Les points requis doivent être un entier supérieur à zéro.' });
 
     const reward = await prisma.loyaltyReward.update({
       where: { id },
@@ -365,7 +388,7 @@ router.put('/admin/rewards/:id', authenticateToken, requireRole(['admin']), asyn
         name,
         description,
         type,
-        points_required: points_required ? parseInt(points_required) : undefined,
+        points_required: points,
         is_active,
         quantity_limit: limit,
         expires_at: expiry,

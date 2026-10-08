@@ -271,13 +271,14 @@ export default function AdminLoyalty() {
 
   const openEditReward = (reward) => {
     const expiryDate = reward.expires_at ? new Date(reward.expires_at) : null;
+    const tier = tiers.find(item => item.level === reward.tier_level);
     if (expiryDate) expiryDate.setMinutes(expiryDate.getMinutes() - expiryDate.getTimezoneOffset());
     setEditingReward(reward);
     setRewardForm({
       name: reward.name,
       description: reward.description || '',
       type: reward.type,
-      points_required: reward.points_required.toString(),
+      points_required: (tier?.threshold_points ?? reward.points_required).toString(),
       quantity_limit: reward.quantity_limit?.toString() || '',
       expires_at: expiryDate ? expiryDate.toISOString().slice(0, 16) : '',
       discount_percent: reward.discount_percent?.toString() || '',
@@ -464,22 +465,31 @@ export default function AdminLoyalty() {
                         </Select>
                       </div>
                       <div>
-                        <Label htmlFor="points">Points requis</Label>
+                        <Label htmlFor="points">{rewardForm.tier_level ? 'Coût de réclamation (points)' : 'Points requis'}</Label>
                         <Input
                           id="points"
                           type="number"
                           value={rewardForm.points_required}
                           onChange={(e) => setRewardForm({...rewardForm, points_required: e.target.value})}
                           placeholder="100"
+                          disabled={Boolean(rewardForm.tier_level)}
                         />
+                        {rewardForm.tier_level && <p className="mt-1 text-xs text-gray-500">Ce coût est automatiquement égal au seuil du palier et sera débité lorsque le client réclamera la récompense.</p>}
                       </div>
                       <div>
                         <Label htmlFor="reward-tier">Palier requis (facultatif)</Label>
-                        <Select value={rewardForm.tier_level || 'none'} onValueChange={value => setRewardForm({ ...rewardForm, tier_level: value === 'none' ? '' : value })}>
+                        <Select value={rewardForm.tier_level || 'none'} onValueChange={value => {
+                          const selectedTier = tiers.find(tier => tier.level.toString() === value);
+                          setRewardForm(current => ({
+                            ...current,
+                            tier_level: value === 'none' ? '' : value,
+                            points_required: selectedTier?.threshold_points != null ? String(selectedTier.threshold_points) : current.points_required
+                          }));
+                        }}>
                           <SelectTrigger id="reward-tier"><SelectValue /></SelectTrigger>
                           <SelectContent><SelectItem value="none">Aucun palier</SelectItem>{tiers.map(tier => <SelectItem key={tier.level} value={tier.level.toString()} disabled={!Number.isInteger(Number(tier.threshold_points)) || Number(tier.threshold_points) < 1}>{tier.title} · seuil {tier.threshold_points || 'à configurer'}</SelectItem>)}</SelectContent>
                         </Select>
-                        <p className="mt-1 text-xs text-gray-500">Le seuil débloque la récompense; les points requis ci-dessus sont ensuite débités quand le client la réclame.</p>
+                        <p className="mt-1 text-xs text-gray-500">Le palier définit à la fois le seuil de déblocage et le coût débité lors de la réclamation.</p>
                       </div>
                       <div>
                         <Label htmlFor="reward-limit">Quantité totale disponible</Label>
