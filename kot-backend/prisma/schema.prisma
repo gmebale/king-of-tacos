@@ -152,7 +152,6 @@ model User {
   orders             Order[]
   validatedOrders    Order[] @relation("orderValidatedBy")
   closedOrders       Order[] @relation("orderClosedBy")
-  cashOrders         Order[] @relation("orderCashSession")
   loyaltyRedemptions LoyaltyRedemption[]
   loyaltyPointEntries LoyaltyPointEntry[] @relation("loyaltyPointOwner")
   loyaltyPointActions LoyaltyPointEntry[] @relation("loyaltyPointActor")
