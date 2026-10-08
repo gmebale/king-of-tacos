@@ -560,7 +560,7 @@ model Log {
 model Settings {
   id    Int    @id @default(autoincrement())
   key   String @unique
-  value String
+  value String @db.Text
 
   @@map("settings")
 }

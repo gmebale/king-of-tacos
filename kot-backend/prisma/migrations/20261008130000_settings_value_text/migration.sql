@@ -1,0 +1,2 @@
+ALTER TABLE `settings`
+  MODIFY COLUMN `value` TEXT NOT NULL;
