@@ -49,3 +49,31 @@
     display: none;  /* Chrome, Safari and Opera */
   }
 }
+
+.legal-copy {
+  @apply space-y-4 text-[15px] leading-7 text-gray-700;
+}
+
+.legal-copy h2 {
+  @apply mt-8 border-b border-amber-100 pb-2 text-xl font-semibold text-gray-900;
+}
+
+.legal-copy ul {
+  @apply list-disc space-y-2 pl-6;
+}
+
+.legal-facts {
+  @apply divide-y divide-gray-100 rounded-xl border border-gray-100;
+}
+
+.legal-facts > div {
+  @apply grid gap-1 px-4 py-3 sm:grid-cols-[minmax(12rem,0.8fr)_1.2fr] sm:gap-4;
+}
+
+.legal-facts dt {
+  @apply font-medium text-gray-900;
+}
+
+.legal-facts dd {
+  @apply text-gray-600;
+}

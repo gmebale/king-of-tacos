@@ -258,6 +258,21 @@ export default function Layout({ children, currentPageName }) {
       <main className="pb-20 md:pb-0">
         {children}
       </main>
+
+      <footer className="border-t border-amber-100 bg-white px-6 py-8 text-sm text-gray-600">
+        <div className="mx-auto flex max-w-7xl flex-col gap-5 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="font-semibold text-gray-900">King Of Tacos</p>
+            <p className="mt-1">Restaurant · Gabon</p>
+          </div>
+          <nav aria-label="Informations légales" className="flex flex-wrap gap-x-5 gap-y-2">
+            <Link to="/mentions-legales" className="hover:text-amber-700">Mentions légales</Link>
+            <Link to="/conditions-generales" className="hover:text-amber-700">Conditions générales</Link>
+            <Link to="/confidentialite" className="hover:text-amber-700">Confidentialité</Link>
+            <Link to="/livraison-annulation" className="hover:text-amber-700">Retrait, livraison et annulation</Link>
+          </nav>
+        </div>
+      </footer>
     </div>
   );
 }

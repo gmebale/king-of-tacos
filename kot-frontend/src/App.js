@@ -26,11 +26,14 @@ import AdminLoyalty from './Pages/AdminLoyalty';
 import AdminReviews from './Pages/AdminReviews';
 import AdminMobileMoney from './Pages/AdminMobileMoney';
 import StaffOrderStart from './Pages/StaffOrderStart';
+import LegalPage from './Pages/LegalPage';
+import SeoManager from './Components/common/SeoManager';
 
 function App() {
   return (
     <ErrorBoundary>
       <Router>
+        <SeoManager />
         <Routes>
           <Route path="/" element={<Layout currentPageName="Home"><Home /></Layout>} />
           <Route path="/menu" element={<Layout currentPageName="Menu"><Menu /></Layout>} />
@@ -58,6 +61,10 @@ function App() {
           <Route path="/admin/reviews" element={<ProtectedRoute requiredPermission="reviews"><Layout currentPageName="AdminReviews"><AdminReviews /></Layout></ProtectedRoute>} />
           <Route path="/login" element={<Layout currentPageName="Auth"><Login /></Layout>} />
           <Route path="/register" element={<Layout currentPageName="Auth"><Register /></Layout>} />
+          <Route path="/mentions-legales" element={<Layout currentPageName="Legal"><LegalPage page="legal" /></Layout>} />
+          <Route path="/conditions-generales" element={<Layout currentPageName="Legal"><LegalPage page="terms" /></Layout>} />
+          <Route path="/confidentialite" element={<Layout currentPageName="Legal"><LegalPage page="privacy" /></Layout>} />
+          <Route path="/livraison-annulation" element={<Layout currentPageName="Legal"><LegalPage page="delivery" /></Layout>} />
         </Routes>
       </Router>
     </ErrorBoundary>
