@@ -22,8 +22,18 @@ import {
   Tag,
   Calendar,
   DollarSign,
-  Percent
+  Percent,
+  Medal,
+  Trophy,
+  Crown
 } from 'lucide-react';
+
+const TIER_ICONS = { star: Star, medal: Medal, trophy: Trophy, crown: Crown };
+const DEFAULT_TIERS = [
+  { level: 1, title: 'Niveau 1', icon: 'star', threshold_points: '' },
+  { level: 2, title: 'Niveau 2', icon: 'medal', threshold_points: '' },
+  { level: 3, title: 'Niveau 3', icon: 'trophy', threshold_points: '' }
+];
 
 export default function AdminLoyalty() {
   const { user: currentUser } = useAuthContext();
@@ -34,6 +44,7 @@ export default function AdminLoyalty() {
   const [promos, setPromos] = useState([]);
   const [products, setProducts] = useState([]);
   const [pointHistory, setPointHistory] = useState([]);
+  const [tiers, setTiers] = useState(DEFAULT_TIERS);
   const [manualPoints, setManualPoints] = useState({ points: '', reason: '' });
   const [loading, setLoading] = useState(true);
 
@@ -55,6 +66,7 @@ export default function AdminLoyalty() {
     expires_at: '',
     discount_percent: '',
     gifted_product_id: '',
+    tier_level: '',
     is_active: true
   });
 
@@ -81,17 +93,30 @@ export default function AdminLoyalty() {
         api.get('/loyalty/admin/redemptions'),
         api.get('/loyalty/admin/promos'),
         api.get('/products'),
-        api.get('/loyalty/admin/point-history')
+        api.get('/loyalty/admin/point-history'),
+        api.get('/loyalty/admin/tiers')
     ]);
-    const [rewardsRes, usersRes, redemptionsRes, promosRes, productsRes, historyRes] = results;
+    const [rewardsRes, usersRes, redemptionsRes, promosRes, productsRes, historyRes, tiersRes] = results;
     if (rewardsRes.status === 'fulfilled') setRewards(rewardsRes.value.data || []);
     if (usersRes.status === 'fulfilled') setUsers(usersRes.value.data || []);
     if (redemptionsRes.status === 'fulfilled') setRedemptions(redemptionsRes.value.data || []);
     if (promosRes.status === 'fulfilled') setPromos(promosRes.value.data || []);
     if (productsRes.status === 'fulfilled') setProducts((productsRes.value.data || []).filter(product => product.available));
     if (historyRes.status === 'fulfilled') setPointHistory(historyRes.value.data || []);
+    if (tiersRes.status === 'fulfilled' && tiersRes.value.data?.length === 3) setTiers(tiersRes.value.data);
     if (results.some(result => result.status === 'rejected')) toast.error('Certaines données fidélité n’ont pas pu être chargées.');
     setLoading(false);
+  };
+
+  const saveTiers = async () => {
+    try {
+      const payload = tiers.map(tier => ({ ...tier, threshold_points: tier.threshold_points === '' ? null : Number(tier.threshold_points) }));
+      const response = await api.put('/loyalty/admin/tiers', { tiers: payload });
+      setTiers(response.data);
+      toast.success('Les trois niveaux de fidélité ont été enregistrés.');
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Impossible d’enregistrer les niveaux.');
+    }
   };
 
   const handleCreateReward = async () => {
@@ -226,6 +251,7 @@ export default function AdminLoyalty() {
       expires_at: '',
       discount_percent: '',
       gifted_product_id: '',
+      tier_level: '',
       is_active: true
     });
   };
@@ -256,6 +282,7 @@ export default function AdminLoyalty() {
       expires_at: expiryDate ? expiryDate.toISOString().slice(0, 16) : '',
       discount_percent: reward.discount_percent?.toString() || '',
       gifted_product_id: reward.gifted_product_id?.toString() || '',
+      tier_level: reward.tier_level?.toString() || '',
       is_active: reward.is_active
     });
     setShowRewardDialog(true);
@@ -340,7 +367,8 @@ export default function AdminLoyalty() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
+          <TabsTrigger value="tiers" className="flex items-center gap-2"><Star className="w-4 h-4" />Niveaux</TabsTrigger>
           <TabsTrigger value="rewards" className="flex items-center gap-2">
             <Award className="w-4 h-4" />
             Récompenses
@@ -358,6 +386,27 @@ export default function AdminLoyalty() {
             Historique
           </TabsTrigger>
         </TabsList>
+
+        <TabsContent value="tiers" className="space-y-6">
+          {currentUser?.role === 'admin' && <Card>
+            <CardHeader><CardTitle>Jauge et paliers de récompense</CardTitle><CardDescription>Les seuils sont comparés au solde actuel du client. Un échange réduit son solde et peut donc faire redescendre sa jauge. Les récompenses de palier restent à réclamer par le client.</CardDescription></CardHeader>
+            <CardContent className="space-y-5">
+              <div className="grid gap-4 md:grid-cols-3">
+                {tiers.map((tier, index) => {
+                  const TierIcon = TIER_ICONS[tier.icon] || Star;
+                  return <div key={tier.level} className="space-y-3 rounded-lg border p-4">
+                    <div className="flex items-center gap-2 font-semibold"><TierIcon className="h-5 w-5 text-amber-500" />Palier {tier.level}</div>
+                    <div><Label htmlFor={`tier-title-${tier.level}`}>Nom</Label><Input id={`tier-title-${tier.level}`} value={tier.title} onChange={e => setTiers(old => old.map(item => item.level === tier.level ? { ...item, title: e.target.value } : item))} /></div>
+                    <div><Label htmlFor={`tier-threshold-${tier.level}`}>Solde requis (points)</Label><Input id={`tier-threshold-${tier.level}`} type="number" min="1" step="1" value={tier.threshold_points ?? ''} onChange={e => setTiers(old => old.map(item => item.level === tier.level ? { ...item, threshold_points: e.target.value } : item))} placeholder={index === 0 ? 'Ex. 100' : 'Entier supérieur au palier précédent'} /></div>
+                    <div><Label htmlFor={`tier-icon-${tier.level}`}>Icône</Label><Select value={tier.icon} onValueChange={value => setTiers(old => old.map(item => item.level === tier.level ? { ...item, icon: value } : item))}><SelectTrigger id={`tier-icon-${tier.level}`}><SelectValue /></SelectTrigger><SelectContent><SelectItem value="star">Étoile</SelectItem><SelectItem value="medal">Médaille</SelectItem><SelectItem value="trophy">Trophée</SelectItem><SelectItem value="crown">Couronne</SelectItem></SelectContent></Select></div>
+                  </div>;
+                })}
+              </div>
+              <p className="text-sm text-gray-500">Renseignez les trois seuils en ordre croissant. Les récompenses non associées à un palier restent accessibles avec leurs règles actuelles.</p>
+              <Button onClick={saveTiers}>Enregistrer les niveaux</Button>
+            </CardContent>
+          </Card>}
+        </TabsContent>
 
         <TabsContent value="rewards" className="space-y-6">
           {currentUser?.role === 'admin' && <Card>
@@ -425,6 +474,14 @@ export default function AdminLoyalty() {
                         />
                       </div>
                       <div>
+                        <Label htmlFor="reward-tier">Palier requis (facultatif)</Label>
+                        <Select value={rewardForm.tier_level || 'none'} onValueChange={value => setRewardForm({ ...rewardForm, tier_level: value === 'none' ? '' : value })}>
+                          <SelectTrigger id="reward-tier"><SelectValue /></SelectTrigger>
+                          <SelectContent><SelectItem value="none">Aucun palier</SelectItem>{tiers.map(tier => <SelectItem key={tier.level} value={tier.level.toString()} disabled={!Number.isInteger(Number(tier.threshold_points)) || Number(tier.threshold_points) < 1}>{tier.title} · seuil {tier.threshold_points || 'à configurer'}</SelectItem>)}</SelectContent>
+                        </Select>
+                        <p className="mt-1 text-xs text-gray-500">Le seuil débloque la récompense; les points requis ci-dessus sont ensuite débités quand le client la réclame.</p>
+                      </div>
+                      <div>
                         <Label htmlFor="reward-limit">Quantité totale disponible</Label>
                         <Input id="reward-limit" type="number" min="1" required value={rewardForm.quantity_limit} onChange={e => setRewardForm({ ...rewardForm, quantity_limit: e.target.value })} />
                       </div>
@@ -473,6 +530,7 @@ export default function AdminLoyalty() {
                   <TableRow>
                     <TableHead>Nom</TableHead>
                     <TableHead>Type</TableHead>
+                    <TableHead>Palier</TableHead>
                     <TableHead>Points / disponibilité</TableHead>
                     <TableHead>Expiration</TableHead>
                     <TableHead>Statut</TableHead>
@@ -484,6 +542,7 @@ export default function AdminLoyalty() {
                     <TableRow key={reward.id}>
                       <TableCell className="font-medium">{reward.name}</TableCell>
                       <TableCell>{getRewardTypeLabel(reward.type)}</TableCell>
+                      <TableCell>{reward.tier?.title || 'Classique'}</TableCell>
                       <TableCell>{reward.points_required} pts · {reward.quantity_claimed}/{reward.quantity_limit ?? '—'}</TableCell>
                       <TableCell>{reward.expires_at ? new Date(reward.expires_at).toLocaleDateString('fr-FR') : 'À configurer'}</TableCell>
                       <TableCell>

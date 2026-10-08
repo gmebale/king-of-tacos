@@ -404,6 +404,15 @@ router.get('/:id', authenticateToken, async (req, res) => {
 // Create order (allows guest orders)
 router.post('/staff', authenticateToken, requireRole(['serveur']), async (req, res) => {
   try {
+    const cashSession = await prisma.cashRegisterSession.findFirst({
+      where: { closed_at: null },
+      orderBy: { opened_at: 'desc' },
+      select: { id: true }
+    });
+    if (!cashSession) {
+      return res.status(409).json({ message: 'La caisse doit être ouverte pour prendre une commande au comptoir.' });
+    }
+
     const {
       items, total_amount, customer_name, customer_phone, customer_email,
       order_type, table_number, service_location, delivery_address, pickup_time, notes,
@@ -475,6 +484,7 @@ router.post('/staff', authenticateToken, requireRole(['serveur']), async (req, r
         notes: notes || null,
         payment_method,
         validated_by: req.user.id,
+        cash_register_session_id: cashSession.id,
         validated_at: new Date(),
         status: 'en_preparation',
         items: {

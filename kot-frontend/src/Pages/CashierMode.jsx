@@ -35,6 +35,11 @@ export default function CashierMode() {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedPeriod, setSelectedPeriod] = useState('day');
   const [cashRegisterSession, setCashRegisterSession] = useState(null);
+  const [expenseCatalog, setExpenseCatalog] = useState([]);
+  const [cashExpenses, setCashExpenses] = useState([]);
+  const [stockProducts, setStockProducts] = useState([]);
+  const [expenseForm, setExpenseForm] = useState({ catalog_item_id: '', amount: '', payment_method: 'cash', supplier: '', items: [{ product_id: '', quantity: 1, unit_cost: '' }] });
+  const [isSavingExpense, setIsSavingExpense] = useState(false);
   const [isOpeningRegister, setIsOpeningRegister] = useState(false);
   const [isClosingRegister, setIsClosingRegister] = useState(false);
   const [openingBalance, setOpeningBalance] = useState('');
@@ -51,6 +56,7 @@ export default function CashierMode() {
     loadOrders();
     loadReports(selectedPeriod);
     loadCashRegisterSession();
+    loadExpenseData();
     const interval = setInterval(loadOrders, 30000);
     return () => clearInterval(interval);
   }, [selectedPeriod]);
@@ -251,6 +257,49 @@ export default function CashierMode() {
     }
   };
 
+  const loadExpenseData = async () => {
+    try {
+      const [catalogResponse, expenseResponse, productsResponse] = await Promise.all([
+        api.get('/finance/expense-catalog'),
+        api.get('/cashier/session/expenses'),
+        api.get('/products')
+      ]);
+      setExpenseCatalog((catalogResponse.data || []).filter(item => item.active));
+      setCashExpenses(expenseResponse.data?.expenses || []);
+      setStockProducts(productsResponse.data || []);
+    } catch (error) {
+      console.error('Error loading cashier expense data:', error);
+    }
+  };
+
+  const selectedExpenseCatalogItem = expenseCatalog.find(item => String(item.id) === String(expenseForm.catalog_item_id));
+  const expensePurchaseTotal = expenseForm.items.reduce((sum, item) => sum + (Number(item.quantity) || 0) * (Number(item.unit_cost) || 0), 0);
+
+  const saveCashExpense = async event => {
+    event.preventDefault();
+    setIsSavingExpense(true);
+    try {
+      const payload = {
+        ...expenseForm,
+        catalog_item_id: Number(expenseForm.catalog_item_id),
+        amount: Number(expenseForm.amount),
+        items: expenseForm.items.map(item => ({ product_id: Number(item.product_id), quantity: Number(item.quantity), unit_cost: Number(item.unit_cost) }))
+      };
+      await api.post('/cashier/session/expenses', payload);
+      alert('Dépense enregistrée dans cette session de caisse.');
+      setExpenseForm({ catalog_item_id: '', amount: '', payment_method: 'cash', supplier: '', items: [{ product_id: '', quantity: 1, unit_cost: '' }] });
+      await Promise.all([loadCashRegisterSession(), loadExpenseData()]);
+    } catch (error) {
+      alert(error.response?.data?.message || 'Impossible d’enregistrer cette dépense.');
+    } finally {
+      setIsSavingExpense(false);
+    }
+  };
+
+  const updateExpenseLine = (index, field, value) => {
+    setExpenseForm(current => ({ ...current, items: current.items.map((item, lineIndex) => lineIndex === index ? { ...item, [field]: value } : item) }));
+  };
+
   const openCashRegister = async () => {
     if (!openingBalance || openingBalance < 0) {
       alert('Veuillez entrer un solde d\'ouverture valide');
@@ -259,7 +308,7 @@ export default function CashierMode() {
 
     setIsOpeningRegister(true);
     try {
-      await api.post('/cashier/session/open', { opening_balance: parseInt(openingBalance) });
+      await api.post('/cashier/session/open', { opening_balance: Number(openingBalance) });
       await loadCashRegisterSession();
       setOpeningBalance('');
     } catch (error) {
@@ -279,7 +328,7 @@ export default function CashierMode() {
     setIsClosingRegister(true);
     try {
       const closeResponse = await api.post('/cashier/session/close', {
-        closing_balance: parseInt(closingBalance),
+        closing_balance: Number(closingBalance),
         notes: closingNotes
       });
       // Télécharger automatiquement le rapport PDF de fermeture
@@ -308,7 +357,7 @@ export default function CashierMode() {
       setClosingNotes('');
     } catch (error) {
       console.error('Error closing cash register:', error);
-      alert('Erreur lors de la fermeture de la caisse');
+      alert(error.response?.data?.message || 'Erreur lors de la fermeture de la caisse');
     } finally {
       setIsClosingRegister(false);
     }
@@ -414,13 +463,13 @@ export default function CashierMode() {
                 <div>
                   <p className="text-sm font-medium text-gray-600">Solde d'ouverture</p>
                   <p className="text-lg font-bold text-green-600">
-                    {cashRegisterSession.session.opening_balance.toFixed(2)} FCFA
+                    {cashRegisterSession.session.opening_balance.toLocaleString('fr-GA')} FCFA
                   </p>
                 </div>
                 <div>
                   <p className="text-sm font-medium text-gray-600">Solde actuel</p>
                   <p className="text-lg font-bold text-blue-600">
-                    {cashRegisterSession.session.current_balance.toFixed(2)} FCFA
+                    {cashRegisterSession.session.current_balance.toLocaleString('fr-GA')} FCFA
                   </p>
                 </div>
               </div>
@@ -433,7 +482,7 @@ export default function CashierMode() {
                     <Input
                       id="closing-balance"
                       type="number"
-                      step="0.01"
+                      step="1"
                       value={closingBalance}
                       onChange={(e) => setClosingBalance(e.target.value)}
                       placeholder="Entrez le solde réel"
@@ -471,7 +520,7 @@ export default function CashierMode() {
                     <Input
                       id="opening-balance"
                       type="number"
-                      step="0.01"
+                      step="1"
                       value={openingBalance}
                       onChange={(e) => setOpeningBalance(e.target.value)}
                       placeholder="Entrez le solde d'ouverture"
@@ -493,8 +542,9 @@ export default function CashierMode() {
       </Card>
 
       <Tabs defaultValue="orders" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="orders">Commandes</TabsTrigger>
+          <TabsTrigger value="expenses">Dépenses</TabsTrigger>
           <TabsTrigger value="reports">Rapports</TabsTrigger>
         </TabsList>
 
@@ -530,6 +580,45 @@ export default function CashierMode() {
                   </div>
                 )}
               </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="expenses" className="space-y-6">
+          <Card>
+            <CardHeader><CardTitle>Enregistrer un mouvement de dépense</CardTitle></CardHeader>
+            <CardContent>
+              {!cashRegisterSession?.isOpen ? (
+                <p className="rounded-md bg-amber-50 p-4 text-amber-900">Ouvrez la caisse pour comptabiliser une dépense dans une session.</p>
+              ) : !expenseCatalog.length ? (
+                <p className="rounded-md bg-amber-50 p-4 text-amber-900">Aucun poste actif. Un administrateur doit d’abord créer les postes dans Gestion des dépenses.</p>
+              ) : (
+                <form onSubmit={saveCashExpense} className="space-y-4">
+                  <div className="grid gap-4 md:grid-cols-3">
+                    <div><Label htmlFor="cash-expense-catalog">Dépense à effectuer</Label><select id="cash-expense-catalog" required className="mt-1 h-10 w-full rounded-md border bg-white px-3 text-sm" value={expenseForm.catalog_item_id} onChange={event => setExpenseForm(current => ({ ...current, catalog_item_id: event.target.value }))}><option value="">Choisir un poste</option>{expenseCatalog.map(item => <option key={item.id} value={item.id}>{item.category} · {item.description}{item.expense_type === 'stock_purchase' ? ' (achat stock)' : ''}</option>)}</select></div>
+                    <div><Label htmlFor="cash-expense-payment">Moyen de paiement</Label><select id="cash-expense-payment" className="mt-1 h-10 w-full rounded-md border bg-white px-3 text-sm" value={expenseForm.payment_method} onChange={event => setExpenseForm(current => ({ ...current, payment_method: event.target.value }))}><option value="cash">Espèces (déduit du tiroir)</option><option value="mobile_money">Mobile Money</option><option value="card">Carte</option><option value="bank_transfer">Virement</option><option value="other">Autre</option></select></div>
+                    <div><Label htmlFor="cash-expense-supplier">Fournisseur (facultatif)</Label><Input id="cash-expense-supplier" value={expenseForm.supplier} onChange={event => setExpenseForm(current => ({ ...current, supplier: event.target.value }))} /></div>
+                  </div>
+                  {selectedExpenseCatalogItem?.expense_type === 'stock_purchase' ? (
+                    <div className="space-y-3 rounded-md border p-4">
+                      <div className="flex items-center justify-between"><h3 className="font-semibold">Produits reçus</h3><Button type="button" variant="outline" size="sm" onClick={() => setExpenseForm(current => ({ ...current, items: [...current.items, { product_id: '', quantity: 1, unit_cost: '' }] }))}>Ajouter un produit</Button></div>
+                      {expenseForm.items.map((item, index) => <div key={index} className="grid items-end gap-3 sm:grid-cols-[2fr_1fr_1fr_auto]"><div><Label>Produit</Label><select required className="mt-1 h-10 w-full rounded-md border bg-white px-3 text-sm" value={item.product_id} onChange={event => updateExpenseLine(index, 'product_id', event.target.value)}><option value="">Choisir un produit</option>{stockProducts.map(product => <option key={product.id} value={product.id}>{product.name}</option>)}</select></div><div><Label>Quantité</Label><Input type="number" min="1" step="1" required value={item.quantity} onChange={event => updateExpenseLine(index, 'quantity', event.target.value)} /></div><div><Label>Coût unitaire (FCFA)</Label><Input type="number" min="0" step="1" required value={item.unit_cost} onChange={event => updateExpenseLine(index, 'unit_cost', event.target.value)} /></div><Button type="button" variant="outline" disabled={expenseForm.items.length === 1} onClick={() => setExpenseForm(current => ({ ...current, items: current.items.filter((_, lineIndex) => lineIndex !== index) }))}>Retirer</Button></div>)}
+                      <p className="text-right font-semibold">Total de l’achat : {expensePurchaseTotal.toLocaleString('fr-GA')} FCFA</p>
+                      <p className="text-sm text-gray-500">Le stock augmente uniquement lorsque cet achat est saisi comme reçu.</p>
+                    </div>
+                  ) : (
+                    <div className="max-w-sm"><Label htmlFor="cash-expense-amount">Montant (FCFA)</Label><Input id="cash-expense-amount" type="number" min="1" step="1" required value={expenseForm.amount} onChange={event => setExpenseForm(current => ({ ...current, amount: event.target.value }))} /></div>
+                  )}
+                  <div className="flex justify-end"><Button type="submit" disabled={isSavingExpense || !expenseForm.catalog_item_id}>{isSavingExpense ? 'Enregistrement...' : 'Enregistrer dans la caisse'}</Button></div>
+                </form>
+              )}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader><CardTitle>Mouvements de cette session</CardTitle></CardHeader>
+            <CardContent className="space-y-3">
+              {cashExpenses.map(expense => <div key={expense.id} className="flex flex-wrap items-start justify-between gap-2 rounded-md border p-3"><div><p className="font-semibold">{expense.category} · {expense.description}</p><p className="text-sm text-gray-500">{new Date(expense.expense_date).toLocaleString('fr-FR')} · {expense.payment_method}{expense.supplier ? ` · ${expense.supplier}` : ''}{expense.items?.length ? ` · ${expense.items.map(line => `${line.quantity} × ${line.product.name}`).join(', ')}` : ''}</p></div><p className="font-semibold">{Number(expense.amount).toLocaleString('fr-GA')} FCFA</p></div>)}
+              {!cashExpenses.length && <p className="py-6 text-center text-gray-500">Aucune dépense enregistrée dans la session active.</p>}
             </CardContent>
           </Card>
         </TabsContent>
@@ -571,7 +660,7 @@ export default function CashierMode() {
                   <div>
                     <p className="text-sm font-medium text-gray-600">Chiffre d'affaires</p>
                     <p className="text-2xl font-bold text-green-600">
-                      {currentReport.totalRevenue?.toFixed(2) || '0.00'} FCFA
+                      {Number(currentReport.totalRevenue || 0).toLocaleString('fr-GA')} FCFA
                     </p>
                   </div>
                   <DollarSign className="w-8 h-8 text-green-600" />
@@ -599,7 +688,7 @@ export default function CashierMode() {
                   <div>
                     <p className="text-sm font-medium text-gray-600">Panier moyen</p>
                     <p className="text-2xl font-bold text-purple-600">
-                      {currentReport.averageOrderValue?.toFixed(2) || '0.00'} FCFA
+                      {Number(currentReport.averageOrderValue || 0).toLocaleString('fr-GA')} FCFA
                     </p>
                   </div>
                   <TrendingUp className="w-8 h-8 text-purple-600" />
@@ -662,7 +751,7 @@ export default function CashierMode() {
                         <p className="text-sm text-gray-600">{product.quantity} vendus</p>
                       </div>
                     </div>
-                    <p className="font-bold text-green-600">{product.revenue.toFixed(2)} FCFA</p>
+                    <p className="font-bold text-green-600">{Number(product.revenue || 0).toLocaleString('fr-GA')} FCFA</p>
                   </div>
                 )) || (
                   <div className="text-center py-8 text-gray-500">
@@ -764,7 +853,7 @@ function OrderCard({ order, onGenerateInvoice, onMarkDelivered, onMarkPaid, onCl
         </div>
 
         <div className="text-right" >
-          <p className="text-lg font-bold text-green-600">{total.toFixed(2)} FCFA</p>
+          <p className="text-lg font-bold text-green-600">{Number(total || 0).toLocaleString('fr-GA')} FCFA</p>
           <p className="text-sm text-gray-600">{order.items.length} article(s)</p>
         </div>
       </div>

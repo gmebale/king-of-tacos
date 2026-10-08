@@ -55,10 +55,13 @@ const AdminSettings = () => {
   const [savingHeroMedia, setSavingHeroMedia] = useState(false);
   const [onlineOrdering, setOnlineOrdering] = useState(DEFAULT_ORDERING);
   const [onlineOrderingConfigured, setOnlineOrderingConfigured] = useState(false);
+  const [orderingLoaded, setOrderingLoaded] = useState(false);
+  const [orderingLoadError, setOrderingLoadError] = useState('');
   const [savingOrdering, setSavingOrdering] = useState(false);
 
   useEffect(() => {
     loadSettings();
+    loadOnlineOrdering();
     if (user?.role === 'admin') {
       loadLocations();
       loadTaxRates();
@@ -155,46 +158,73 @@ const AdminSettings = () => {
   const loadSettings = async () => {
     try {
       setLoading(true);
-      const [response, paymentResponse, homepageResponse, orderingResponse] = await Promise.all([
+      const [restaurantResult, paymentResult, homepageResult] = await Promise.allSettled([
         api.get('/settings/restaurant'),
         api.get('/settings/payment'),
-        api.get('/settings/homepage'),
-        api.get('/settings/online-ordering')
+        api.get('/settings/homepage')
       ]);
-      setSettings({
-        name: response.data.name || '',
-        address: response.data.address || '',
-        phone: response.data.phone || '',
-        email: response.data.email || '',
-        opening_hours: response.data.opening_hours || '',
-        delivery_radius: response.data.delivery_radius || '',
-        minimum_order: response.data.minimum_order || ''
-      });
-      setPaymentSettings({
-        mobile_money_enabled: paymentResponse.data.mobile_money_enabled ?? true,
-        mobile_money_airtel_enabled: paymentResponse.data.mobile_money_airtel_enabled ?? true,
-        mobile_money_moov_enabled: paymentResponse.data.mobile_money_moov_enabled ?? true
-      });
-      setHeroMedia({
-        media_url: homepageResponse.data.media_url || '',
-        media_type: homepageResponse.data.media_type || '',
-        overlay_opacity: Number.isInteger(Number(homepageResponse.data.overlay_opacity)) ? Number(homepageResponse.data.overlay_opacity) : 85
-      });
-      setOnlineOrdering({
-        enabled: orderingResponse.data.enabled !== false,
-        outside_hours_mode: orderingResponse.data.outside_hours_mode === 'next_opening' ? 'next_opening' : 'closed',
-        weekly: Object.fromEntries(ORDERING_DAYS.map(([key]) => [key, {
-          active: Boolean(orderingResponse.data.weekly?.[key]?.active),
-          open_time: orderingResponse.data.weekly?.[key]?.open_time || '11:00',
-          last_order_time: orderingResponse.data.weekly?.[key]?.last_order_time || '21:30'
-        }]))
-      });
-      setOnlineOrderingConfigured(Boolean(orderingResponse.data.configured));
+      if (restaurantResult.status === 'fulfilled') {
+        const data = restaurantResult.value.data;
+        setSettings({
+          name: data.name || '', address: data.address || '', phone: data.phone || '', email: data.email || '',
+          opening_hours: data.opening_hours || '', delivery_radius: data.delivery_radius || '', minimum_order: data.minimum_order || ''
+        });
+      } else {
+        console.error('Load restaurant settings error:', restaurantResult.reason);
+        toast.error('Impossible de relire les horaires affichés et les paramètres du restaurant.');
+      }
+      if (paymentResult.status === 'fulfilled') {
+        const data = paymentResult.value.data;
+        setPaymentSettings({
+          mobile_money_enabled: data.mobile_money_enabled ?? true,
+          mobile_money_airtel_enabled: data.mobile_money_airtel_enabled ?? true,
+          mobile_money_moov_enabled: data.mobile_money_moov_enabled ?? true
+        });
+      } else {
+        console.error('Load payment settings error:', paymentResult.reason);
+        toast.error('Impossible de relire les paramètres de paiement.');
+      }
+      if (homepageResult.status === 'fulfilled') {
+        const data = homepageResult.value.data;
+        setHeroMedia({
+          media_url: data.media_url || '', media_type: data.media_type || '',
+          overlay_opacity: Number.isInteger(Number(data.overlay_opacity)) ? Number(data.overlay_opacity) : 85
+        });
+      } else {
+        console.error('Load homepage settings error:', homepageResult.reason);
+        toast.error('Impossible de relire les paramètres de la bannière.');
+      }
     } catch (error) {
       console.error('Error loading settings:', error);
       toast.error('Erreur lors du chargement des paramètres');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadOnlineOrdering = async () => {
+    setOrderingLoaded(false);
+    setOrderingLoadError('');
+    try {
+      const response = await api.get('/settings/online-ordering', {
+        headers: { 'Cache-Control': 'no-cache' }
+      });
+      const data = response.data || {};
+      setOnlineOrdering({
+        enabled: data.enabled !== false,
+        outside_hours_mode: data.outside_hours_mode === 'next_opening' ? 'next_opening' : 'closed',
+        weekly: Object.fromEntries(ORDERING_DAYS.map(([key]) => [key, {
+          active: Boolean(data.weekly?.[key]?.active),
+          open_time: data.weekly?.[key]?.open_time || '11:00',
+          last_order_time: data.weekly?.[key]?.last_order_time || '21:30'
+        }]))
+      });
+      setOnlineOrderingConfigured(Boolean(data.configured));
+      setOrderingLoaded(true);
+    } catch (error) {
+      console.error('Load online ordering settings error:', error);
+      setOrderingLoadError(error.response?.data?.message || 'Impossible de relire les horaires depuis le serveur.');
+      toast.error('Les horaires n’ont pas pu être relus. Les modifications sont désactivées pour éviter un écrasement.');
     }
   };
 
@@ -242,8 +272,20 @@ const AdminSettings = () => {
   const saveOnlineOrdering = async () => {
     try {
       setSavingOrdering(true);
-      await api.put('/settings/online-ordering', onlineOrdering);
+      const response = await api.put('/settings/online-ordering', onlineOrdering);
+      const saved = response.data;
+      setOnlineOrdering({
+        enabled: saved.enabled !== false,
+        outside_hours_mode: saved.outside_hours_mode === 'next_opening' ? 'next_opening' : 'closed',
+        weekly: Object.fromEntries(ORDERING_DAYS.map(([key]) => [key, {
+          active: Boolean(saved.weekly?.[key]?.active),
+          open_time: saved.weekly?.[key]?.open_time || '11:00',
+          last_order_time: saved.weekly?.[key]?.last_order_time || '21:30'
+        }]))
+      });
       setOnlineOrderingConfigured(true);
+      setOrderingLoaded(true);
+      setOrderingLoadError('');
       toast.success('Horaires et règles de commande enregistrés');
     } catch (error) {
       toast.error(error.response?.data?.message || 'Impossible d’enregistrer les horaires de commande');
@@ -402,17 +444,19 @@ const AdminSettings = () => {
           <p className="text-sm text-gray-500">Les horaires utilisent l’heure du Gabon (Africa/Libreville). La règle est aussi vérifiée par le serveur au moment de la commande.</p>
         </CardHeader>
         <CardContent className="space-y-5">
-          {!onlineOrderingConfigured && <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Aucun horaire n’est encore enregistré : les commandes restent ouvertes sans restriction horaire jusqu’à la première sauvegarde.</p>}
+          {!orderingLoaded && !orderingLoadError && <p role="status" className="rounded-lg border bg-gray-50 p-3 text-sm text-gray-600">Chargement des horaires enregistrés…</p>}
+          {orderingLoadError && <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800"><span>{orderingLoadError} La sauvegarde reste désactivée pour ne pas remplacer les valeurs présentes sur le serveur.</span><Button type="button" variant="outline" onClick={loadOnlineOrdering}>Recharger les horaires</Button></div>}
+          {orderingLoaded && !onlineOrderingConfigured && <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Aucun horaire n’est encore enregistré : les commandes restent ouvertes sans restriction horaire jusqu’à la première sauvegarde.</p>}
           <div className="flex items-center justify-between rounded-lg border p-4">
             <div>
               <Label htmlFor="online-ordering-enabled" className="text-base">Accepter les commandes en ligne</Label>
               <p className="text-sm text-gray-500">Désactivez ce bouton pour suspendre immédiatement les nouvelles commandes.</p>
             </div>
-            <Switch id="online-ordering-enabled" checked={onlineOrdering.enabled} onCheckedChange={checked => setOnlineOrdering(current => ({ ...current, enabled: checked }))} />
+            <Switch id="online-ordering-enabled" checked={onlineOrdering.enabled} disabled={!orderingLoaded} onCheckedChange={checked => setOnlineOrdering(current => ({ ...current, enabled: checked }))} />
           </div>
           <div>
             <Label htmlFor="outside-hours-mode">Après l’heure limite</Label>
-            <select id="outside-hours-mode" className="mt-1 h-10 w-full rounded-md border bg-white px-3 text-sm" value={onlineOrdering.outside_hours_mode} onChange={event => setOnlineOrdering(current => ({ ...current, outside_hours_mode: event.target.value }))}>
+            <select id="outside-hours-mode" disabled={!orderingLoaded} className="mt-1 h-10 w-full rounded-md border bg-white px-3 text-sm" value={onlineOrdering.outside_hours_mode} onChange={event => setOnlineOrdering(current => ({ ...current, outside_hours_mode: event.target.value }))}>
               <option value="closed">Refuser les commandes et afficher la prochaine ouverture</option>
               <option value="next_opening">Accepter et planifier au prochain créneau d’ouverture</option>
             </select>
@@ -425,13 +469,13 @@ const AdminSettings = () => {
               const day = onlineOrdering.weekly[key];
               return <div key={key} className="grid gap-2 rounded-lg border p-3 sm:grid-cols-[100px_90px_1fr_1fr] sm:items-center">
                 <span className="font-medium">{label}</span>
-                <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={day.active} onChange={event => setOnlineOrdering(current => ({ ...current, weekly: { ...current.weekly, [key]: { ...current.weekly[key], active: event.target.checked } } }))} />Ouvert</label>
-                <div><Label className="text-xs sm:hidden">Ouverture</Label><Input aria-label={`${label}, heure d’ouverture`} type="time" value={day.open_time} disabled={!day.active} onChange={event => setOnlineOrdering(current => ({ ...current, weekly: { ...current.weekly, [key]: { ...current.weekly[key], open_time: event.target.value } } }))} /></div>
-                <div><Label className="text-xs sm:hidden">Dernière commande</Label><Input aria-label={`${label}, dernière commande`} type="time" value={day.last_order_time} disabled={!day.active} onChange={event => setOnlineOrdering(current => ({ ...current, weekly: { ...current.weekly, [key]: { ...current.weekly[key], last_order_time: event.target.value } } }))} /></div>
+                <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={day.active} disabled={!orderingLoaded} onChange={event => setOnlineOrdering(current => ({ ...current, weekly: { ...current.weekly, [key]: { ...current.weekly[key], active: event.target.checked } } }))} />Ouvert</label>
+                <div><Label className="text-xs sm:hidden">Ouverture</Label><Input aria-label={`${label}, heure d’ouverture`} type="time" value={day.open_time} disabled={!orderingLoaded || !day.active} onChange={event => setOnlineOrdering(current => ({ ...current, weekly: { ...current.weekly, [key]: { ...current.weekly[key], open_time: event.target.value } } }))} /></div>
+                <div><Label className="text-xs sm:hidden">Dernière commande</Label><Input aria-label={`${label}, dernière commande`} type="time" value={day.last_order_time} disabled={!orderingLoaded || !day.active} onChange={event => setOnlineOrdering(current => ({ ...current, weekly: { ...current.weekly, [key]: { ...current.weekly[key], last_order_time: event.target.value } } }))} /></div>
               </div>;
             })}
           </div>
-          <div className="flex justify-end"><Button type="button" onClick={saveOnlineOrdering} disabled={savingOrdering}>{savingOrdering ? 'Enregistrement…' : 'Enregistrer les horaires'}</Button></div>
+          <div className="flex justify-end"><Button type="button" onClick={saveOnlineOrdering} disabled={savingOrdering || !orderingLoaded}>{savingOrdering ? 'Enregistrement…' : 'Enregistrer les horaires'}</Button></div>
         </CardContent>
       </Card>}
 

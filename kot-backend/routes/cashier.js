@@ -107,7 +107,7 @@ function normalizeCategoryName(categoryName) {
 
 function formatAmount(amount) {
   const numericAmount = Number(amount || 0);
-  return `${numericAmount.toFixed(2)} FCFA`;
+  return `${numericAmount.toLocaleString('fr-GA', { maximumFractionDigits: 0 })} FCFA`;
 }
 
 // PDF helpers for styling
@@ -442,8 +442,8 @@ router.post('/session/open', authenticateToken, requirePagePermission('cashier')
   try {
     const { opening_balance } = req.body;
 
-    if (opening_balance === undefined || opening_balance < 0) {
-      return res.status(400).json({ message: 'Opening balance is required and must be non-negative' });
+    if (!Number.isSafeInteger(opening_balance) || opening_balance < 0) {
+      return res.status(400).json({ message: 'Le solde d’ouverture doit être un nombre entier de FCFA positif ou nul.' });
     }
 
     // Check if there's already an open session
@@ -501,8 +501,8 @@ router.post('/session/close', authenticateToken, requirePagePermission('cashier'
   try {
     const { closing_balance, notes } = req.body;
 
-    if (closing_balance === undefined || closing_balance < 0) {
-      return res.status(400).json({ message: 'Closing balance is required and must be non-negative' });
+    if (!Number.isSafeInteger(closing_balance) || closing_balance < 0) {
+      return res.status(400).json({ message: 'Le solde de clôture doit être un nombre entier de FCFA positif ou nul.' });
     }
 
     // Get current open session
@@ -514,10 +514,26 @@ router.post('/session/close', authenticateToken, requirePagePermission('cashier'
       return res.status(400).json({ message: 'No open cash register session found' });
     }
 
-    // Calculate the session totals from fulfilled, paid orders closed during this session.
+    const pendingCounterOrders = await prisma.order.findMany({
+      where: {
+        cash_register_session_id: session.id,
+        closed_at: null,
+        status: { notIn: ['annulee', 'cloturee'] }
+      },
+      select: { order_code: true, id: true, status: true }
+    });
+    if (pendingCounterOrders.length) {
+      return res.status(409).json({
+        message: `Clôture impossible : ${pendingCounterOrders.length} commande(s) de cette session ne sont pas clôturées.`,
+        pendingOrders: pendingCounterOrders.map(order => order.order_code || order.id.slice(-8))
+      });
+    }
+
+    // Calculate totals from completed, paid counter orders assigned to this session.
     const sessionClosedAt = new Date();
     const orders = await prisma.order.findMany({
       where: {
+        cash_register_session_id: session.id,
         closed_at: {
           gte: session.opened_at,
           lte: sessionClosedAt
@@ -528,7 +544,7 @@ router.post('/session/close', authenticateToken, requirePagePermission('cashier'
       include: { items: true }
     });
 
-    let totalRevenueCents = 0;
+    let totalRevenue = 0;
     const paymentMethods = {
       cash: 0,
       card: 0,
@@ -538,7 +554,7 @@ router.post('/session/close', authenticateToken, requirePagePermission('cashier'
 
     for (const order of orders) {
       const amount = order.total_amount || 0;
-      totalRevenueCents += amount;
+      totalRevenue += amount;
       const method = order.payment_method || 'cash';
       if (paymentMethods[method] !== undefined) {
         paymentMethods[method] += amount;
@@ -553,7 +569,7 @@ router.post('/session/close', authenticateToken, requirePagePermission('cashier'
       data: {
         closed_at: sessionClosedAt,
         closing_balance: closing_balance,
-        total_revenue: totalRevenueCents,
+        total_revenue: totalRevenue,
         cash_payments: paymentMethods.cash,
         card_payments: paymentMethods.card,
         mobile_payments: paymentMethods.mobile_money,
@@ -565,16 +581,120 @@ router.post('/session/close', authenticateToken, requirePagePermission('cashier'
       message: 'Cash register closed successfully',
       session: updatedSession,
       summary: {
-        totalRevenue: totalRevenueCents / 100,
+        totalRevenue,
         paymentMethods,
-        expectedBalance: (session.opening_balance + paymentMethods.cash) / 100,
+        expectedBalance: session.current_balance,
         actualBalance: closing_balance,
-        difference: closing_balance - (session.opening_balance + paymentMethods.cash)
+        difference: closing_balance - session.current_balance
       }
     });
   } catch (error) {
     console.error('Close cash register error:', error);
     res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+router.get('/session/expenses', authenticateToken, requirePagePermission('cashier'), async (req, res) => {
+  try {
+    const session = await prisma.cashRegisterSession.findFirst({ where: { closed_at: null }, orderBy: { opened_at: 'desc' } });
+    if (!session) return res.json({ session: null, expenses: [] });
+    const expenses = await prisma.cashExpense.findMany({
+      where: { session_id: session.id },
+      include: { items: { include: { product: { select: { id: true, name: true } } } }, createdBy: { select: { full_name: true } } },
+      orderBy: { expense_date: 'desc' }
+    });
+    res.json({ session, expenses });
+  } catch (error) {
+    console.error('List cash expenses error:', error);
+    res.status(500).json({ message: 'Impossible de charger les dépenses de la session.' });
+  }
+});
+
+router.post('/session/expenses', authenticateToken, requirePagePermission('cashier'), async (req, res) => {
+  try {
+    const { catalog_item_id, amount, payment_method = 'cash', supplier, items = [] } = req.body;
+    if (!['cash', 'card', 'mobile_money', 'bank_transfer', 'other'].includes(payment_method)) {
+      return res.status(400).json({ message: 'Moyen de paiement invalide.' });
+    }
+    const catalogItem = await prisma.expenseCatalogItem.findFirst({ where: { id: Number(catalog_item_id), active: true } });
+    if (!catalogItem) return res.status(400).json({ message: 'Choisissez une dépense active du catalogue.' });
+
+    let normalizedItems = [];
+    let finalAmount = Number(amount);
+    if (catalogItem.expense_type === 'stock_purchase') {
+      if (!Array.isArray(items) || !items.length) return res.status(400).json({ message: 'Ajoutez au moins un produit reçu.' });
+      normalizedItems = items.map(item => ({ product_id: Number(item.product_id), quantity: Number(item.quantity), unit_cost: Number(item.unit_cost) }));
+      if (normalizedItems.some(item => !Number.isInteger(item.product_id) || item.product_id < 1 || !Number.isInteger(item.quantity) || item.quantity < 1 || !Number.isInteger(item.unit_cost) || item.unit_cost < 0)) {
+        return res.status(400).json({ message: 'Produit, quantité ou coût unitaire invalide.' });
+      }
+      finalAmount = normalizedItems.reduce((sum, item) => sum + item.quantity * item.unit_cost, 0);
+    } else if (!Number.isSafeInteger(finalAmount) || finalAmount <= 0) {
+      return res.status(400).json({ message: 'Le montant doit être un nombre entier de FCFA supérieur à zéro.' });
+    }
+    if (!Number.isSafeInteger(finalAmount) || finalAmount <= 0) return res.status(400).json({ message: 'Montant de dépense invalide.' });
+
+    const created = await prisma.$transaction(async tx => {
+      const session = await tx.cashRegisterSession.findFirst({ where: { closed_at: null }, orderBy: { opened_at: 'desc' } });
+      if (!session) {
+        const error = new Error('La caisse doit être ouverte pour enregistrer une dépense.');
+        error.statusCode = 409;
+        throw error;
+      }
+      if (payment_method === 'cash' && finalAmount > session.current_balance) {
+        const error = new Error('Le montant dépasse le solde espèces actuellement disponible dans le tiroir.');
+        error.statusCode = 409;
+        throw error;
+      }
+      const activeCatalogItem = await tx.expenseCatalogItem.findFirst({ where: { id: catalogItem.id, active: true } });
+      if (!activeCatalogItem) {
+        const error = new Error('Cette dépense a été désactivée. Actualisez la liste.');
+        error.statusCode = 409;
+        throw error;
+      }
+      if (normalizedItems.length) {
+        const ids = [...new Set(normalizedItems.map(item => item.product_id))];
+        const products = await tx.product.findMany({ where: { id: { in: ids } } });
+        if (products.length !== ids.length) {
+          const error = new Error('Un produit de la dépense est introuvable.');
+          error.statusCode = 400;
+          throw error;
+        }
+      }
+      const expense = await tx.cashExpense.create({
+        data: {
+          session_id: session.id,
+          catalog_item_id: catalogItem.id,
+          category: catalogItem.category,
+          description: catalogItem.description,
+          expense_type: catalogItem.expense_type,
+          amount: finalAmount,
+          payment_method,
+          supplier: supplier ? String(supplier).trim() : null,
+          created_by: req.user.id,
+          ...(normalizedItems.length ? { items: { create: normalizedItems } } : {})
+        },
+        include: { items: { include: { product: { select: { id: true, name: true } } } }, createdBy: { select: { full_name: true } } }
+      });
+      const sessionUpdate = {};
+      if (payment_method === 'cash') sessionUpdate.current_balance = { decrement: finalAmount };
+      if (payment_method === 'cash') sessionUpdate.cash_expenses = { increment: finalAmount };
+      if (Object.keys(sessionUpdate).length) await tx.cashRegisterSession.update({ where: { id: session.id }, data: sessionUpdate });
+
+      for (const line of normalizedItems) {
+        const product = await tx.product.findUnique({ where: { id: line.product_id } });
+        const previousQuantity = Math.max(0, product.stock);
+        const averageCost = product.average_purchase_cost === null || previousQuantity === 0
+          ? line.unit_cost
+          : Math.round((previousQuantity * product.average_purchase_cost + line.quantity * line.unit_cost) / (previousQuantity + line.quantity));
+        await tx.product.update({ where: { id: product.id }, data: { stock: { increment: line.quantity }, average_purchase_cost: averageCost } });
+      }
+      return expense;
+    });
+    res.status(201).json(created);
+  } catch (error) {
+    if (error.statusCode) return res.status(error.statusCode).json({ message: error.message });
+    console.error('Create cash expense error:', error);
+    res.status(500).json({ message: 'Impossible d’enregistrer cette dépense.' });
   }
 });
 
@@ -598,7 +718,6 @@ router.get('/orders', authenticateToken, requirePagePermission('cashier'), async
     });
     const locationNames = new Map((await prisma.restaurantLocation.findMany({ select: { slug: true, name: true } }))
       .map(location => [location.slug, location.name]));
-
     // Process orders to include formatted customizations
     const processedOrders = await Promise.all(orders.map(async (order) => {
       const processedItems = await Promise.all(order.items.map(async (item) => {
@@ -720,41 +839,24 @@ router.get('/invoice/:orderId', authenticateToken, requirePagePermission('cashie
     // Items
     let y = doc.y;
     let total = 0;
-    const missingProducts = [];
-
     for (const item of order.items) {
-      // Look up product price by name
-      const product = await prisma.product.findFirst({
-        where: { name: item.product_name }
-      });
-
-      if (!product) {
-        missingProducts.push(item.product_name);
-        continue;
-      }
-
-      const price = product.price; // Convert from centimes to currency
+      // Order item prices are snapshots in whole FCFA; don't use a product's current price.
+      const price = Number(item.price || 0);
       const itemTotal = item.quantity * price;
       total += itemTotal;
 
       doc.text(item.product_name, 50, y);
       doc.text(item.quantity.toString(), 300, y);
-      doc.text(`${price.toFixed(2)} ${currency}`, 400, y);
-      doc.text(`${itemTotal.toFixed(2)} ${currency}`, 480, y);
+      doc.text(`${price.toLocaleString('fr-GA')} ${currency}`, 400, y);
+      doc.text(`${itemTotal.toLocaleString('fr-GA')} ${currency}`, 480, y);
 
       y += 20;
-    }
-
-    if (missingProducts.length > 0) {
-      return res.status(400).json({
-        message: `Produits non trouvés dans la base de données: ${missingProducts.join(', ')}`
-      });
     }
 
     // Total
     doc.moveTo(50, y + 5).lineTo(550, y + 5).stroke();
     doc.moveDown();
-    doc.fontSize(12).text(`Total: ${total.toFixed(2)} ${currency}`, 400, y + 10);
+    doc.fontSize(12).text(`Total: ${total.toLocaleString('fr-GA')} ${currency}`, 400, y + 10);
 
     // Footer
     doc.moveDown(2);
@@ -1213,6 +1315,7 @@ router.get('/session/close-report', authenticateToken, requirePagePermission('ca
     // Fetch orders in the session window
     const orders = await prisma.order.findMany({
       where: {
+        cash_register_session_id: session.id,
         closed_at: {
           gte: session.opened_at,
           lte: reportEndDate
@@ -1228,8 +1331,13 @@ router.get('/session/close-report', authenticateToken, requirePagePermission('ca
     });
     const locationNames = new Map((await prisma.restaurantLocation.findMany({ select: { slug: true, name: true } }))
       .map(location => [location.slug, location.name]));
+    const expenses = await prisma.cashExpense.findMany({
+      where: { session_id: session.id },
+      include: { items: { include: { product: { select: { name: true } } } }, createdBy: { select: { full_name: true } } },
+      orderBy: { expense_date: 'asc' }
+    });
 
-    // Compute payment breakdown from orders (centimes)
+    // Compute the payment breakdown in whole FCFA.
     const paymentTotals = {
       cash: 0,
       card: 0,
@@ -1268,21 +1376,24 @@ router.get('/session/close-report', authenticateToken, requirePagePermission('ca
     doc.fontSize(10);
     doc.text(`Ouverture: ${format(session.opened_at, 'dd/MM/yyyy HH:mm')}`);
     doc.text(`Fermeture: ${session.closed_at ? format(session.closed_at, 'dd/MM/yyyy HH:mm') : 'Non clôturée'}`);
-    doc.text(`Solde d'ouverture: ${(session.opening_balance / 100).toFixed(2)} FCFA`);
+    doc.text(`Solde d'ouverture: ${formatAmount(session.opening_balance)}`);
     if (session.closing_balance !== null && session.closing_balance !== undefined) {
-      doc.text(`Solde de clôture: ${(session.closing_balance / 100).toFixed(2)} FCFA`);
+      doc.text(`Solde de clôture: ${formatAmount(session.closing_balance)}`);
     }
-    doc.text(`Solde actuel (après clôture): ${(session.current_balance / 100).toFixed(2)} FCFA`);
+    doc.text(`Solde actuel (après clôture): ${formatAmount(session.current_balance)}`);
     doc.moveDown();
 
     // Summary
     doc.fontSize(14).text('Résumé des ventes:');
     doc.fontSize(10);
-    doc.text(`Revenus totaux: ${(totalRevenue / 100).toFixed(2)} FCFA`);
-    doc.text(`Paiements en espèces: ${(paymentTotals.cash / 100).toFixed(2)} FCFA`);
-    doc.text(`Paiements par carte: ${(paymentTotals.card / 100).toFixed(2)} FCFA`);
-    doc.text(`Paiements mobile money: ${(paymentTotals.mobile_money / 100).toFixed(2)} FCFA`);
-    doc.text(`Paiements points fidélité: ${(paymentTotals.loyalty_points / 100).toFixed(2)} FCFA`);
+    doc.text(`Revenus totaux: ${formatAmount(totalRevenue)}`);
+    doc.text(`Paiements en espèces: ${formatAmount(paymentTotals.cash)}`);
+    doc.text(`Paiements par carte: ${formatAmount(paymentTotals.card)}`);
+    doc.text(`Paiements mobile money: ${formatAmount(paymentTotals.mobile_money)}`);
+    doc.text(`Paiements points fidélité: ${formatAmount(paymentTotals.loyalty_points)}`);
+    const cashExpenseTotal = expenses.reduce((sum, expense) => sum + expense.amount, 0);
+    const cashPaidExpenseTotal = expenses.filter(expense => expense.payment_method === 'cash').reduce((sum, expense) => sum + expense.amount, 0);
+    doc.text(`Dépenses enregistrées: ${formatAmount(cashExpenseTotal)} (dont espèces : ${formatAmount(cashPaidExpenseTotal)})`);
     doc.moveDown();
 
     // Orders summary
@@ -1292,7 +1403,7 @@ router.get('/session/close-report', authenticateToken, requirePagePermission('ca
     orders.forEach((order, index) => {
       const displayCode = order.order_code || order.id.substring(0, 8);
       doc.fontSize(10).text(
-        `${index + 1}. Commande #${displayCode} - ${(order.total_amount / 100).toFixed(2)} FCFA - ${order.payment_method || 'cash'}`
+        `${index + 1}. Commande #${displayCode} - ${formatAmount(order.total_amount)} - ${order.payment_method || 'cash'}`
       );
       doc.fontSize(8).text(`Validé par : ${order.validatedBy?.full_name || 'Client en ligne'} | Clôturé par : ${order.closedBy?.full_name || 'Non clôturée'}`);
       if (order.service_location) doc.fontSize(8).text(`Lieu : ${locationNames.get(order.service_location) || order.service_location}${order.table_number ? ` · Table ${order.table_number}` : ''}`);
@@ -1301,6 +1412,19 @@ router.get('/session/close-report', authenticateToken, requirePagePermission('ca
       });
       doc.moveDown(0.5);
     });
+
+    doc.moveDown();
+    doc.fontSize(14).text('Détail des dépenses de caisse:');
+    doc.moveDown(0.5);
+    if (!expenses.length) {
+      doc.fontSize(10).text('Aucune dépense enregistrée sur cette session.');
+    } else {
+      expenses.forEach((expense, index) => {
+        const products = expense.items.map(item => `${item.quantity} × ${item.product.name}`).join(', ');
+        doc.fontSize(10).text(`${index + 1}. ${expense.category} — ${formatAmount(expense.amount)} — ${expense.payment_method}`);
+        doc.fontSize(8).text(`${expense.description}${expense.supplier ? ` · Fournisseur : ${expense.supplier}` : ''}${products ? ` · ${products}` : ''}`);
+      });
+    }
 
     doc.end();
   } catch (error) {

@@ -45,20 +45,21 @@ function toBoolean(value, fallback = false) {
 }
 
 function parseOnlineOrderingConfig(value) {
-  try {
-    const parsed = JSON.parse(value || '{}');
-    return {
-      enabled: parsed.enabled !== false,
-      outside_hours_mode: parsed.outside_hours_mode === 'next_opening' ? 'next_opening' : 'closed',
-      weekly: { ...EMPTY_ORDERING_SCHEDULE, ...(parsed.weekly || {}) }
-    };
-  } catch (_error) {
-    return { enabled: true, outside_hours_mode: 'closed', weekly: EMPTY_ORDERING_SCHEDULE };
+  if (!value) return { enabled: true, outside_hours_mode: 'closed', weekly: EMPTY_ORDERING_SCHEDULE };
+  const parsed = JSON.parse(value);
+  if (!parsed || typeof parsed !== 'object' || !parsed.weekly || typeof parsed.weekly !== 'object') {
+    throw new Error('Stored online ordering configuration has an invalid structure');
   }
+  return {
+    enabled: parsed.enabled !== false,
+    outside_hours_mode: parsed.outside_hours_mode === 'next_opening' ? 'next_opening' : 'closed',
+    weekly: { ...EMPTY_ORDERING_SCHEDULE, ...parsed.weekly }
+  };
 }
 
 router.get('/online-ordering', async (_req, res) => {
   try {
+    res.set('Cache-Control', 'no-store');
     const row = await prisma.settings.findUnique({ where: { key: 'online_ordering_config' }, select: { value: true } });
     const { getOnlineOrderingState } = require('../utils/onlineOrdering');
     const config = parseOnlineOrderingConfig(row?.value);
@@ -71,6 +72,7 @@ router.get('/online-ordering', async (_req, res) => {
 
 router.put('/online-ordering', authenticateToken, requirePagePermission('settings'), async (req, res) => {
   try {
+    res.set('Cache-Control', 'no-store');
     const { enabled, outside_hours_mode, weekly } = req.body || {};
     if (typeof enabled !== 'boolean' || !['closed', 'next_opening'].includes(outside_hours_mode) || !weekly || typeof weekly !== 'object') {
       return res.status(400).json({ message: 'Configuration des commandes en ligne invalide' });
@@ -92,7 +94,9 @@ router.put('/online-ordering', authenticateToken, requirePagePermission('setting
       update: { value: JSON.stringify(config) },
       create: { key: 'online_ordering_config', value: JSON.stringify(config) }
     });
-    res.json({ ...config, configured: true });
+    const persisted = await prisma.settings.findUnique({ where: { key: 'online_ordering_config' }, select: { value: true } });
+    const verifiedConfig = parseOnlineOrderingConfig(persisted?.value);
+    res.json({ ...verifiedConfig, configured: true });
   } catch (error) {
     console.error('Update online ordering settings error:', error);
     res.status(500).json({ message: 'Impossible d’enregistrer les horaires de commande' });
@@ -312,14 +316,18 @@ router.put('/restaurant', authenticateToken, requirePagePermission('settings'), 
     // Update or create each setting
     const updatedSettings = {};
     for (const [key, value] of Object.entries(settingsToUpdate)) {
-      if (value !== null && value !== undefined && value !== '') {
-        await prisma.settings.upsert({
-          where: { key },
-          update: { value: value.toString() },
-          create: { key, value: value.toString() }
-        });
-        updatedSettings[key] = value;
+      if (value === undefined) continue;
+      if (value === null) {
+        await prisma.settings.deleteMany({ where: { key } });
+        updatedSettings[key] = '';
+        continue;
       }
+      await prisma.settings.upsert({
+        where: { key },
+        update: { value: value.toString() },
+        create: { key, value: value.toString() }
+      });
+      updatedSettings[key] = value;
     }
 
     res.json(updatedSettings);

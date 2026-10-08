@@ -152,6 +152,7 @@ model User {
   orders             Order[]
   validatedOrders    Order[] @relation("orderValidatedBy")
   closedOrders       Order[] @relation("orderClosedBy")
+  cashOrders         Order[] @relation("orderCashSession")
   loyaltyRedemptions LoyaltyRedemption[]
   loyaltyPointEntries LoyaltyPointEntry[] @relation("loyaltyPointOwner")
   loyaltyPointActions LoyaltyPointEntry[] @relation("loyaltyPointActor")
@@ -161,6 +162,8 @@ model User {
   logs               Log[]
   userPermissions    UserPermission[]
   createdExpenses   Expense[]
+  createdCashExpenses CashExpense[]
+  expenseCatalogItems ExpenseCatalogItem[]
 
   @@map("users")
 }
@@ -169,7 +172,7 @@ model Product {
   id                    Int            @id @default(autoincrement())
   name                  String
   description           String?
-  price                 Int // Prix en centimes
+  price                 Int // Prix entier en FCFA
   discount_percentage   Int            @default(0)
   categoryId            Int
   category              CategoryModel? @relation(fields: [categoryId], references: [id])
@@ -190,6 +193,7 @@ model Product {
   taxRates ProductTax[]
   orderItems OrderItem[]
   expenseItems ExpenseItem[]
+  cashExpenseItems CashExpenseItem[]
   giftedRewards LoyaltyReward[] @relation("giftedRewardProduct")
 
   @@map("products")
@@ -200,7 +204,7 @@ model Order {
   order_code          String?        @unique
   user_id             Int?
   user                User?          @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  total_amount        Int // Montant total en centimes
+  total_amount        Int // Montant total entier en FCFA
   status              OrderStatus    @default(en_attente)
   payment_method      PaymentMethod?
   payment_status      PaymentStatus  @default(pending)
@@ -231,6 +235,8 @@ model Order {
 
   closed_by Int?
   closedBy  User?  @relation("orderClosedBy", fields: [closed_by], references: [id])
+  cash_register_session_id Int?
+  cashRegisterSession CashRegisterSession? @relation("orderCashSession", fields: [cash_register_session_id], references: [id])
   closed_at DateTime?
 
   items   OrderItem[]
@@ -238,6 +244,7 @@ model Order {
   loyaltyPointEntries LoyaltyPointEntry[]
   cancellation OrderCancellation?
 
+  @@index([cash_register_session_id])
   @@index([promo_code_id])
 
   @@map("orders")
@@ -289,7 +296,7 @@ model OrderItem {
   order                Order   @relation(fields: [order_id], references: [id], onDelete: Cascade)
   product_name         String
   quantity             Int
-  price                Int // Prix unitaire en centimes
+  price                Int // Prix unitaire entier en FCFA
   customization        Json? // Détails de personnalisation du produit
   inventory_components Json? // Snapshot des produits choisis à débiter du stock
   customizationSummary String? // Résumé textuel des personnalisations
@@ -341,14 +348,30 @@ model LoyaltyReward {
   discount_percent Int?
   gifted_product_id Int?
   giftedProduct Product? @relation("giftedRewardProduct", fields: [gifted_product_id], references: [id], onDelete: SetNull)
+  tier_level Int?
+  tier LoyaltyTier? @relation(fields: [tier_level], references: [level], onDelete: SetNull)
   created_at      DateTime   @default(now())
   updated_at      DateTime   @updatedAt
 
   redemptions LoyaltyRedemption[]
 
   @@index([gifted_product_id])
+  @@index([tier_level])
 
   @@map("loyalty_rewards")
+}
+
+model LoyaltyTier {
+  id Int @id @default(autoincrement())
+  level Int @unique
+  title String
+  icon String
+  threshold_points Int?
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  rewards LoyaltyReward[]
+
+  @@map("loyalty_tiers")
 }
 
 model LoyaltyRedemption {
@@ -379,8 +402,8 @@ model PromoCode {
   code             String    @unique
   description      String?
   type             PromoType
-  value            Int // Pourcentage ou montant fixe en centimes
-  min_order_amount Int? // Montant minimum de commande en centimes
+  value            Int // Pourcentage ou montant fixe entier en FCFA
+  min_order_amount Int? // Montant minimum de commande entier en FCFA
   max_uses         Int? // Nombre maximum d'utilisations
   used_count       Int       @default(0)
   is_active        Boolean   @default(true)
@@ -440,17 +463,74 @@ model CashRegisterSession {
   id               Int       @id @default(autoincrement())
   opened_at        DateTime  @default(now())
   closed_at        DateTime?
-  opening_balance  Int // Solde d'ouverture en centimes
-  closing_balance  Int? // Solde de clôture en centimes
-  current_balance  Int // Solde actuel en centimes
-  total_revenue    Int? // Revenus totaux en centimes
-  cash_payments    Int? // Paiements en espèces en centimes
-  card_payments    Int? // Paiements par carte en centimes
-  mobile_payments  Int? // Paiements mobile money en centimes
-  loyalty_payments Int? // Paiements points fidélité en centimes
+  opening_balance  Int // Solde d'ouverture entier en FCFA
+  closing_balance  Int? // Solde de clôture entier en FCFA
+  current_balance  Int // Solde actuel entier en FCFA
+  total_revenue    Int? // Revenus entiers en FCFA
+  cash_payments    Int? // Paiements en espèces entiers en FCFA
+  card_payments    Int? // Paiements par carte entiers en FCFA
+  mobile_payments  Int? // Paiements mobile money entiers en FCFA
+  loyalty_payments Int? // Paiements points fidélité entiers en FCFA
   notes            String?
+  cash_expenses    Int       @default(0)
+  orders           Order[]   @relation("orderCashSession")
+  expenses         CashExpense[]
 
   @@map("cash_register_sessions")
+}
+
+model ExpenseCatalogItem {
+  id Int @id @default(autoincrement())
+  category String
+  description String
+  expense_type String @default("operating")
+  active Boolean @default(true)
+  created_by Int?
+  createdBy User? @relation(fields: [created_by], references: [id], onDelete: SetNull)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  cashExpenses CashExpense[]
+
+  @@index([created_by])
+  @@map("expense_catalog_items")
+}
+
+model CashExpense {
+  id Int @id @default(autoincrement())
+  session_id Int
+  session CashRegisterSession @relation(fields: [session_id], references: [id])
+  catalog_item_id Int?
+  catalogItem ExpenseCatalogItem? @relation(fields: [catalog_item_id], references: [id], onDelete: SetNull)
+  category String
+  description String
+  expense_type String @default("operating")
+  amount Int
+  payment_method String
+  supplier String?
+  created_by Int?
+  createdBy User? @relation(fields: [created_by], references: [id], onDelete: SetNull)
+  expense_date DateTime @default(now())
+  created_at DateTime @default(now())
+  items CashExpenseItem[]
+
+  @@index([session_id, expense_date])
+  @@index([catalog_item_id])
+  @@index([created_by])
+  @@map("cash_expenses")
+}
+
+model CashExpenseItem {
+  id Int @id @default(autoincrement())
+  expense_id Int
+  expense CashExpense @relation(fields: [expense_id], references: [id], onDelete: Cascade)
+  product_id Int
+  product Product @relation(fields: [product_id], references: [id], onDelete: Restrict)
+  quantity Int
+  unit_cost Int
+
+  @@index([product_id])
+  @@index([expense_id])
+  @@map("cash_expense_items")
 }
 
 model ProductOption {

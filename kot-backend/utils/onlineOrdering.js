@@ -54,8 +54,13 @@ function timeToMinutes(value) {
 }
 
 function getOnlineOrderingState(rawConfig, now = new Date()) {
-  const config = parseConfig(rawConfig) || {};
-  const configured = Boolean(config.weekly && WEEKDAYS.some(dayName => Object.hasOwn(config.weekly, dayName)));
+  const parsedConfig = parseConfig(rawConfig);
+  const config = parsedConfig || {};
+  // A present but malformed persisted value must fail closed; treating it as
+  // "not configured" would silently bypass the restaurant's ordering hours.
+  const configured = rawConfig !== undefined && rawConfig !== null && rawConfig !== ''
+    ? !parsedConfig || Boolean(config.weekly && WEEKDAYS.some(dayName => Object.hasOwn(config.weekly, dayName)))
+    : false;
   const enabled = config.enabled !== false;
   const local = localParts(now);
   const day = config.weekly?.[local.weekday];

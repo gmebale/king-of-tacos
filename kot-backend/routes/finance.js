@@ -278,7 +278,7 @@ router.get('/profit-summary', authenticateToken, requirePagePermission('finance'
   try {
     const dateFilter = getFinanceFilters({ start_date: req.query.start_date, end_date: req.query.end_date });
     const expenseDateFilter = getFinanceFilters({ start_date: req.query.start_date, end_date: req.query.end_date }, 'expense_date');
-    const [orders, expenses] = await Promise.all([
+    const [orders, legacyExpenses, cashExpenses] = await Promise.all([
       prisma.order.findMany({
         where: {
           ...dateFilter,
@@ -305,8 +305,13 @@ router.get('/profit-summary', authenticateToken, requirePagePermission('finance'
       prisma.expense.findMany({
         where: expenseDateFilter,
         select: { expense_type: true, amount: true }
+      }),
+      prisma.cashExpense.findMany({
+        where: expenseDateFilter,
+        select: { expense_type: true, amount: true }
       })
     ]);
+    const expenses = [...legacyExpenses, ...cashExpenses];
 
     let revenueWithTax = 0;
     let taxTotal = 0;
@@ -355,6 +360,45 @@ router.get('/profit-summary', authenticateToken, requirePagePermission('finance'
   }
 });
 
+router.get('/expense-catalog', authenticateToken, async (req, res) => {
+  try {
+    const items = await prisma.expenseCatalogItem.findMany({ orderBy: [{ active: 'desc' }, { category: 'asc' }] });
+    res.json(items);
+  } catch (error) {
+    console.error('Get expense catalog error:', error);
+    res.status(500).json({ message: 'Impossible de charger le catalogue des dépenses.' });
+  }
+});
+
+router.post('/expense-catalog', authenticateToken, requirePagePermission('finance', 'dashboard'), async (req, res) => {
+  try {
+    const { category, description, expense_type = 'operating' } = req.body;
+    if (!['operating', 'stock_purchase'].includes(expense_type) || !String(category || '').trim() || !String(description || '').trim()) {
+      return res.status(400).json({ message: 'Catégorie, libellé et type de dépense valides sont requis.' });
+    }
+    const item = await prisma.expenseCatalogItem.create({ data: {
+      category: String(category).trim(), description: String(description).trim(), expense_type, created_by: req.user.id
+    } });
+    res.status(201).json(item);
+  } catch (error) {
+    console.error('Create expense catalog item error:', error);
+    res.status(500).json({ message: 'Impossible de créer ce poste de dépense.' });
+  }
+});
+
+router.patch('/expense-catalog/:id', authenticateToken, requirePagePermission('finance', 'dashboard'), async (req, res) => {
+  try {
+    const item = await prisma.expenseCatalogItem.update({
+      where: { id: Number(req.params.id) },
+      data: { active: Boolean(req.body.active) }
+    });
+    res.json(item);
+  } catch (error) {
+    console.error('Update expense catalog item error:', error);
+    res.status(404).json({ message: 'Poste de dépense introuvable.' });
+  }
+});
+
 router.get('/expenses', authenticateToken, requirePagePermission('finance', 'dashboard'), async (req, res) => {
   try {
     const filters = getFinanceFilters({ start_date: req.query.start_date, end_date: req.query.end_date }, 'expense_date');
@@ -373,7 +417,28 @@ router.get('/expenses', authenticateToken, requirePagePermission('finance', 'das
   }
 });
 
+router.get('/cash-expenses', authenticateToken, requirePagePermission('finance', 'dashboard'), async (req, res) => {
+  try {
+    const filters = getFinanceFilters({ start_date: req.query.start_date, end_date: req.query.end_date }, 'expense_date');
+    const expenses = await prisma.cashExpense.findMany({
+      where: filters,
+      include: {
+        session: { select: { id: true, opened_at: true } },
+        createdBy: { select: { full_name: true } },
+        items: { include: { product: { select: { id: true, name: true } } } }
+      },
+      orderBy: { expense_date: 'desc' }
+    });
+    res.json(expenses);
+  } catch (error) {
+    console.error('Get cash expenses error:', error);
+    res.status(500).json({ message: 'Impossible de charger les mouvements de dépenses.' });
+  }
+});
+
 router.post('/expenses', authenticateToken, requirePagePermission('finance', 'dashboard'), async (req, res) => {
+  return res.status(410).json({ message: 'Les dépenses réelles se saisissent depuis une session ouverte dans le mode Caisse.' });
+  /* Legacy endpoint retained below for reference; new expense entries are session-bound. */
   try {
     const {
       expense_type = 'operating', category, description, amount, expense_date,
