@@ -94,6 +94,21 @@ callback is then reconciled against the authenticated invoice API. The customer 
 checks the invoice directly. A USSD `202 Accepted` or an intermediate `ready` state is not treated as a
 successful payment.
 
+### MyPVIT (sandbox)
+La collecte MyPVIT reste désactivée par défaut. Pour l’activer en sandbox, renseignez dans le fichier
+kot-backend/.env.production les variables PVIT_ENABLED=true, PVIT_MODE=test, le code du compte
+d’opération de test, les codes URL des APIs Renew Secret Key v2, REST Payment v2, Check Status et KYC,
+le mot de passe de Renew Secret Key et le code URL callback. Gardez ces valeurs uniquement sur le
+serveur et ne les ajoutez jamais au dépôt.
+
+Enregistrez dans MyPVIT une URL Callback de type Callback vers
+https://<site>/api/payments/pvit/callback, puis utilisez son code dans PVIT_CALLBACK_URL_CODE.
+La clé X-Secret est renouvelée automatiquement et reste côté serveur. Le suivi interroge Check
+Status après trois minutes si le callback n’a pas déjà confirmé le paiement.
+
+Avant la production, PVit exige au minimum deux paiements de test réussis, deux échecs, le traitement
+des callbacks et les APIs KYC et Check Status. Avant chaque paiement, le backend vérifie le numéro client et l’opérateur avec l’API KYC MyPVIT. Ne basculez pas PVIT_MODE en production avant cette validation et l’activation du compte marchand.
+
 ### Base de données
 Assurez-vous que XAMPP est démarré et que la base `king_of_tacos` existe.
 

@@ -1,4 +1,5 @@
 const express = require('express');
+const pvit = require('../services/pvit');
 const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
@@ -509,7 +510,7 @@ router.post('/', async (req, res) => {
     if (payment_method && payment_method !== 'mobile_money') {
       return res.status(400).json({ message: 'Moyen de paiement en ligne invalide.' });
     }
-    if (payment_method === 'mobile_money' && process.env.EBILLING_ENABLED !== 'true') {
+    if (payment_method === 'mobile_money' && process.env.EBILLING_ENABLED !== 'true' && !pvit.getConfig().configured) {
       return res.status(503).json({ message: 'Le paiement Mobile Money en ligne est momentanément indisponible.' });
     }
 

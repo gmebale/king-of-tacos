@@ -1,6 +1,7 @@
 const express = require('express');
 const { PrismaClient } = require('@prisma/client');
 const { authenticateToken, requirePagePermission, requireRole } = require('../middleware/auth');
+const pvit = require('../services/pvit');
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -354,6 +355,8 @@ router.get('/payment', async (req, res) => {
       mobile_money_enabled: toBoolean(settingsObj.mobile_money_enabled, true),
       mobile_money_airtel_enabled: toBoolean(settingsObj.mobile_money_airtel_enabled, true),
       mobile_money_moov_enabled: toBoolean(settingsObj.mobile_money_moov_enabled, true),
+      pvit_enabled: pvit.getConfig().configured,
+      pvit_test_mode: pvit.getConfig().mode === 'test',
       ebilling_enabled: process.env.EBILLING_ENABLED === 'true',
       ebilling_test_mode: (() => {
         try {

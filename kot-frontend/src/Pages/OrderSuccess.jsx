@@ -8,7 +8,9 @@ import api from "../services/api.service";
 
 export default function OrderSuccess() {
   const location = useLocation();
-  const ebillingPayment = location.state?.ebillingPayment;
+  const pvitPayment = location.state?.pvitPayment;
+  const statusProvider = pvitPayment ? 'pvit' : 'ebilling';
+  const ebillingPayment = location.state?.ebillingPayment || pvitPayment;
   const [paymentStatus, setPaymentStatus] = useState(ebillingPayment ? 'requires_action' : 'paid');
   const [providerState, setProviderState] = useState('');
   const [pushState, setPushState] = useState('');
@@ -25,7 +27,7 @@ export default function OrderSuccess() {
 
     const checkPayment = async () => {
       try {
-        const response = await api.get(`/payments/ebilling/status/${encodeURIComponent(ebillingPayment.orderId)}`, {
+        const response = await api.get(`/payments/${statusProvider}/status/${encodeURIComponent(ebillingPayment.orderId)}`, {
           headers: { 'X-Payment-Token': ebillingPayment.paymentStatusToken }
         });
         if (!active) return;
@@ -34,15 +36,15 @@ export default function OrderSuccess() {
         setPushState(response.data.pushState || '');
         setPaymentConflict(Boolean(response.data.conflict));
         setStatusMessage(response.data.conflict ? 'Le paiement est reçu, mais la commande est clôturée ou annulée. Contactez le restaurant.' : '');
-        if (!['paid', 'failed'].includes(response.data.paymentStatus) && attempts++ < 24) {
+        if (!['paid', 'failed'].includes(response.data.paymentStatus) && attempts++ < 42) {
           timer = setTimeout(checkPayment, 5000);
         } else if (!['paid', 'failed'].includes(response.data.paymentStatus)) {
           setStatusMessage('Le paiement est toujours en attente. Vous pouvez quitter cette page ; la confirmation sera synchronisée lors du prochain suivi.');
         }
       } catch (_error) {
         if (!active) return;
-        if (attempts++ < 24) timer = setTimeout(checkPayment, 8000);
-        else setStatusMessage('Impossible de joindre E-Billing pour le moment. Réessayez dans quelques instants.');
+        if (attempts++ < 42) timer = setTimeout(checkPayment, 8000);
+        else setStatusMessage(pvitPayment ? 'Impossible de joindre MyPVIT pour le moment. Réessayez dans quelques instants.' : 'Impossible de joindre E-Billing pour le moment. Réessayez dans quelques instants.');
       }
     };
 
@@ -77,12 +79,17 @@ export default function OrderSuccess() {
     setRetrying(true);
     setStatusMessage('');
     try {
-      await api.post('/payments/ebilling/ussd-push', {
-        orderId: ebillingPayment.orderId,
-        paymentStatusToken: ebillingPayment.paymentStatusToken,
-        paymentSystemName: ebillingPayment.paymentSystemName,
-        ...(ebillingPayment.paymentSystemName === 'SIMU' ? { payerMsisdn: ebillingPayment.payerMsisdn } : {})
-      });
+      if (pvitPayment) {
+        await api.post('/payments/pvit/create', {
+          orderId: pvitPayment.orderId, paymentStatusToken: pvitPayment.paymentStatusToken, operatorCode: pvitPayment.operatorCode
+        });
+      } else {
+        await api.post('/payments/ebilling/ussd-push', {
+          orderId: ebillingPayment.orderId, paymentStatusToken: ebillingPayment.paymentStatusToken,
+          paymentSystemName: ebillingPayment.paymentSystemName,
+          ...(ebillingPayment.paymentSystemName === 'SIMU' ? { payerMsisdn: ebillingPayment.payerMsisdn } : {})
+        });
+      }
       setPaymentStatus('requires_action');
       setProviderState('accepted');
       setRetryCount(count => count + 1);
@@ -122,12 +129,12 @@ export default function OrderSuccess() {
             : paymentConflict
               ? 'Le paiement est confirmé, mais la commande est déjà clôturée ou annulée. Le restaurant doit vérifier la situation avant toute préparation.'
               : isPaid
-              ? 'E-Billing a confirmé le paiement. Votre commande est en préparation.'
+              ? (pvitPayment ? 'MyPVIT' : 'E-Billing') + ' a confirmé le paiement. Votre commande est en préparation.'
               : isFailed
                 ? 'E-Billing a signalé un échec. Vérifiez votre numéro et réessayez.'
                 : ebillingPayment.paymentSystemName === 'SIMU'
                   ? 'Demande transmise au simulateur E-Billing. Aucun appel ne sera envoyé à un téléphone réel.'
-                  : `Une demande ${ebillingPayment.paymentSystemName === 'moovmoney' ? 'Moov Money' : 'Airtel Money'} a été envoyée au téléphone associé à la commande.`}
+                  : (pvitPayment ? 'Une demande MyPVIT a été envoyée au téléphone associé à la commande.' : (ebillingPayment.paymentSystemName === 'moovmoney' ? 'Une demande Moov Money a été envoyée au téléphone associé à la commande.' : 'Une demande Airtel Money a été envoyée au téléphone associé à la commande.'))}
         </p>
         {ebillingPayment && !isPaid && !isFailed && <p className="mb-4 text-sm text-gray-500">État facture : {providerState || 'en attente'}{pushState ? ` · Push USSD : ${pushState}` : ''} · La commande ne partira en préparation qu’après confirmation du paiement.</p>}
         {statusMessage && <p className="mb-5 rounded-lg bg-amber-50 p-3 text-sm text-amber-900" role="status">{statusMessage}</p>}
@@ -137,7 +144,7 @@ export default function OrderSuccess() {
           {ebillingPayment && (isFailed || ebillingPayment.initiationError) && (
             <Button onClick={retryPayment} disabled={retrying} className="w-full bg-amber-500 hover:bg-amber-600 py-5">
               {retrying ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
-              Réessayer avec {ebillingPayment.paymentSystemName === 'moovmoney' ? 'Moov Money' : ebillingPayment.paymentSystemName === 'SIMU' ? 'SIMU' : 'Airtel Money'}
+              Réessayer avec {pvitPayment ? 'MyPVIT' : ebillingPayment.paymentSystemName === 'moovmoney' ? 'Moov Money' : ebillingPayment.paymentSystemName === 'SIMU' ? 'SIMU' : 'Airtel Money'}
             </Button>
           )}
           <Link to={createPageUrl("OrdersPage")}>

@@ -24,17 +24,25 @@ export default function Payment() {
   const [serverCodeError, setServerCodeError] = useState("");
   const [isCodeDialogOpen, setIsCodeDialogOpen] = useState(false);
   const [paymentSettings, setPaymentSettings] = useState(null);
-  const [paymentSystemName, setPaymentSystemName] = useState('airtelmoney');
+  const [paymentProvider, setPaymentProvider] = useState('pvit');
+  const [paymentSystemName, setPaymentSystemName] = useState('AIRTEL_MONEY');
   const [simuMsisdn, setSimuMsisdn] = useState('077000001');
   const [createdOrder, setCreatedOrder] = useState(null);
   const isStaffOrder = user?.role === "serveur" && sessionStorage.getItem("kot_staff_order_mode") === "true";
-  const availableOperators = paymentSettings?.ebilling_test_mode
+  const ebillingOperators = paymentSettings?.ebilling_test_mode
     ? (user?.role === 'admin' ? [{ value: 'SIMU', label: 'SIMU · test Lab' }] : [])
     : [
       ...(paymentSettings?.mobile_money_airtel_enabled ? [{ value: 'airtelmoney', label: 'Airtel Money' }] : []),
       ...(paymentSettings?.mobile_money_moov_enabled ? [{ value: 'moovmoney', label: 'Moov Money' }] : [])
     ];
-  const ebillingAvailable = Boolean(paymentSettings?.ebilling_enabled && paymentSettings.mobile_money_enabled && availableOperators.length);
+  const pvitOperators = [
+    ...(paymentSettings?.mobile_money_airtel_enabled ? [{ value: 'AIRTEL_MONEY', label: 'Airtel Money' }] : []),
+    ...(paymentSettings?.mobile_money_moov_enabled ? [{ value: 'MOOV_MONEY', label: 'Moov Money' }] : [])
+  ];
+  const ebillingAvailable = Boolean(paymentSettings?.ebilling_enabled && paymentSettings.mobile_money_enabled && ebillingOperators.length);
+  const pvitAvailable = Boolean(paymentSettings?.pvit_enabled && paymentSettings.mobile_money_enabled && pvitOperators.length);
+  const availableOperators = paymentProvider === 'pvit' ? pvitOperators : ebillingOperators;
+  const mobileMoneyAvailable = (paymentProvider === 'pvit' && pvitAvailable) || (paymentProvider === 'ebilling' && ebillingAvailable);
 
   useEffect(() => {
     let active = true;
@@ -42,11 +50,15 @@ export default function Payment() {
       .then(response => {
         if (!active) return;
         setPaymentSettings(response.data);
-        const firstAvailable = response.data.mobile_money_airtel_enabled
-          ? 'airtelmoney'
-          : response.data.mobile_money_moov_enabled ? 'moovmoney' : '';
-        if (response.data.ebilling_test_mode) setPaymentSystemName('SIMU');
-        else if (firstAvailable) setPaymentSystemName(firstAvailable);
+        if (response.data.pvit_enabled) {
+          setPaymentProvider('pvit');
+          setPaymentSystemName(response.data.mobile_money_airtel_enabled ? 'AIRTEL_MONEY' : 'MOOV_MONEY');
+        } else {
+          setPaymentProvider('ebilling');
+          const firstAvailable = response.data.mobile_money_airtel_enabled ? 'airtelmoney' : response.data.mobile_money_moov_enabled ? 'moovmoney' : '';
+          if (response.data.ebilling_test_mode) setPaymentSystemName('SIMU');
+          else if (firstAvailable) setPaymentSystemName(firstAvailable);
+        }
       })
       .catch(() => { if (active) setPaymentSettings({ ebilling_enabled: false }); });
     return () => { active = false; };
@@ -111,39 +123,38 @@ export default function Payment() {
         window.dispatchEvent(new Event('storage'));
         navigate(createPageUrl("OrderSuccess"));
       } else {
-        const useEbilling = ebillingAvailable;
+        const useMobileMoney = mobileMoneyAvailable;
         const order = createdOrder || await Order.create({
           ...orderData,
-          ...(useEbilling ? { payment_method: 'mobile_money' } : {})
+          ...(useMobileMoney ? { payment_method: 'mobile_money' } : {})
         });
-        if (useEbilling && !createdOrder) setCreatedOrder(order);
+        if (useMobileMoney && !createdOrder) setCreatedOrder(order);
 
         localStorage.removeItem('kingoftacos_cart');
         window.dispatchEvent(new Event('storage'));
 
-        if (useEbilling) {
+        if (useMobileMoney && paymentProvider === 'pvit') {
+          let initiationError = null;
+          try {
+            await api.post('/payments/pvit/create', { orderId: order.id, paymentStatusToken: order.payment_status_token, operatorCode: paymentSystemName });
+          } catch (error) {
+            initiationError = error.response?.data?.message || 'Le démarrage du paiement PVit n’a pas pu être confirmé.';
+          }
+          navigate(createPageUrl("OrderSuccess"), {
+            state: { pvitPayment: { orderId: order.id, orderCode: order.order_code, paymentStatusToken: order.payment_status_token, operatorCode: paymentSystemName, initiationError } }
+          });
+        } else if (useMobileMoney) {
           let initiationError = null;
           try {
             await api.post('/payments/ebilling/ussd-push', {
-              orderId: order.id,
-              paymentStatusToken: order.payment_status_token,
-              paymentSystemName,
+              orderId: order.id, paymentStatusToken: order.payment_status_token, paymentSystemName,
               ...(paymentSystemName === 'SIMU' ? { payerMsisdn: simuMsisdn } : {})
             });
           } catch (error) {
             initiationError = error.response?.data?.message || 'Le démarrage du paiement n’a pas pu être confirmé.';
           }
           navigate(createPageUrl("OrderSuccess"), {
-            state: {
-              ebillingPayment: {
-                orderId: order.id,
-                orderCode: order.order_code,
-                paymentStatusToken: order.payment_status_token,
-                paymentSystemName,
-                payerMsisdn: paymentSystemName === 'SIMU' ? simuMsisdn : undefined,
-                initiationError
-              }
-            }
+            state: { ebillingPayment: { orderId: order.id, orderCode: order.order_code, paymentStatusToken: order.payment_status_token, paymentSystemName, payerMsisdn: paymentSystemName === 'SIMU' ? simuMsisdn : undefined, initiationError } }
           });
         } else {
           navigate(createPageUrl("OrderSuccess"));
@@ -214,9 +225,28 @@ export default function Payment() {
                 </div>
                 {!isStaffOrder && paymentSettings && (
                   <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4">
-                    {ebillingAvailable ? (
+                    {mobileMoneyAvailable ? (
                       <>
-                        <Label htmlFor="mobile-money-operator">Paiement Mobile Money</Label>
+                        {ebillingAvailable && pvitAvailable && (
+                          <>
+                            <Label htmlFor="mobile-money-provider">Prestataire de paiement</Label>
+                            <select
+                              id="mobile-money-provider"
+                              value={paymentProvider}
+                              onChange={event => {
+                                const nextProvider = event.target.value;
+                                setPaymentProvider(nextProvider);
+                                const nextOperators = nextProvider === 'pvit' ? pvitOperators : ebillingOperators;
+                                if (nextOperators.length) setPaymentSystemName(nextOperators[0].value);
+                              }}
+                              className="mt-2 h-11 w-full rounded-md border border-input bg-white px-3 text-sm"
+                            >
+                              <option value="pvit">MyPVIT</option>
+                              <option value="ebilling">E-Billing</option>
+                            </select>
+                          </>
+                        )}
+                        <Label htmlFor="mobile-money-operator" className="mt-3 block">Paiement Mobile Money</Label>
                         <select
                           id="mobile-money-operator"
                           value={paymentSystemName}
@@ -232,7 +262,7 @@ export default function Payment() {
                             <p className="mt-2 text-sm text-gray-600">Le simulateur ne déclenche pas d’appel sur un téléphone réel. Utilisez l’un des numéros de scénario du guide E-Billing.</p>
                           </>
                         ) : (
-                          <p className="mt-2 text-sm text-gray-600">Un message de confirmation sera envoyé au {formData.customer_phone}. La commande ne sera confirmée qu’après validation du paiement par E-Billing.</p>
+                          <p className="mt-2 text-sm text-gray-600">Une demande de paiement sera envoyée au {formData.customer_phone}. La commande ne partira en préparation qu’après confirmation par {paymentProvider === 'pvit' ? 'MyPVIT' : 'E-Billing'}.</p>
                         )}
                       </>
                     ) : (
@@ -248,7 +278,7 @@ export default function Payment() {
               disabled={isSubmitting}
               className="w-full mt-6 bg-gradient-to-r from-yellow-400 to-amber-600 hover:from-yellow-500 hover:to-amber-700 text-white py-6 rounded-2xl text-lg font-semibold shadow-lg"
             >
-              {isSubmitting ? "Traitement..." : isStaffOrder ? "Confirmer la commande" : ebillingAvailable ? "Continuer avec Mobile Money" : "Confirmer la commande"}
+              {isSubmitting ? "Traitement..." : isStaffOrder ? "Confirmer la commande" : mobileMoneyAvailable ? "Continuer avec Mobile Money" : "Confirmer la commande"}
               <CreditCard className="ml-2 w-5 h-5" />
             </Button>
           </div>
