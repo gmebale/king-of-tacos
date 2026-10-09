@@ -6,12 +6,12 @@ const SHARE_IMAGE = `${SITE_URL}/Images/LOGO-KING-OF-TACOS.jpg`;
 
 const publicPages = {
   '/': {
-    title: 'King Of Tacos | Tacos et repas à commander au Gabon',
-    description: 'Découvrez le menu King Of Tacos et commandez vos tacos, burgers et autres repas en ligne, à emporter ou en livraison selon disponibilité.'
+    title: 'King Of Tacos à Libreville | Tacos et repas à commander',
+    description: 'Commandez tacos, burgers et repas King Of Tacos à Libreville. Consultez le menu en ligne et choisissez le retrait ou la livraison selon disponibilité.'
   },
   '/menu': {
-    title: 'Menu | King Of Tacos',
-    description: 'Consultez le menu King Of Tacos : tacos, burgers, burritos, accompagnements, boissons et desserts. Personnalisez votre commande en ligne.'
+    title: 'Menu King Of Tacos à Libreville | Tacos, burgers et burritos',
+    description: 'Découvrez le menu King Of Tacos à Libreville : tacos, burgers, burritos, accompagnements, boissons et desserts. Personnalisez votre commande en ligne.'
   },
   '/mentions-legales': {
     title: 'Mentions légales | King Of Tacos',
@@ -98,7 +98,7 @@ export default function SeoManager() {
         '@type': 'Organization',
         name: 'King Of Tacos',
         url: SITE_URL,
-        logo: SHARE_IMAGE
+        logo: SHARE_IMAGE, areaServed: { '@type': 'City', name: 'Libreville' }
       });
     } else {
       structuredData?.remove();

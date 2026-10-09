@@ -81,7 +81,7 @@ export default function Home() {
               className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-yellow-400 to-amber-500 text-white rounded-full text-sm font-medium mb-6 shadow-lg">
 
               <Sparkles className="w-4 h-4" />
-              <span>Le meilleur tacos de la ville</span>
+              <span>Votre restaurant de tacos à Libreville</span>
             </motion.div>
 
             <h1 className="text-5xl md:text-7xl font-bold mb-6 leading-tight">
@@ -91,7 +91,7 @@ export default function Home() {
             </h1>
 
             <p className="text-xl md:text-2xl text-gray-600 mb-10 max-w-2xl mx-auto">
-              Découvrez nos tacos authentiques, préparés avec passion et des ingrédients de qualité
+              À Libreville, découvrez nos tacos authentiques, préparés avec passion et des ingrédients de qualité
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">

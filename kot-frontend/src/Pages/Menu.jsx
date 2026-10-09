@@ -147,10 +147,10 @@ export default function Menu() {
             Retour à l'accueil
           </Button>
           <h1 className="text-4xl md:text-5xl font-bold mb-4 bg-gradient-to-r from-amber-600 to-yellow-500 bg-clip-text text-transparent">
-            Notre Menu
+            Menu de King Of Tacos à Libreville
           </h1>
           <p className="text-gray-600 text-lg">
-            Découvrez nos délicieux tacos et accompagnements
+            Découvrez nos tacos, burgers, burritos et accompagnements à Libreville.
           </p>
         </motion.div>
 
