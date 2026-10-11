@@ -196,7 +196,7 @@ export default function Checkout() {
 
   return (
     <div className="min-h-screen py-8">
-      <div className="max-w-4xl mx-auto px-6">
+      <div className="mx-auto max-w-4xl px-4 sm:px-6">
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -409,8 +409,8 @@ export default function Checkout() {
                   {activePromo ? <div className="rounded-md bg-green-50 p-3 text-sm text-green-800">
                     {activePromo.loyalty ? 'Votre récompense fidélité est appliquée automatiquement' : 'Code promo appliqué'} : <strong className="font-mono">{activePromo.code}</strong>
                     <Button type="button" variant="link" className="ml-2 p-0" onClick={() => { setActivePromo(null); setGiftRedemption(loyaltyClaims?.find(claim => claim.reward?.type === 'gifted_product') || null); }}>Retirer</Button>
-                  </div> : <div className="flex gap-2">
-                    <Input value={promoInput} onChange={event => setPromoInput(event.target.value.toUpperCase())} placeholder="Saisir un code promo" />
+                  </div> : <div className="flex flex-col gap-2 sm:flex-row">
+                    <Input className="min-w-0" value={promoInput} onChange={event => setPromoInput(event.target.value.toUpperCase())} placeholder="Saisir un code promo" />
                     <Button type="button" variant="outline" onClick={applyPromoCode}>Appliquer</Button>
                   </div>}
                   {!activePromo && giftCartItem && <p className="text-sm text-green-700">Produit offert appliqué : {giftRedemption.reward.giftedProduct.name}</p>}
@@ -430,14 +430,14 @@ export default function Checkout() {
           </div>
 
           <div>
-            <Card className="sticky top-24 bg-gradient-to-br from-amber-50 to-yellow-50 border-2 border-amber-200">
+            <Card className="bg-gradient-to-br from-amber-50 to-yellow-50 border-2 border-amber-200 lg:sticky lg:top-24">
               <CardHeader>
                 <CardTitle>Récapitulatif</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 {cart.map((item) => (
-                  <div key={`${item.product.id}-${JSON.stringify(item.customization)}`} className="flex justify-between text-sm">
-                    <div className="flex-1">
+                  <div key={`${item.product.id}-${JSON.stringify(item.customization)}`} className="flex items-start justify-between gap-3 text-sm">
+                    <div className="min-w-0 flex-1 break-words">
                       <span>{item.quantity}x {item.product.name}</span>
                       {item.customizationSummary && (
                         <div className="text-xs text-gray-500 mt-1">
@@ -445,7 +445,7 @@ export default function Checkout() {
                         </div>
                       )}
                     </div>
-                    <span className="font-semibold">
+                    <span className="shrink-0 text-right font-semibold">
                       {item.subtotal.toLocaleString()} FCFA
                     </span>
                   </div>

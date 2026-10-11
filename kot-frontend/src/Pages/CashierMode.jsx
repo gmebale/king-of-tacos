@@ -542,10 +542,10 @@ export default function CashierMode() {
       </Card>
 
       <Tabs defaultValue="orders" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="orders">Commandes</TabsTrigger>
-          <TabsTrigger value="expenses">Dépenses</TabsTrigger>
-          <TabsTrigger value="reports">Rapports</TabsTrigger>
+        <TabsList className="flex w-full max-w-full justify-start overflow-x-auto scrollbar-hide sm:grid sm:grid-cols-3 sm:overflow-visible">
+          <TabsTrigger value="orders" className="shrink-0 sm:w-full">Commandes</TabsTrigger>
+          <TabsTrigger value="expenses" className="shrink-0 sm:w-full">Dépenses</TabsTrigger>
+          <TabsTrigger value="reports" className="shrink-0 sm:w-full">Rapports</TabsTrigger>
         </TabsList>
 
         <TabsContent value="orders" className="space-y-6">

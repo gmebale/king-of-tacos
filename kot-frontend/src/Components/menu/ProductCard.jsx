@@ -96,9 +96,9 @@ export default function ProductCard({ product, onAddToCart, cartItem, onUpdateQu
             </div>
           </div>
 
-          <CardContent className="p-6">
+          <CardContent className="p-4 sm:p-6">
             <div className="mb-4">
-              <h3 className="text-xl font-bold text-gray-900 mb-2">
+              <h3 className="mb-2 break-words text-lg font-bold text-gray-900 sm:text-xl">
                 {product.name}
               </h3>
               {product.description && (
@@ -109,12 +109,12 @@ export default function ProductCard({ product, onAddToCart, cartItem, onUpdateQu
               {product.loyalty_points > 0 && <p className="mt-2 flex items-center gap-1 text-sm font-medium text-amber-700"><Star className="h-4 w-4" />{product.loyalty_points} point{product.loyalty_points > 1 ? 's' : ''} fidélité par unité pour les clients inscrits</p>}
             </div>
 
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 {hasDiscount ? (
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="text-2xl font-bold text-green-600">
+                      <span className="text-xl font-bold text-green-600 sm:text-2xl">
                         {Math.round(finalPrice).toLocaleString()} FCFA
                       </span>
                     </div>
@@ -123,7 +123,7 @@ export default function ProductCard({ product, onAddToCart, cartItem, onUpdateQu
                     </span>
                   </div>
                 ) : (
-                  <span className="text-2xl font-bold bg-gradient-to-r from-amber-600 to-yellow-500 bg-clip-text text-transparent">
+                  <span className="text-xl font-bold bg-gradient-to-r from-amber-600 to-yellow-500 bg-clip-text text-transparent sm:text-2xl">
                     {(product.price ).toLocaleString()} FCFA
                   </span>
                 )}
@@ -134,7 +134,7 @@ export default function ProductCard({ product, onAddToCart, cartItem, onUpdateQu
                   <Button
                     onClick={handleAddClick}
                     disabled={loadingOptions}
-                    className="bg-gradient-to-r from-yellow-400 to-amber-600 hover:from-yellow-500 hover:to-amber-700 text-white rounded-xl shadow-lg"
+                    className="max-w-full rounded-xl bg-gradient-to-r from-yellow-400 to-amber-600 px-3 text-sm text-white shadow-lg hover:from-yellow-500 hover:to-amber-700 sm:px-4 sm:text-base"
                   >
                     <Plus className="w-4 h-4 mr-1" />
                     {loadingOptions ? "Chargement…" : product.type === 'combo' ? "Composer le menu" : "Personnaliser"}
@@ -144,7 +144,7 @@ export default function ProductCard({ product, onAddToCart, cartItem, onUpdateQu
               ) : quantity === 0 ? (
                 <Button
                   onClick={handleAddClick}
-                  className="bg-gradient-to-r from-yellow-400 to-amber-600 hover:from-yellow-500 hover:to-amber-700 text-white rounded-xl shadow-lg"
+                  className="max-w-full rounded-xl bg-gradient-to-r from-yellow-400 to-amber-600 px-3 text-sm text-white shadow-lg hover:from-yellow-500 hover:to-amber-700 sm:px-4 sm:text-base"
                 >
                   <Plus className="w-4 h-4 mr-1" />
                   {product.type === 'combo' ? "Composer le menu" : isConfigurable ? "Personnaliser" : "Ajouter"}

@@ -171,7 +171,7 @@ export default function Payment() {
 
   return (
     <div className="min-h-screen py-8">
-      <div className="max-w-4xl mx-auto px-6">
+      <div className="mx-auto max-w-4xl px-4 sm:px-6">
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -201,9 +201,9 @@ export default function Payment() {
                 <div className="space-y-4">
                   {cart.filter(item => item.product).map((item, index) => (
                     <div key={`${item.product.id}-${index}`}>
-                      <div className="flex justify-between">
-                        <span>{item.quantity}x {item.product.name}</span>
-                        <span>{item.subtotal.toLocaleString()} FCFA</span>
+                      <div className="flex items-start justify-between gap-3">
+                        <span className="min-w-0 flex-1 break-words">{item.quantity}x {item.product.name}</span>
+                        <span className="shrink-0 text-right">{item.subtotal.toLocaleString()} FCFA</span>
                       </div>
                       {item.customizationSummary && (
                         <div className="text-xs text-gray-500 mt-1 ml-4">

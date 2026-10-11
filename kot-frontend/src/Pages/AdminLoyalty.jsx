@@ -338,7 +338,7 @@ export default function AdminLoyalty() {
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
+    <div className="container mx-auto space-y-6 p-4 sm:p-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Gestion Fidélité</h1>
@@ -368,21 +368,21 @@ export default function AdminLoyalty() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-5">
-          <TabsTrigger value="tiers" className="flex items-center gap-2"><Star className="w-4 h-4" />Niveaux</TabsTrigger>
-          <TabsTrigger value="rewards" className="flex items-center gap-2">
+        <TabsList className="flex w-full max-w-full justify-start overflow-x-auto scrollbar-hide lg:grid lg:grid-cols-5 lg:overflow-visible">
+          <TabsTrigger value="tiers" className="shrink-0 items-center gap-2 px-2 sm:px-3 lg:min-w-0"><Star className="w-4 h-4" />Niveaux</TabsTrigger>
+          <TabsTrigger value="rewards" className="shrink-0 items-center gap-2 px-2 sm:px-3 lg:min-w-0">
             <Award className="w-4 h-4" />
             Récompenses
           </TabsTrigger>
-          <TabsTrigger value="users" className="flex items-center gap-2">
+          <TabsTrigger value="users" className="shrink-0 items-center gap-2 px-2 sm:px-3 lg:min-w-0">
             <Users className="w-4 h-4" />
             Utilisateurs
           </TabsTrigger>
-          <TabsTrigger value="promos" className="flex items-center gap-2">
+          <TabsTrigger value="promos" className="shrink-0 items-center gap-2 px-2 sm:px-3 lg:min-w-0">
             <Tag className="w-4 h-4" />
             Codes Promo
           </TabsTrigger>
-          <TabsTrigger value="history" className="flex items-center gap-2">
+          <TabsTrigger value="history" className="shrink-0 items-center gap-2 px-2 sm:px-3 lg:min-w-0">
             <Calendar className="w-4 h-4" />
             Historique
           </TabsTrigger>
@@ -535,7 +535,7 @@ export default function AdminLoyalty() {
               </div>
             </CardHeader>
             <CardContent>
-              <Table>
+              <Table className="min-w-[850px]">
                 <TableHeader>
                   <TableRow>
                     <TableHead>Nom</TableHead>
@@ -638,7 +638,7 @@ export default function AdminLoyalty() {
               </div>}
             </CardContent>
             <CardContent>
-              <Table>
+              <Table className="min-w-[620px]">
                 <TableHeader>
                   <TableRow>
                     <TableHead>Nom</TableHead>
@@ -666,7 +666,7 @@ export default function AdminLoyalty() {
             </CardContent>
           </Card>
 
-          <Card><CardHeader><CardTitle>Journal des ajustements manuels</CardTitle><CardDescription>Qui a modifié le solde, pour quel client, avec quel motif.</CardDescription></CardHeader><CardContent><Table><TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Client</TableHead><TableHead>Admin</TableHead><TableHead>Variation</TableHead><TableHead>Motif</TableHead></TableRow></TableHeader><TableBody>{pointHistory.map(entry => <TableRow key={entry.id}><TableCell>{new Date(entry.created_at).toLocaleString('fr-FR')}</TableCell><TableCell>{entry.user.full_name}</TableCell><TableCell>{entry.actor?.full_name || '—'}</TableCell><TableCell>{entry.points > 0 ? '+' : ''}{entry.points}</TableCell><TableCell>{entry.reason}</TableCell></TableRow>)}</TableBody></Table></CardContent></Card>
+          <Card><CardHeader><CardTitle>Journal des ajustements manuels</CardTitle><CardDescription>Qui a modifié le solde, pour quel client, avec quel motif.</CardDescription></CardHeader><CardContent><Table className="min-w-[720px]"><TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Client</TableHead><TableHead>Admin</TableHead><TableHead>Variation</TableHead><TableHead>Motif</TableHead></TableRow></TableHeader><TableBody>{pointHistory.map(entry => <TableRow key={entry.id}><TableCell>{new Date(entry.created_at).toLocaleString('fr-FR')}</TableCell><TableCell>{entry.user.full_name}</TableCell><TableCell>{entry.actor?.full_name || '—'}</TableCell><TableCell>{entry.points > 0 ? '+' : ''}{entry.points}</TableCell><TableCell>{entry.reason}</TableCell></TableRow>)}</TableBody></Table></CardContent></Card>
         </TabsContent>
 
         <TabsContent value="promos" className="space-y-6">
@@ -685,7 +685,7 @@ export default function AdminLoyalty() {
                   Créer un code
                 </Button>
                 <Dialog open={showPromoDialog} onOpenChange={setShowPromoDialog}>
-                  <DialogContent className="w-[95vw] sm:max-w-2xl max-h-[85vh] overflow-auto">
+                  <DialogContent className="max-h-[85vh] w-full overflow-auto sm:max-w-2xl">
                     <DialogHeader>
                       <DialogTitle>{editingPromo ? 'Modifier le Code Promo' : 'Nouveau Code Promo'}</DialogTitle>
                       <DialogDescription>
@@ -800,7 +800,7 @@ export default function AdminLoyalty() {
               </div>
             </CardHeader>
             <CardContent>
-              <Table>
+              <Table className="min-w-[920px]">
                 <TableHeader>
                   <TableRow>
                     <TableHead>Code</TableHead>
@@ -868,7 +868,7 @@ export default function AdminLoyalty() {
               <CardDescription>Liste de tous les échanges de récompenses</CardDescription>
             </CardHeader>
             <CardContent>
-              <Table>
+              <Table className="min-w-[760px]">
                 <TableHeader>
                   <TableRow>
                     <TableHead>Utilisateur</TableHead>

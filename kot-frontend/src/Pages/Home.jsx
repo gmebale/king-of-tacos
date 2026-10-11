@@ -41,7 +41,7 @@ export default function Home() {
   return (
     <div className="min-h-screen">
       {/* Hero Section */}
-      <section className="relative overflow-hidden bg-gradient-to-br from-amber-50 via-yellow-50 to-orange-50">
+      <section className="relative overflow-hidden bg-gradient-to-br from-gray-950 via-gray-900 to-amber-950">
         {heroMedia.media_url && (heroMedia.media_type === 'video' ? (
           <video
             key={heroMedia.media_url}
@@ -63,7 +63,7 @@ export default function Home() {
           />
         ))}
         <div
-          className="pointer-events-none absolute inset-0 bg-gradient-to-br from-amber-50 via-yellow-50 to-orange-100"
+          className="pointer-events-none absolute inset-0 bg-gradient-to-br from-black/70 via-black/50 to-black/70"
           style={{ opacity: Math.max(0, Math.min(100, Number(heroMedia.overlay_opacity ?? 85))) / 100 }}
         />
         
@@ -78,27 +78,27 @@ export default function Home() {
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
               transition={{ delay: 0.2, type: "spring" }}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-yellow-400 to-amber-500 text-white rounded-full text-sm font-medium mb-6 shadow-lg">
+              className="inline-flex max-w-full items-center gap-2 rounded-full bg-gradient-to-r from-yellow-400 to-amber-500 px-3 py-2 text-xs font-medium text-white shadow-lg mb-6 sm:px-4 sm:text-sm">
 
               <Sparkles className="w-4 h-4" />
               <span>Votre restaurant de tacos à Libreville</span>
             </motion.div>
 
-            <h1 className="text-5xl md:text-7xl font-bold mb-6 leading-tight">
-              <span className="bg-gradient-to-r from-amber-600 via-yellow-500 to-orange-500 bg-clip-text text-transparent">
+            <h1 className="mb-6 text-4xl font-bold leading-tight sm:text-5xl md:text-7xl">
+              <span className="text-white drop-shadow-[0_3px_8px_rgba(0,0,0,0.9)]">
                 King Of Tacos
               </span>
             </h1>
 
-            <p className="text-xl md:text-2xl text-gray-600 mb-10 max-w-2xl mx-auto">
+            <p className="mx-auto mb-10 max-w-2xl text-lg text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.95)] sm:text-xl md:text-2xl">
               À Libreville, découvrez nos tacos authentiques, préparés avec passion et des ingrédients de qualité
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-              <Link to={createPageUrl("Menu")}>
+              <Link to={createPageUrl("Menu")} className="w-full max-w-xs sm:w-auto">
                 <Button
                   size="lg"
-                  className="bg-gradient-to-r from-yellow-400 to-amber-600 hover:from-yellow-500 hover:to-amber-700 text-white px-8 py-6 text-lg rounded-2xl shadow-2xl hover:shadow-3xl transition-all duration-300 group">
+                  className="group w-full max-w-xs rounded-2xl bg-gradient-to-r from-yellow-400 to-amber-600 px-4 py-6 text-base text-white shadow-2xl transition-all duration-300 hover:from-yellow-500 hover:to-amber-700 hover:shadow-3xl sm:w-auto sm:px-8 sm:text-lg">
 
                   Commander maintenant
                   <motion.div
@@ -110,11 +110,11 @@ export default function Home() {
                 </Button>
               </Link>
 
-              <Link to={createPageUrl("Menu")}>
+              <Link to={createPageUrl("Menu")} className="w-full max-w-xs sm:w-auto">
                 <Button
                   size="lg"
                   variant="outline"
-                  className="border-2 border-amber-600 text-amber-600 hover:bg-amber-50 px-8 py-6 text-lg rounded-2xl">
+                  className="w-full max-w-xs rounded-2xl border-2 border-white bg-black/20 px-4 py-6 text-base text-white hover:bg-white/15 sm:w-auto sm:px-8 sm:text-lg">
 
                   Voir le menu
                 </Button>
@@ -122,12 +122,12 @@ export default function Home() {
             </div>
 
             {!isAuthenticated && (
-              <div className="mt-6 flex flex-col sm:flex-row gap-4 justify-center items-center text-sm text-gray-500">
-                <Link to={createPageUrl("Login")} className="hover:text-amber-600 transition-colors">
+              <div className="mt-6 flex flex-col sm:flex-row gap-4 justify-center items-center text-sm text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">
+                <Link to={createPageUrl("Login")} className="hover:text-amber-200 transition-colors">
                   Se connecter
                 </Link>
                 <span className="hidden sm:block">•</span>
-                <Link to={createPageUrl("Register")} className="hover:text-amber-600 transition-colors">
+                <Link to={createPageUrl("Register")} className="hover:text-amber-200 transition-colors">
                   S'inscrire
                 </Link>
               </div>

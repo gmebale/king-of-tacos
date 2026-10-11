@@ -493,10 +493,10 @@ const AdminSettings = () => {
                 <img src={resolveMediaUrl(heroMedia.media_url)} alt="Aperçu de la bannière" className="h-full w-full object-cover" />
               )}
               <div
-                className="pointer-events-none absolute inset-0 bg-gradient-to-br from-amber-50 via-yellow-50 to-orange-100"
+                className="pointer-events-none absolute inset-0 bg-gradient-to-br from-black/70 via-black/50 to-black/70"
                 style={{ opacity: heroMedia.overlay_opacity / 100 }}
               />
-              <div className="pointer-events-none absolute inset-0 flex items-center justify-center px-4 text-center text-xl font-black text-slate-900 drop-shadow-sm sm:text-3xl">
+              <div className="pointer-events-none absolute inset-0 flex items-center justify-center px-4 text-center text-xl font-black text-white drop-shadow-[0_3px_8px_rgba(0,0,0,0.9)] sm:text-3xl">
                 King Of Tacos
               </div>
             </div>
@@ -517,7 +517,7 @@ const AdminSettings = () => {
           </div>
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label htmlFor="hero-overlay-opacity">Opacité du voile blanc/jaune</Label>
+              <Label htmlFor="hero-overlay-opacity">Opacité du voile sombre</Label>
               <span className="text-sm font-semibold text-amber-700">{heroMedia.overlay_opacity}%</span>
             </div>
             <Input

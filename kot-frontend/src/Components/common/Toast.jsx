@@ -31,7 +31,7 @@ const Toast = ({ message, type = 'info', onClose, duration = 5000 }) => {
       initial={{ opacity: 0, y: -50, scale: 0.95 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: -20, scale: 0.95 }}
-      className={`fixed top-4 right-4 z-50 max-w-sm w-full ${colors[type]} border rounded-lg shadow-lg`}
+      className={`pointer-events-auto relative w-full ${colors[type]} border rounded-lg shadow-lg`}
     >
       <div className="flex items-center p-4">
         <Icon className="w-5 h-5 mr-3 flex-shrink-0" />
@@ -49,7 +49,7 @@ const Toast = ({ message, type = 'info', onClose, duration = 5000 }) => {
 
 const ToastContainer = ({ toasts, removeToast }) => {
   return (
-    <div className="fixed top-0 right-0 z-50 p-4 space-y-2">
+    <div className="pointer-events-none fixed top-0 right-0 z-[100] flex w-full max-w-sm flex-col gap-2 p-4">
       <AnimatePresence>
         {toasts.map((toast) => (
           <Toast

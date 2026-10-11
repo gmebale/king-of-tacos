@@ -131,7 +131,7 @@ export default function Menu() {
 
   return (
     <div className="min-h-screen pb-32">
-      <div className="max-w-7xl mx-auto px-6 py-8">
+      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
@@ -146,7 +146,7 @@ export default function Menu() {
             <ArrowLeft className="w-4 h-4 mr-2" />
             Retour à l'accueil
           </Button>
-          <h1 className="text-4xl md:text-5xl font-bold mb-4 bg-gradient-to-r from-amber-600 to-yellow-500 bg-clip-text text-transparent">
+          <h1 className="mb-4 text-3xl font-bold bg-gradient-to-r from-amber-600 to-yellow-500 bg-clip-text text-transparent sm:text-4xl md:text-5xl">
             Menu de King Of Tacos à Libreville
           </h1>
           <p className="text-gray-600 text-lg">

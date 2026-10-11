@@ -98,9 +98,9 @@ export default function AdminExpenses() {
       </Card>
 
       <Card>
-        <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-4"><div><CardTitle>Dépenses enregistrées en caisse</CardTitle><p className="mt-1 text-sm text-gray-500">Mouvements liés aux sessions de caisse et repris dans les rapports financiers.</p></div><div className="flex gap-2"><div><Label htmlFor="cash-expense-start">Du</Label><Input id="cash-expense-start" type="date" value={startDate} onChange={event => setStartDate(event.target.value)} /></div><div><Label htmlFor="cash-expense-end">Au</Label><Input id="cash-expense-end" type="date" value={endDate} onChange={event => setEndDate(event.target.value)} /></div></div></CardHeader>
+        <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-4"><div><CardTitle>Dépenses enregistrées en caisse</CardTitle><p className="mt-1 text-sm text-gray-500">Mouvements liés aux sessions de caisse et repris dans les rapports financiers.</p></div><div className="flex w-full flex-wrap gap-2 sm:w-auto"><div className="min-w-0 flex-1 sm:flex-none"><Label htmlFor="cash-expense-start">Du</Label><Input id="cash-expense-start" type="date" value={startDate} onChange={event => setStartDate(event.target.value)} /></div><div className="min-w-0 flex-1 sm:flex-none"><Label htmlFor="cash-expense-end">Au</Label><Input id="cash-expense-end" type="date" value={endDate} onChange={event => setEndDate(event.target.value)} /></div></div></CardHeader>
         <CardContent>
-          <Table>
+          <Table className="min-w-[960px]">
             <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Session</TableHead><TableHead>Type / catégorie</TableHead><TableHead>Description</TableHead><TableHead>Règlement</TableHead><TableHead>Produits reçus</TableHead><TableHead className="text-right">Montant</TableHead></TableRow></TableHeader>
             <TableBody>
               {cashExpenses.map(expense => <TableRow key={expense.id}><TableCell>{new Date(expense.expense_date).toLocaleString('fr-FR')}</TableCell><TableCell>#{expense.session_id}</TableCell><TableCell>{expense.expense_type === 'stock_purchase' ? 'Achat stock' : 'Dépense'} · {expense.category}</TableCell><TableCell>{expense.description}{expense.supplier && <div className="text-xs text-gray-500">{expense.supplier}</div>}</TableCell><TableCell>{expense.payment_method}</TableCell><TableCell>{expense.items?.map(line => `${line.quantity} × ${line.product.name}`).join(', ') || '—'}</TableCell><TableCell className="text-right">{amountText(expense.amount)}</TableCell></TableRow>)}
@@ -113,7 +113,7 @@ export default function AdminExpenses() {
       <Card>
         <CardHeader><CardTitle>Catalogue des dépenses</CardTitle></CardHeader>
         <CardContent>
-          <Table>
+          <Table className="min-w-[680px]">
             <TableHeader><TableRow><TableHead>Catégorie</TableHead><TableHead>Libellé</TableHead><TableHead>Type</TableHead><TableHead>État</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
             <TableBody>
               {catalog.map(item => <TableRow key={item.id}><TableCell>{item.category}</TableCell><TableCell>{item.description}</TableCell><TableCell>{item.expense_type === 'stock_purchase' ? 'Achat de stock' : 'Dépense courante'}</TableCell><TableCell>{item.active ? 'Actif' : 'Désactivé'}</TableCell><TableCell className="text-right"><Button size="sm" variant="outline" onClick={() => toggleActive(item)}>{item.active ? 'Désactiver' : 'Réactiver'}</Button></TableCell></TableRow>)}
@@ -124,9 +124,9 @@ export default function AdminExpenses() {
       </Card>
 
       <Card>
-        <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-4"><div><CardTitle>Ancien historique</CardTitle><p className="mt-1 text-sm text-gray-500">Ces écritures antérieures sont conservées. Les nouvelles dépenses seront enregistrées depuis la caisse.</p></div><div className="flex gap-2"><div><Label htmlFor="expense-start">Du</Label><Input id="expense-start" type="date" value={startDate} onChange={event => setStartDate(event.target.value)} /></div><div><Label htmlFor="expense-end">Au</Label><Input id="expense-end" type="date" value={endDate} onChange={event => setEndDate(event.target.value)} /></div></div></CardHeader>
+        <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-4"><div><CardTitle>Ancien historique</CardTitle><p className="mt-1 text-sm text-gray-500">Ces écritures antérieures sont conservées. Les nouvelles dépenses seront enregistrées depuis la caisse.</p></div><div className="flex w-full flex-wrap gap-2 sm:w-auto"><div className="min-w-0 flex-1 sm:flex-none"><Label htmlFor="expense-start">Du</Label><Input id="expense-start" type="date" value={startDate} onChange={event => setStartDate(event.target.value)} /></div><div className="min-w-0 flex-1 sm:flex-none"><Label htmlFor="expense-end">Au</Label><Input id="expense-end" type="date" value={endDate} onChange={event => setEndDate(event.target.value)} /></div></div></CardHeader>
         <CardContent>
-          <Table>
+          <Table className="min-w-[760px]">
             <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Type / catégorie</TableHead><TableHead>Description</TableHead><TableHead>Produits</TableHead><TableHead className="text-right">Montant</TableHead></TableRow></TableHeader>
             <TableBody>
               {legacyExpenses.map(expense => <TableRow key={expense.id}><TableCell>{new Date(expense.expense_date).toLocaleDateString('fr-FR')}</TableCell><TableCell>{expense.expense_type === 'stock_purchase' ? 'Achat stock' : 'Charge'} · {expense.category}</TableCell><TableCell>{expense.description}{expense.supplier && <div className="text-xs text-gray-500">{expense.supplier}</div>}</TableCell><TableCell>{expense.items?.map(line => `${line.quantity} × ${line.product.name}`).join(', ') || '—'}</TableCell><TableCell className="text-right">{amountText(expense.amount)}</TableCell></TableRow>)}

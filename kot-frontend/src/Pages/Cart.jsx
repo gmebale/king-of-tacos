@@ -17,7 +17,7 @@ export default function Cart() {
 
   if (cart.length === 0) {
     return (
-      <div className="min-h-screen flex items-center justify-center px-6">
+      <div className="min-h-screen flex items-center justify-center px-4 sm:px-6">
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -41,7 +41,7 @@ export default function Cart() {
 
   return (
     <div className="min-h-screen py-8">
-      <div className="max-w-4xl mx-auto px-6">
+      <div className="mx-auto max-w-4xl px-4 sm:px-6">
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -76,8 +76,8 @@ export default function Cart() {
               >
                 <Card className="overflow-hidden hover:shadow-lg transition-shadow">
                   <CardContent className="p-4">
-                    <div className="flex gap-4">
-                      <div className="w-24 h-24 bg-gradient-to-br from-amber-50 to-yellow-100 rounded-2xl flex items-center justify-center flex-shrink-0">
+                    <div className="flex gap-3 sm:gap-4">
+                      <div className="h-20 w-20 flex-shrink-0 rounded-2xl bg-gradient-to-br from-amber-50 to-yellow-100 flex items-center justify-center sm:h-24 sm:w-24">
                         {item.product.image_url ? (
                           <img
                             src={resolveMediaUrl(item.product.image_url)}
@@ -89,12 +89,12 @@ export default function Cart() {
                         )}
                       </div>
 
-                      <div className="flex-1">
-                        <div className="flex justify-between items-start mb-2">
-                          <div>
-                            <h3 className="font-bold text-lg">{item.product.name}</h3>
+                      <div className="min-w-0 flex-1">
+                        <div className="mb-2 flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <h3 className="break-words text-base font-bold sm:text-lg">{item.product.name}</h3>
                             {item.customizationSummary && (
-                              <p className="text-sm text-gray-600 mt-1">
+                              <p className="mt-1 break-words text-sm text-gray-600">
                                 {item.customizationSummary}
                               </p>
                             )}
@@ -112,26 +112,26 @@ export default function Cart() {
                           </Button>
                         </div>
 
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                           <Button
                             size="icon"
                             variant="outline"
                             onClick={() => updateQuantity(item.product.id, item.quantity - 1, item.customization)}
-                            className="rounded-xl border-amber-400 text-amber-600 hover:bg-amber-50 h-8 w-8"
+                            className="h-11 w-11 rounded-xl border-amber-400 text-amber-600 hover:bg-amber-50 sm:h-8 sm:w-8"
                           >
                             <Minus className="w-3 h-3" />
                           </Button>
-                          <span className="text-lg font-bold w-8 text-center">
+                          <span className="w-8 text-center text-lg font-bold">
                             {item.quantity}
                           </span>
                           <Button
                             size="icon"
                             onClick={() => updateQuantity(item.product.id, item.quantity + 1, item.customization)}
-                            className="rounded-xl bg-gradient-to-r from-yellow-400 to-amber-600 text-white h-8 w-8"
+                            className="h-11 w-11 rounded-xl bg-gradient-to-r from-yellow-400 to-amber-600 text-white sm:h-8 sm:w-8"
                           >
                             <Plus className="w-3 h-3" />
                           </Button>
-                          <span className="ml-auto text-lg font-bold">
+                          <span className="w-full text-right text-base font-bold sm:ml-auto sm:w-auto sm:text-lg">
                             {item.subtotal.toLocaleString()} FCFA
                           </span>
                         </div>
@@ -145,14 +145,14 @@ export default function Cart() {
         </div>
 
         <Card className="bg-gradient-to-br from-amber-50 to-yellow-50 border-2 border-amber-200">
-          <CardContent className="p-6">
+          <CardContent className="p-4 sm:p-6">
             <div className="space-y-3 mb-6">
               <div className="flex justify-between text-lg">
                 <span className="text-gray-700">Sous-total</span>
                 <span className="font-semibold">{subtotal.toLocaleString()} FCFA</span>
               </div>
               <div className="border-t-2 border-amber-200 pt-3">
-                <div className="flex justify-between text-2xl font-bold">
+                <div className="flex justify-between gap-3 text-xl font-bold sm:text-2xl">
                   <span>Total</span>
                   <span className="bg-gradient-to-r from-amber-600 to-yellow-500 bg-clip-text text-transparent">
                     {total.toLocaleString()} FCFA

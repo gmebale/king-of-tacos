@@ -74,17 +74,17 @@ export default function RevenueStatsWidget({ orders }) {
       </CardHeader>
       <CardContent className="space-y-4">
         <Tabs value={period} onValueChange={setPeriod}>
-          <TabsList className="grid grid-cols-4 bg-gray-100">
-            <TabsTrigger value="day" className="rounded-lg data-[state=active]:bg-gradient-to-r data-[state=active]:from-green-500 data-[state=active]:to-emerald-600 data-[state=active]:text-white">
+          <TabsList className="grid h-auto grid-cols-2 gap-1 bg-gray-100 sm:grid-cols-4">
+            <TabsTrigger value="day" className="min-w-0 px-2 text-xs sm:px-3 sm:text-sm rounded-lg data-[state=active]:bg-gradient-to-r data-[state=active]:from-green-500 data-[state=active]:to-emerald-600 data-[state=active]:text-white">
               Jour
             </TabsTrigger>
-            <TabsTrigger value="week" className="rounded-lg data-[state=active]:bg-gradient-to-r data-[state=active]:from-green-500 data-[state=active]:to-emerald-600 data-[state=active]:text-white">
+            <TabsTrigger value="week" className="min-w-0 px-2 text-xs sm:px-3 sm:text-sm rounded-lg data-[state=active]:bg-gradient-to-r data-[state=active]:from-green-500 data-[state=active]:to-emerald-600 data-[state=active]:text-white">
               Semaine
             </TabsTrigger>
-            <TabsTrigger value="month" className="rounded-lg data-[state=active]:bg-gradient-to-r data-[state=active]:from-green-500 data-[state=active]:to-emerald-600 data-[state=active]:text-white">
+            <TabsTrigger value="month" className="min-w-0 px-2 text-xs sm:px-3 sm:text-sm rounded-lg data-[state=active]:bg-gradient-to-r data-[state=active]:from-green-500 data-[state=active]:to-emerald-600 data-[state=active]:text-white">
               Mois
             </TabsTrigger>
-            <TabsTrigger value="year" className="rounded-lg data-[state=active]:bg-gradient-to-r data-[state=active]:from-green-500 data-[state=active]:to-emerald-600 data-[state=active]:text-white">
+            <TabsTrigger value="year" className="min-w-0 px-2 text-xs sm:px-3 sm:text-sm rounded-lg data-[state=active]:bg-gradient-to-r data-[state=active]:from-green-500 data-[state=active]:to-emerald-600 data-[state=active]:text-white">
               Année
             </TabsTrigger>
           </TabsList>

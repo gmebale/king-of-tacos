@@ -92,7 +92,7 @@ export default function Layout({ children, currentPageName }) {
 
   if (isAdminPage) {
     return (
-      <div className="flex h-screen bg-gray-50">
+      <div className="flex h-screen h-[100dvh] bg-gray-50">
         <style>{`
           :root {
             --king-gold: #D4AF37;
@@ -182,7 +182,7 @@ export default function Layout({ children, currentPageName }) {
 
       {/* Desktop Header */}
       <header className="hidden md:block sticky top-0 z-50 bg-white/90 backdrop-blur-lg border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-6 py-4">
+        <div className="w-full px-6 py-4">
           <div className="flex items-center justify-between">
             <Link to={createPageUrl("Home")} className="flex items-center gap-3">
               <div className="w-12 h-12 bg-gradient-to-br from-yellow-400 to-amber-600 rounded-2xl flex items-center justify-center shadow-lg">
@@ -230,19 +230,19 @@ export default function Layout({ children, currentPageName }) {
 
       {/* Mobile Bottom Navigation */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 safe-area-pb">
-        <div className="flex items-center justify-around px-2 py-3">
+        <div className="flex items-center px-2 py-3">
           {clientNavItems.map((item) => {
             const isActive = location.pathname === createPageUrl(item.path);
             return (
               <Link
                 key={item.path}
                 to={createPageUrl(item.path)}
-                className={`relative flex flex-col items-center gap-1 px-4 py-2 rounded-xl transition-all duration-200 ${
+                className={`relative flex min-w-0 flex-1 flex-col items-center gap-1 px-0.5 py-2 rounded-xl transition-all duration-200 ${
                   isActive ? 'text-amber-600' : 'text-gray-500'
                 }`}
               >
                 <item.icon className={`w-6 h-6 ${isActive ? 'scale-110' : ''}`} />
-                <span className="text-xs font-medium">{item.name}</span>
+                <span className="whitespace-nowrap text-[10px] font-medium sm:text-xs">{item.name}</span>
                 {item.badge > 0 && (
                   <span className="absolute top-0 right-2 w-4 h-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-bold">
                     {item.badge}
@@ -255,12 +255,12 @@ export default function Layout({ children, currentPageName }) {
       </nav>
 
       {/* Main Content */}
-      <main className="pb-20 md:pb-0">
+      <main className="pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-0">
         {children}
       </main>
 
-      <footer className="border-t border-amber-100 bg-white px-6 py-8 text-sm text-gray-600">
-        <div className="mx-auto flex max-w-7xl flex-col gap-5 md:flex-row md:items-center md:justify-between">
+      <footer className="border-t border-amber-100 bg-white px-6 pt-8 pb-[calc(6rem+env(safe-area-inset-bottom))] text-sm text-gray-600 md:pb-8">
+        <div className="flex w-full flex-col gap-5 md:flex-row md:items-center md:justify-between">
           <div>
             <p className="font-semibold text-gray-900">King Of Tacos</p>
             <p className="mt-1">Restaurant · Gabon</p>

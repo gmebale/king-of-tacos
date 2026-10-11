@@ -274,7 +274,7 @@ export default function AdminFinance() {
         {profitSummary?.taxBreakdown?.length > 0 && (
           <Card className="mt-5">
             <CardHeader><CardTitle className="text-base">Taxes collectées par taux</CardTitle></CardHeader>
-            <CardContent><Table><TableHeader><TableRow><TableHead>Taxe</TableHead><TableHead className="text-right">Taux</TableHead><TableHead className="text-right">Montant</TableHead></TableRow></TableHeader><TableBody>
+            <CardContent><Table className="min-w-[560px]"><TableHeader><TableRow><TableHead>Taxe</TableHead><TableHead className="text-right">Taux</TableHead><TableHead className="text-right">Montant</TableHead></TableRow></TableHeader><TableBody>
               {profitSummary.taxBreakdown.map(tax => <TableRow key={tax.id}><TableCell>{tax.name}</TableCell><TableCell className="text-right">{tax.rate.toFixed(2)} %</TableCell><TableCell className="text-right">{Number(tax.amount).toLocaleString()} FCFA</TableCell></TableRow>)}
             </TableBody></Table></CardContent>
           </Card>
@@ -293,7 +293,7 @@ export default function AdminFinance() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <Table>
+            <Table className="min-w-[560px]">
               <TableHeader>
                 <TableRow>
                   <TableHead>Produit</TableHead>
@@ -323,7 +323,7 @@ export default function AdminFinance() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <Table>
+            <Table className="min-w-[760px]">
               <TableHeader>
                 <TableRow>
                   <TableHead>Client</TableHead>
@@ -366,7 +366,7 @@ export default function AdminFinance() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <Table>
+            <Table className="min-w-[760px]">
               <TableHeader>
                 <TableRow>
                   <TableHead>Lieu</TableHead>
@@ -398,7 +398,7 @@ export default function AdminFinance() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <Table>
+            <Table className="min-w-[760px]">
               <TableHeader>
                 <TableRow>
                   <TableHead>Serveur</TableHead>

@@ -15,7 +15,7 @@ export default function CartSummary({ cartTotal, cartCount, onCheckout }) {
         dragElastic={0}
         initial={{ opacity: 0, scale: 0.8 }}
         animate={{ opacity: 1, scale: 1 }}
-        className="pointer-events-auto absolute bottom-5 right-5 touch-none"
+        className="pointer-events-auto absolute bottom-[calc(6.5rem+env(safe-area-inset-bottom))] right-4 touch-none md:bottom-5 md:right-5"
       >
         <Button
           onClick={onCheckout}

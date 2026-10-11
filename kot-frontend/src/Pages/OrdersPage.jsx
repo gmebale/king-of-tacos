@@ -256,14 +256,14 @@ export default function OrdersPage() {
       </motion.div>
 
       <Tabs defaultValue="active" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="active">
+        <TabsList className="flex w-full max-w-full justify-start overflow-x-auto scrollbar-hide sm:grid sm:grid-cols-3 sm:overflow-visible">
+          <TabsTrigger value="active" className="shrink-0 px-2 text-xs sm:w-full sm:px-3 sm:text-sm">
             En cours ({activeOrders.length})
           </TabsTrigger>
-          <TabsTrigger value="completed">
+          <TabsTrigger value="completed" className="shrink-0 px-2 text-xs sm:w-full sm:px-3 sm:text-sm">
             Terminées ({completedOrders.length})
           </TabsTrigger>
-          <TabsTrigger value="cancelled">
+          <TabsTrigger value="cancelled" className="shrink-0 px-2 text-xs sm:w-full sm:px-3 sm:text-sm">
             Annulées ({cancelledOrders.length})
           </TabsTrigger>
         </TabsList>

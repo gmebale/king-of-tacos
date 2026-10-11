@@ -303,7 +303,7 @@ export default function AdminStaff() {
   };
 
   return (
-    <div className="p-6 md:p-8">
+    <div className="p-4 sm:p-6 md:p-8">
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -326,7 +326,7 @@ export default function AdminStaff() {
             Nouvel Utilisateur
           </Button>
           <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-            <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
+            <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[500px]">
               <DialogHeader>
                 <DialogTitle>Créer un nouvel utilisateur</DialogTitle>
               </DialogHeader>
@@ -401,7 +401,7 @@ export default function AdminStaff() {
 
                 <div className="pt-2">
                   <Label>Permissions d’accès</Label>
-                  <div className="grid grid-cols-2 gap-3 mt-2">
+                  <div className="mt-2 grid gap-2 sm:grid-cols-2 sm:gap-3">
                     {PAGE_PERMISSIONS.map((permission) => (
                       <div key={permission.key} className="flex items-center justify-between rounded-lg border p-2">
                         <span className="text-sm text-gray-700">{permission.label}</span>
@@ -454,10 +454,10 @@ export default function AdminStaff() {
           />
         </div>
         <div className="flex flex-wrap gap-4">
-          <div className="flex items-center gap-2">
-            <Filter className="w-5 h-5 text-gray-500" />
-            <Select value={roleFilter} onValueChange={setRoleFilter}>
-              <SelectTrigger className="w-[150px]">
+          <div className="flex w-full items-center gap-2 sm:w-auto">
+            <Filter className="w-5 h-5 shrink-0 text-gray-500" />
+            <Select className="min-w-0 flex-1 sm:flex-none" value={roleFilter} onValueChange={setRoleFilter}>
+              <SelectTrigger className="w-full sm:w-[150px]">
                 <SelectValue placeholder="Tous les rôles" />
               </SelectTrigger>
               <SelectContent>
@@ -470,9 +470,9 @@ export default function AdminStaff() {
               </SelectContent>
             </Select>
           </div>
-          <div className="flex items-center gap-2">
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-[150px]">
+          <div className="flex w-full items-center gap-2 sm:w-auto">
+            <Select className="min-w-0 flex-1 sm:flex-none" value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-full sm:w-[150px]">
                 <SelectValue placeholder="Tous les statuts" />
               </SelectTrigger>
               <SelectContent>
@@ -605,7 +605,7 @@ export default function AdminStaff() {
 
       {/* Edit Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[500px]">
           <DialogHeader>
             <DialogTitle>Modifier l'utilisateur</DialogTitle>
           </DialogHeader>
@@ -667,7 +667,7 @@ export default function AdminStaff() {
 
               <div className="pt-2">
                 <Label>Permissions d’accès</Label>
-                <div className="grid grid-cols-2 gap-3 mt-2">
+                <div className="mt-2 grid gap-2 sm:grid-cols-2 sm:gap-3">
                   {PAGE_PERMISSIONS.map((permission) => (
                     <div key={permission.key} className="flex items-center justify-between rounded-lg border p-2">
                       <span className="text-sm text-gray-700">{permission.label}</span>
