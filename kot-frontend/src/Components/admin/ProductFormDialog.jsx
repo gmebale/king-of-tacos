@@ -26,7 +26,7 @@ export default function ProductFormDialog({ open, onOpenChange, product, onSave 
     description: "",
     price: 0,
     type: 'simple',
-    customization: { isConfigurable: false, optionGroups: [], recommendations: [] },
+    customization: { isConfigurable: false, optionGroups: [], recommendations: [], imagePresentation: { x: 50, y: 50, scale: 100 } },
     discount_percentage: 0,
     category: "",
     image: "",
@@ -56,7 +56,7 @@ export default function ProductFormDialog({ open, onOpenChange, product, onSave 
         ...product,
         category: typeof product.category === 'object' ? product.category?.name || '' : product.category || '',
         type: allowedTypes.includes(product.type) ? product.type : product.customization?.isConfigurable || product.options?.length ? 'configurable' : 'simple',
-        customization: product.customization || { isConfigurable: false, optionGroups: [], recommendations: [] },
+        customization: { ...(product.customization || { isConfigurable: false, optionGroups: [], recommendations: [] }), imagePresentation: product.customization?.imagePresentation || { x: 50, y: 50, scale: 100 } },
         tax_rate_ids: (product.taxRates || []).map(entry => entry.tax_rate_id)
       });
       setImagePreview(product.image);
@@ -86,7 +86,7 @@ export default function ProductFormDialog({ open, onOpenChange, product, onSave 
         description: "",
         price: 0,
         type: 'simple',
-        customization: { isConfigurable: false, optionGroups: [], recommendations: [] },
+        customization: { isConfigurable: false, optionGroups: [], recommendations: [], imagePresentation: { x: 50, y: 50, scale: 100 } },
         discount_percentage: 0,
         category: categories.length > 0 ? categories[0].name : "",
         image: "",
@@ -160,7 +160,8 @@ export default function ProductFormDialog({ open, onOpenChange, product, onSave 
                 <img
                   src={resolveMediaUrl(imagePreview)}
                   alt="Preview"
-                  className="w-full h-48 object-cover"
+                  className="h-48 w-full object-cover"
+                  style={{ objectPosition: `${formData.customization?.imagePresentation?.x ?? 50}% ${formData.customization?.imagePresentation?.y ?? 50}%`, transform: `scale(${(formData.customization?.imagePresentation?.scale ?? 100) / 100})` }}
                 />
                 <Button
                   type="button"
@@ -195,6 +196,31 @@ export default function ProductFormDialog({ open, onOpenChange, product, onSave 
               </label>
             )}
           </div>
+
+          {imagePreview && (
+            <div className="grid gap-4 rounded-lg border bg-gray-50 p-3 sm:grid-cols-3">
+              {[
+                ['x', 'Cadrage horizontal', 0, 100],
+                ['y', 'Cadrage vertical', 0, 100],
+                ['scale', 'Zoom', 100, 200]
+              ].map(([field, label, min, max]) => {
+                const presentation = formData.customization?.imagePresentation || { x: 50, y: 50, scale: 100 };
+                return <div key={field} className="space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <Label htmlFor={`product-image-${field}`}>{label}</Label>
+                    <span className="text-xs font-semibold text-amber-700">{presentation[field]}%</span>
+                  </div>
+                  <Input id={`product-image-${field}`} type="range" min={min} max={max} step="1" value={presentation[field]} onChange={event => setFormData(current => ({
+                    ...current,
+                    customization: {
+                      ...(current.customization || {}),
+                      imagePresentation: { ...presentation, [field]: Number(event.target.value) }
+                    }
+                  }))} />
+                </div>;
+              })}
+            </div>
+          )}
 
           <div className="grid md:grid-cols-2 gap-4">
             <div className="space-y-2">
@@ -262,7 +288,10 @@ export default function ProductFormDialog({ open, onOpenChange, product, onSave 
           {(productKind === 'configurable' || productKind === 'combo') && (
             <ProductConfigurationEditor
               value={formData.customization}
-              onChange={customization => setFormData(current => ({ ...current, customization }))}
+              onChange={customization => setFormData(current => ({
+                ...current,
+                customization: { ...customization, imagePresentation: current.customization?.imagePresentation || { x: 50, y: 50, scale: 100 } }
+              }))}
               products={catalogProducts}
               currentProductId={product?.id}
             />

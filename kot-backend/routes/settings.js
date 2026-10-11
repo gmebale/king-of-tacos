@@ -231,13 +231,19 @@ router.patch('/tax-rates/:id', authenticateToken, requireRole(['admin']), async 
 // Get restaurant settings
 router.get('/homepage', async (_req, res) => {
   try {
-    const rows = await prisma.settings.findMany({ where: { key: { in: ['hero_media_url', 'hero_media_type', 'hero_overlay_opacity'] } } });
+    const rows = await prisma.settings.findMany({ where: { key: { in: ['hero_media_url', 'hero_media_type', 'hero_overlay_opacity', 'hero_media_position_x', 'hero_media_position_y', 'hero_media_image_scale'] } } });
     const settings = mapSettings(rows);
     const overlayOpacity = Number(settings.hero_overlay_opacity);
+    const positionX = Number(settings.hero_media_position_x);
+    const positionY = Number(settings.hero_media_position_y);
+    const imageScale = Number(settings.hero_media_image_scale);
     res.json({
       media_url: settings.hero_media_url || '',
       media_type: settings.hero_media_type || '',
-      overlay_opacity: Number.isInteger(overlayOpacity) && overlayOpacity >= 0 && overlayOpacity <= 100 ? overlayOpacity : 85
+      overlay_opacity: Number.isInteger(overlayOpacity) && overlayOpacity >= 0 && overlayOpacity <= 100 ? overlayOpacity : 85,
+      position_x: Number.isInteger(positionX) && positionX >= 0 && positionX <= 100 ? positionX : 50,
+      position_y: Number.isInteger(positionY) && positionY >= 0 && positionY <= 100 ? positionY : 50,
+      image_scale: Number.isInteger(imageScale) && imageScale >= 100 && imageScale <= 200 ? imageScale : 100
     });
   } catch (error) {
     console.error('Get homepage settings error:', error);
@@ -250,15 +256,24 @@ router.put('/homepage', authenticateToken, requirePagePermission('settings'), as
     const mediaUrl = typeof req.body?.media_url === 'string' ? req.body.media_url.trim() : '';
     const mediaType = typeof req.body?.media_type === 'string' ? req.body.media_type : '';
     const overlayOpacity = Number(req.body?.overlay_opacity);
+    const positionX = Number(req.body?.position_x ?? 50);
+    const positionY = Number(req.body?.position_y ?? 50);
+    const imageScale = Number(req.body?.image_scale ?? 100);
+    if (!Number.isInteger(positionX) || positionX < 0 || positionX > 100 || !Number.isInteger(positionY) || positionY < 0 || positionY > 100 || !Number.isInteger(imageScale) || imageScale < 100 || imageScale > 200) {
+      return res.status(400).json({ message: 'Le cadrage doit être compris entre 0 et 100 %, et le zoom entre 100 et 200 %.' });
+    }
     if (!Number.isInteger(overlayOpacity) || overlayOpacity < 0 || overlayOpacity > 100) {
       return res.status(400).json({ message: 'L’opacité doit être un pourcentage entre 0 et 100.' });
     }
     if (!mediaUrl) {
       await prisma.$transaction([
         prisma.settings.deleteMany({ where: { key: { in: ['hero_media_url', 'hero_media_type'] } } }),
-        prisma.settings.upsert({ where: { key: 'hero_overlay_opacity' }, update: { value: String(overlayOpacity) }, create: { key: 'hero_overlay_opacity', value: String(overlayOpacity) } })
+        prisma.settings.upsert({ where: { key: 'hero_overlay_opacity' }, update: { value: String(overlayOpacity) }, create: { key: 'hero_overlay_opacity', value: String(overlayOpacity) } }),
+        prisma.settings.upsert({ where: { key: 'hero_media_position_x' }, update: { value: String(positionX) }, create: { key: 'hero_media_position_x', value: String(positionX) } }),
+        prisma.settings.upsert({ where: { key: 'hero_media_position_y' }, update: { value: String(positionY) }, create: { key: 'hero_media_position_y', value: String(positionY) } }),
+        prisma.settings.upsert({ where: { key: 'hero_media_image_scale' }, update: { value: String(imageScale) }, create: { key: 'hero_media_image_scale', value: String(imageScale) } })
       ]);
-      return res.json({ media_url: '', media_type: '', overlay_opacity: overlayOpacity });
+      return res.json({ media_url: '', media_type: '', overlay_opacity: overlayOpacity, position_x: positionX, position_y: positionY, image_scale: imageScale });
     }
     if (!['image', 'video'].includes(mediaType) || mediaUrl.length > 2048) {
       return res.status(400).json({ message: 'Média de bannière invalide.' });
@@ -280,9 +295,12 @@ router.put('/homepage', authenticateToken, requirePagePermission('settings'), as
     await prisma.$transaction([
       prisma.settings.upsert({ where: { key: 'hero_media_url' }, update: { value: normalizedMediaUrl }, create: { key: 'hero_media_url', value: normalizedMediaUrl } }),
       prisma.settings.upsert({ where: { key: 'hero_media_type' }, update: { value: mediaType }, create: { key: 'hero_media_type', value: mediaType } }),
-      prisma.settings.upsert({ where: { key: 'hero_overlay_opacity' }, update: { value: String(overlayOpacity) }, create: { key: 'hero_overlay_opacity', value: String(overlayOpacity) } })
+      prisma.settings.upsert({ where: { key: 'hero_overlay_opacity' }, update: { value: String(overlayOpacity) }, create: { key: 'hero_overlay_opacity', value: String(overlayOpacity) } }),
+      prisma.settings.upsert({ where: { key: 'hero_media_position_x' }, update: { value: String(positionX) }, create: { key: 'hero_media_position_x', value: String(positionX) } }),
+      prisma.settings.upsert({ where: { key: 'hero_media_position_y' }, update: { value: String(positionY) }, create: { key: 'hero_media_position_y', value: String(positionY) } }),
+      prisma.settings.upsert({ where: { key: 'hero_media_image_scale' }, update: { value: String(imageScale) }, create: { key: 'hero_media_image_scale', value: String(imageScale) } })
     ]);
-    res.json({ media_url: normalizedMediaUrl, media_type: mediaType, overlay_opacity: overlayOpacity });
+    res.json({ media_url: normalizedMediaUrl, media_type: mediaType, overlay_opacity: overlayOpacity, position_x: positionX, position_y: positionY, image_scale: imageScale });
   } catch (error) {
     console.error('Update homepage settings error:', error);
     res.status(500).json({ message: 'Impossible de sauvegarder la bannière' });

@@ -12,7 +12,7 @@ import { RadioGroup, RadioGroupItem } from "../ui/radio-group";
 import { Checkbox } from "../ui/checkbox";
 import { Badge } from "../ui/badge";
 import { motion } from "framer-motion";
-import { Check, Plus, Minus } from "lucide-react";
+import { Check, Plus, Minus, UtensilsCrossed } from "lucide-react";
 
 export default function TacosCustomizationDialog({ open, onOpenChange, product, onConfirm }) {
   const [customization, setCustomization] = useState({
@@ -52,14 +52,14 @@ export default function TacosCustomizationDialog({ open, onOpenChange, product, 
   ];
 
   const sauces = [
-    { id: "algerienne", name: "Algérienne", icon: "🌶️" },
-    { id: "blanche", name: "Blanche", icon: "🥛" },
-    { id: "harissa", name: "Harissa", icon: "🔥" },
-    { id: "ketchup", name: "Ketchup", icon: "🍅" },
-    { id: "mayonnaise", name: "Mayonnaise", icon: "🥚" },
-    { id: "bbq", name: "BBQ", icon: "🍖" },
-    { id: "samourai", name: "Samouraï", icon: "⚔️" },
-    { id: "curry", name: "Curry", icon: "🍛" }
+    { id: "algerienne", name: "Algérienne" },
+    { id: "blanche", name: "Blanche" },
+    { id: "harissa", name: "Harissa" },
+    { id: "ketchup", name: "Ketchup" },
+    { id: "mayonnaise", name: "Mayonnaise" },
+    { id: "bbq", name: "BBQ" },
+    { id: "samourai", name: "Samouraï" },
+    { id: "curry", name: "Curry" }
   ];
 
   useEffect(() => {
@@ -167,7 +167,7 @@ export default function TacosCustomizationDialog({ open, onOpenChange, product, 
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-2xl font-bold flex items-center gap-2">
-            <span>🌮</span> Personnalisez votre {product?.name}
+            <UtensilsCrossed className="h-5 w-5 text-amber-600" /> Personnalisez votre {product?.name}
           </DialogTitle>
         </DialogHeader>
 

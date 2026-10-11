@@ -11,12 +11,12 @@ import { resolveMediaUrl } from "../utils/media";
 
 export default function Home() {
   const { isAuthenticated } = useAuthContext();
-  const [heroMedia, setHeroMedia] = useState({ media_url: '', media_type: '', overlay_opacity: 85 });
+  const [heroMedia, setHeroMedia] = useState({ media_url: '', media_type: '', overlay_opacity: 85, position_x: 50, position_y: 50, image_scale: 100 });
   const [reviews, setReviews] = useState({ data: [], total: 0, average_rating: 0 });
 
   useEffect(() => {
     window.scrollTo(0, 0);
-    api.get('/settings/homepage').then(response => setHeroMedia(response.data)).catch(() => {});
+    api.get('/settings/homepage').then(response => setHeroMedia(current => ({ ...current, ...response.data }))).catch(() => {});
     api.get('/reviews/public').then(response => setReviews(response.data)).catch(() => {});
   }, []);
 
@@ -41,7 +41,7 @@ export default function Home() {
   return (
     <div className="min-h-screen">
       {/* Hero Section */}
-      <section className="relative overflow-hidden bg-gradient-to-br from-gray-950 via-gray-900 to-amber-950">
+      <section className="relative min-h-[calc(100svh-6rem-env(safe-area-inset-bottom))] overflow-hidden bg-gradient-to-br from-gray-950 via-gray-900 to-amber-950 md:min-h-0">
         {heroMedia.media_url && (heroMedia.media_type === 'video' ? (
           <video
             key={heroMedia.media_url}
@@ -53,12 +53,14 @@ export default function Home() {
             controls
             aria-label="Vidéo de présentation du restaurant"
             className="absolute inset-0 h-full w-full object-cover"
+            style={{ objectPosition: `${heroMedia.position_x ?? 50}% ${heroMedia.position_y ?? 50}%`, transform: `scale(${Number(heroMedia.image_scale || 100) / 100})` }}
           />
         ) : (
           <img
             src={resolveMediaUrl(heroMedia.media_url)}
             alt=""
             className="absolute inset-0 h-full w-full object-cover"
+            style={{ objectPosition: `${heroMedia.position_x ?? 50}% ${heroMedia.position_y ?? 50}%`, transform: `scale(${Number(heroMedia.image_scale || 100) / 100})` }}
             onError={(event) => { event.currentTarget.style.display = 'none'; }}
           />
         ))}
@@ -67,7 +69,7 @@ export default function Home() {
           style={{ opacity: Math.max(0, Math.min(100, Number(heroMedia.overlay_opacity ?? 85))) / 100 }}
         />
         
-        <div className="relative max-w-7xl mx-auto px-6 py-20 md:py-32">
+        <div className="relative mx-auto flex min-h-[calc(100svh-6rem-env(safe-area-inset-bottom))] w-full max-w-7xl items-center justify-center px-6 py-10 sm:py-16 md:min-h-0 md:py-32">
           <motion.div
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}

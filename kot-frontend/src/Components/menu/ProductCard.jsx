@@ -9,12 +9,16 @@ import { Product } from '../../Entities/Product';
 import { toast } from 'react-hot-toast';
 import { resolveMediaUrl } from '../../utils/media';
 
-export default function ProductCard({ product, onAddToCart, cartItem, onUpdateQuantity }) {
+export default function ProductCard({ product, onAddToCart, cartItem, onUpdateQuantity, cleanText = value => value }) {
   const [showCustomization, setShowCustomization] = useState(false);
   const [productOptions, setProductOptions] = useState(null);
   const [recommendations, setRecommendations] = useState([]);
   const [loadingOptions, setLoadingOptions] = useState(false);
   const quantity = cartItem?.quantity || 0;
+  const isUnavailable = product.available === false;
+  const imagePresentation = product.customization?.imagePresentation || {};
+  const imagePosition = `${imagePresentation.x ?? 50}% ${imagePresentation.y ?? 50}%`;
+  const imageScale = Math.max(100, Math.min(200, Number(imagePresentation.scale) || 100));
   const hasDiscount = product.discount_percentage > 0;
   const finalPrice = hasDiscount
     ? product.price * (1 - product.discount_percentage / 100)
@@ -56,18 +60,19 @@ export default function ProductCard({ product, onAddToCart, cartItem, onUpdateQu
   return (
     <>
       <motion.div
-        initial={{ opacity: 0, scale: 0.9 }}
+        initial={{ opacity: 0, scale: 0.98 }}
         animate={{ opacity: 1, scale: 1 }}
         whileHover={{ y: -5 }}
         transition={{ duration: 0.3 }}
       >
-        <Card className="overflow-hidden border-2 hover:border-amber-400 transition-all duration-300 hover:shadow-2xl group">
-          <div className="relative h-48 bg-gradient-to-br from-amber-50 to-yellow-100 overflow-hidden">
+        <Card className={`group flex flex-row overflow-hidden rounded-none border-x-0 border-t-0 border-b border-gray-200 shadow-none transition-all duration-300 md:flex-col md:rounded-xl md:border-2 md:hover:border-amber-400 md:hover:shadow-xl ${isUnavailable ? 'bg-gray-50' : 'bg-white'}`}>
+          <div className="relative order-2 h-24 w-24 flex-none self-center overflow-hidden bg-gradient-to-br from-amber-50 to-yellow-100 sm:h-28 sm:w-28 md:order-none md:h-48 md:w-full md:self-auto">
             {product.image ? (
               <img
                 src={resolveMediaUrl(product.image)}
-                alt={product.name}
-                className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                alt={cleanText(product.name)}
+                className="h-full w-full object-cover transition-transform duration-300"
+                style={{ objectPosition: imagePosition, transform: `scale(${imageScale / 100})` }}
               />
             ) : (
               <div className="w-full h-full flex items-center justify-center">
@@ -75,8 +80,12 @@ export default function ProductCard({ product, onAddToCart, cartItem, onUpdateQu
               </div>
             )}
             
+            {isUnavailable && <>
+              <div className="absolute inset-0 bg-white/50" />
+              <Badge className="absolute inset-x-1 bottom-1 justify-center bg-gray-800 px-1 text-[9px] text-white sm:inset-x-auto sm:right-2 sm:bottom-2 sm:px-2 sm:text-xs">Indisponible</Badge>
+            </>}
             {/* Badges */}
-            <div className="absolute top-3 right-3 flex flex-col gap-2">
+            <div className="absolute right-1 top-1 flex flex-col gap-1 sm:right-3 sm:top-3 sm:gap-2">
               {hasDiscount && (
                 <motion.div
                   initial={{ scale: 0 }}
@@ -88,7 +97,7 @@ export default function ProductCard({ product, onAddToCart, cartItem, onUpdateQu
                   </Badge>
                 </motion.div>
               )}
-              {product.stock < 5 && (
+              {!isUnavailable && product.stock < 5 && (
                 <Badge className="bg-orange-500 text-white shadow-lg">
                   Stock faible
                 </Badge>
@@ -96,25 +105,25 @@ export default function ProductCard({ product, onAddToCart, cartItem, onUpdateQu
             </div>
           </div>
 
-          <CardContent className="p-4 sm:p-6">
-            <div className="mb-4">
-              <h3 className="mb-2 break-words text-lg font-bold text-gray-900 sm:text-xl">
-                {product.name}
+          <CardContent className="flex min-w-0 flex-1 flex-col justify-center p-3 sm:p-4 md:flex-none md:p-6">
+            <div className="mb-2 min-w-0 md:mb-4">
+              <h3 className="mb-1 break-words text-base font-bold text-gray-900 sm:text-lg md:mb-2 md:text-xl">
+                {cleanText(product.name)}
               </h3>
               {product.description && (
-                <p className="text-gray-600 text-sm line-clamp-2">
-                  {product.description}
+                <p className="line-clamp-2 text-xs text-gray-600 sm:text-sm">
+                  {cleanText(product.description)}
                 </p>
               )}
               {product.loyalty_points > 0 && <p className="mt-2 flex items-center gap-1 text-sm font-medium text-amber-700"><Star className="h-4 w-4" />{product.loyalty_points} point{product.loyalty_points > 1 ? 's' : ''} fidélité par unité pour les clients inscrits</p>}
             </div>
 
-            <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 md:gap-3">
               <div>
                 {hasDiscount ? (
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="text-xl font-bold text-green-600 sm:text-2xl">
+                      <span className="text-base font-bold text-green-600 sm:text-lg md:text-2xl">
                         {Math.round(finalPrice).toLocaleString()} FCFA
                       </span>
                     </div>
@@ -123,17 +132,19 @@ export default function ProductCard({ product, onAddToCart, cartItem, onUpdateQu
                     </span>
                   </div>
                 ) : (
-                  <span className="text-xl font-bold bg-gradient-to-r from-amber-600 to-yellow-500 bg-clip-text text-transparent sm:text-2xl">
+                  <span className="text-base font-bold bg-gradient-to-r from-amber-600 to-yellow-500 bg-clip-text text-transparent sm:text-lg md:text-2xl">
                     {(product.price ).toLocaleString()} FCFA
                   </span>
                 )}
               </div>
 
-              {isConfigurable ? (
+              {isUnavailable ? (
+                <span className="text-xs font-semibold text-gray-500 md:hidden">Indisponible</span>
+              ) : isConfigurable ? (
                 <div className="flex flex-col items-end gap-1">
                   <Button
                     onClick={handleAddClick}
-                    disabled={loadingOptions}
+                    disabled={loadingOptions || isUnavailable}
                     className="max-w-full rounded-xl bg-gradient-to-r from-yellow-400 to-amber-600 px-3 text-sm text-white shadow-lg hover:from-yellow-500 hover:to-amber-700 sm:px-4 sm:text-base"
                   >
                     <Plus className="w-4 h-4 mr-1" />
@@ -165,6 +176,7 @@ export default function ProductCard({ product, onAddToCart, cartItem, onUpdateQu
                   <Button
                     size="icon"
                     onClick={() => onUpdateQuantity(product.id, 1)}
+                    disabled={isUnavailable}
                     className="rounded-xl bg-gradient-to-r from-yellow-400 to-amber-600 text-white"
                   >
                     <Plus className="w-4 h-4" />

@@ -6,7 +6,6 @@ import { Button } from "../Components/ui/button";
 import { Input } from "../Components/ui/input";
 import { Badge } from "../Components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "../Components/ui/tabs";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../Components/ui/select";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "../utils";
 
@@ -41,7 +40,7 @@ export default function Menu() {
         Product.list(),
         Product.getCategories()
       ]);
-      setProducts(productsData.filter(p => p.available && p.category?.is_menu_visible !== false));
+      setProducts(productsData.filter(p => p.category?.is_menu_visible !== false));
       setCategories(categoriesData.filter(cat => cat.is_menu_visible !== false));
     } catch (err) {
       setError('Erreur de chargement des produits. Vérifiez la connexion au serveur.');
@@ -128,6 +127,7 @@ export default function Menu() {
     return sum + (price * item.quantity);
   }, 0);
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
+  const cleanMenuText = value => String(value || '').replace(/[\p{Extended_Pictographic}\uFE0F]/gu, '').replace(/\s+/g, ' ').trim();
 
   return (
     <div className="min-h-screen pb-32">
@@ -166,48 +166,30 @@ export default function Menu() {
             />
           </div>
 
-          {/* Category Filter - Desktop */}
-          <div className="hidden md:block">
+          <div className="sticky top-0 z-30 -mx-4 bg-amber-50/95 px-4 py-2 backdrop-blur sm:-mx-6 sm:px-6 md:static md:mx-0 md:bg-transparent md:p-0">
             <Tabs value={category} onValueChange={setCategory}>
-              <TabsList className="bg-white border-2 border-gray-200 flex-wrap h-auto p-1">
-                <TabsTrigger value="all" className="rounded-xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-yellow-400 data-[state=active]:to-amber-500 data-[state=active]:text-white px-4 py-2">
+              <TabsList className="flex h-auto w-max min-w-full justify-start gap-1 overflow-x-auto rounded-xl border border-gray-200 bg-white p-1 scrollbar-hide md:w-full md:flex-wrap md:overflow-visible">
+                <TabsTrigger value="all" className="shrink-0 rounded-lg px-4 py-2 data-[state=active]:bg-gradient-to-r data-[state=active]:from-yellow-400 data-[state=active]:to-amber-500 data-[state=active]:text-white">
                   Tous
                 </TabsTrigger>
                 {categories.map(cat => (
-                  <TabsTrigger 
+                  <TabsTrigger
                     key={cat.id}
-                    value={cat.name} 
-                    className="rounded-xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-yellow-400 data-[state=active]:to-amber-500 data-[state=active]:text-white px-4 py-2"
+                    value={cat.name}
+                    className="shrink-0 rounded-lg px-4 py-2 data-[state=active]:bg-gradient-to-r data-[state=active]:from-yellow-400 data-[state=active]:to-amber-500 data-[state=active]:text-white"
                   >
-                    {cat.displayName || cat.name}
+                    {cleanMenuText(cat.displayName || cat.name)}
                   </TabsTrigger>
                 ))}
               </TabsList>
             </Tabs>
-          </div>
-
-          {/* Category Filter - Mobile */}
-          <div className="md:hidden">
-            <Select value={category} onValueChange={setCategory}>
-              <SelectTrigger className="w-full h-12 rounded-2xl border-2 focus:border-amber-400 bg-white">
-                <SelectValue placeholder="Sélectionner une catégorie" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tous</SelectItem>
-                {categories.map(cat => (
-                  <SelectItem key={cat.id} value={cat.name}>
-                    {cat.displayName || cat.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
           </div>
         </div>
 
         {/* Products Grid */}
         <AnimatePresence mode="wait">
           {isLoading ? (
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 md:gap-6 lg:grid-cols-3">
               {[...Array(6)].map((_, i) => (
                 <div key={i} className="h-80 bg-gray-100 rounded-3xl animate-pulse" />
               ))}
@@ -217,7 +199,7 @@ export default function Menu() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8"
+              className="mb-8 grid grid-cols-1 gap-0 md:grid-cols-2 md:gap-6 lg:grid-cols-3"
             >
               {filteredProducts.map((product) => {
                 // Find cart item for this product, considering customizations
@@ -232,6 +214,7 @@ export default function Menu() {
                     onAddToCart={addToCart}
                     cartItem={cartItem}
                     onUpdateQuantity={updateQuantity}
+                    cleanText={cleanMenuText}
                   />
                 );
               })}

@@ -127,13 +127,13 @@ export default function AdminStock() {
     const categoryName = typeof category === 'string' ? category : category.name;
     
     const labels = {
-      tacos: "🌮 Tacos",
-      burritos: "🌯 Burritos",
-      burger: "🍔 Burgers",
-      boissons: "🥤 Boissons",
-      desserts: "🍰 Desserts",
-      accompagnements: "🍟 Accompagnements",
-      options: "⚙️ Options"
+      tacos: "Tacos",
+      burritos: "Burritos",
+      burger: "Burgers",
+      boissons: "Boissons",
+      desserts: "Desserts",
+      accompagnements: "Accompagnements",
+      options: "Options"
     };
     return labels[categoryName] || (typeof category === 'object' ? category.displayName || category.name : category);
   };

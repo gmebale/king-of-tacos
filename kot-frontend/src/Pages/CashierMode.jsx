@@ -14,7 +14,8 @@ import {
   Unlock,
   Calculator,
   Volume2,
-  VolumeX
+  VolumeX,
+  Printer
 } from "lucide-react";
 import { Button } from "../Components/ui/button";
 import { Badge } from "../Components/ui/badge";
@@ -28,6 +29,64 @@ import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import api from "../services/api.service";
 import { formatCustomizationForDisplay } from "../utils/index";
+
+const escapeReceiptText = value => String(value ?? '').replace(/[&<>"']/g, character => ({
+  '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+}[character]));
+
+const printCashReceipt = order => {
+  const printWindow = window.open('', '_blank', 'width=420,height=720');
+  if (!printWindow) {
+    window.alert('Autorisez les fenêtres surgissantes pour imprimer le ticket.');
+    return;
+  }
+  const code = order.order_code || `KOT-${order.id?.slice(-6) || ''}`;
+  const createdAt = order.created_date ? format(new Date(order.created_date), 'dd/MM/yyyy HH:mm', { locale: fr }) : '';
+  const total = Number(order.total_amount || 0);
+  const lineMarkup = (order.items || []).map(item => {
+    const quantity = Number(item.quantity || 0);
+    const unitPrice = Number(item.price || 0);
+    const customization = item.customizationFormatted || item.customizationSummary || '';
+    return `<div class="item"><div class="item-name">${escapeReceiptText(item.product_name)} × ${quantity}</div>${customization ? `<div class="customization">${escapeReceiptText(customization)}</div>` : ''}<div class="line-total"><span>${unitPrice.toLocaleString('fr-GA')} FCFA / unité</span><strong>${(unitPrice * quantity).toLocaleString('fr-GA')} FCFA</strong></div></div>`;
+  }).join('');
+  const details = [
+    order.customer_name && `Client : ${order.customer_name}`,
+    order.customer_phone && `Tél. : ${order.customer_phone}`,
+    order.table_number && `Table : ${order.table_number}`,
+    order.service_location_name && `Lieu : ${order.service_location_name}`,
+    order.order_type && `Commande : ${order.order_type}`
+  ].filter(Boolean).map(line => `<div>${escapeReceiptText(line)}</div>`).join('');
+
+  printWindow.document.open();
+  printWindow.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Ticket ${escapeReceiptText(code)}</title><style>
+    @page { size: 80mm auto; margin: 3mm; }
+    * { box-sizing: border-box; }
+    body { width: 74mm; margin: 0 auto; color: #111; font: 11px/1.4 Arial, sans-serif; }
+    header { text-align: center; padding-bottom: 8px; border-bottom: 1px dashed #555; }
+    header img { display: block; width: 24mm; height: 18mm; object-fit: contain; margin: 0 auto 4px; }
+    h1 { margin: 0; font-size: 16px; letter-spacing: .4px; }
+    .subtitle { margin-top: 2px; font-size: 10px; letter-spacing: 1px; }
+    .meta { padding: 8px 0; border-bottom: 1px dashed #555; }
+    .items { padding: 4px 0; }
+    .item { padding: 6px 0; border-bottom: 1px dotted #aaa; }
+    .item-name { font-weight: 700; }
+    .customization { padding-left: 5px; font-size: 9px; }
+    .line-total { display: flex; justify-content: space-between; gap: 4px; padding-top: 2px; font-size: 10px; }
+    .total { display: flex; justify-content: space-between; padding: 9px 0; border-top: 1px dashed #555; border-bottom: 1px dashed #555; font-size: 14px; font-weight: 700; }
+    .payment { padding-top: 7px; }
+    footer { padding-top: 14px; text-align: center; font-size: 10px; }
+    @media screen { body { margin: 12px auto; padding: 8px; box-shadow: 0 0 8px #aaa; } }
+  </style></head><body>
+    <header><img src="${window.location.origin}/Images/LOGO-KING-OF-TACOS.jpg" alt="King Of Tacos"><h1>KING OF TACOS</h1><div class="subtitle">TICKET DE CAISSE</div></header>
+    <section class="meta"><div><strong>N° ${escapeReceiptText(code)}</strong></div><div>${escapeReceiptText(createdAt)}</div>${details}</section>
+    <section class="items">${lineMarkup}</section>
+    <div class="total"><span>TOTAL</span><span>${total.toLocaleString('fr-GA')} FCFA</span></div>
+    <div class="payment">Paiement : ${escapeReceiptText(order.payment_method || 'Non renseigné')}<br>État : ${escapeReceiptText(order.payment_status || 'en attente')}</div>
+    <footer>Merci pour votre commande !<br>À très bientôt.</footer>
+    <script>window.onload = () => { window.focus(); window.print(); };</script>
+  </body></html>`);
+  printWindow.document.close();
+};
 
 export default function CashierMode() {
   const [orders, setOrders] = useState([]);
@@ -565,6 +624,7 @@ export default function CashierMode() {
                       key={order.id}
                       order={order}
                       onGenerateInvoice={generateInvoice}
+                      onPrintReceipt={printCashReceipt}
                       onMarkDelivered={markAsDelivered}
                       onMarkPaid={markAsPaid}
                       onClose={closeOrder}
@@ -789,7 +849,7 @@ export default function CashierMode() {
 }
 
 // Order Card Component
-function OrderCard({ order, onGenerateInvoice, onMarkDelivered, onMarkPaid, onClose, onRefund, getStatusColor, getStatusText }) {
+function OrderCard({ order, onGenerateInvoice, onPrintReceipt, onMarkDelivered, onMarkPaid, onClose, onRefund, getStatusColor, getStatusText }) {
   const total = order.total_amount; 
   const displayCode = order.order_code || `KOT-${order.id?.slice(-6) || ''}`;
   const [paymentMethod, setPaymentMethod] = useState(order.payment_method || 'cash');
@@ -858,7 +918,11 @@ function OrderCard({ order, onGenerateInvoice, onMarkDelivered, onMarkPaid, onCl
         </div>
       </div>
 
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
+        <Button onClick={() => onPrintReceipt(order)} variant="outline" size="sm" className="flex items-center gap-2">
+          <Printer className="h-4 w-4" />
+          Ticket imprimable
+        </Button>
         <Button
           onClick={() => onGenerateInvoice(order.id)}
           variant="outline"

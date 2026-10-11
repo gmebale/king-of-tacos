@@ -50,7 +50,7 @@ const AdminSettings = () => {
   const [editingTaxId, setEditingTaxId] = useState(null);
   const [editingTaxName, setEditingTaxName] = useState('');
   const [editingTaxPercentage, setEditingTaxPercentage] = useState('');
-  const [heroMedia, setHeroMedia] = useState({ media_url: '', media_type: '', overlay_opacity: 85 });
+  const [heroMedia, setHeroMedia] = useState({ media_url: '', media_type: '', overlay_opacity: 85, position_x: 50, position_y: 50, image_scale: 100 });
   const [uploadingHeroMedia, setUploadingHeroMedia] = useState(false);
   const [savingHeroMedia, setSavingHeroMedia] = useState(false);
   const [onlineOrdering, setOnlineOrdering] = useState(DEFAULT_ORDERING);
@@ -188,7 +188,10 @@ const AdminSettings = () => {
         const data = homepageResult.value.data;
         setHeroMedia({
           media_url: data.media_url || '', media_type: data.media_type || '',
-          overlay_opacity: Number.isInteger(Number(data.overlay_opacity)) ? Number(data.overlay_opacity) : 85
+          overlay_opacity: Number.isInteger(Number(data.overlay_opacity)) ? Number(data.overlay_opacity) : 85,
+          position_x: Number.isInteger(Number(data.position_x)) ? Number(data.position_x) : 50,
+          position_y: Number.isInteger(Number(data.position_y)) ? Number(data.position_y) : 50,
+          image_scale: Number.isInteger(Number(data.image_scale)) ? Number(data.image_scale) : 100
         });
       } else {
         console.error('Load homepage settings error:', homepageResult.reason);
@@ -488,9 +491,9 @@ const AdminSettings = () => {
           {heroMedia.media_url && (
             <div className="relative aspect-video overflow-hidden rounded-xl border bg-gray-950">
               {heroMedia.media_type === 'video' ? (
-                <video key={heroMedia.media_url} src={resolveMediaUrl(heroMedia.media_url)} controls muted playsInline className="h-full w-full object-cover" />
+                <video key={heroMedia.media_url} src={resolveMediaUrl(heroMedia.media_url)} controls muted playsInline className="h-full w-full object-cover" style={{ objectPosition: `${heroMedia.position_x}% ${heroMedia.position_y}%`, transform: `scale(${heroMedia.image_scale / 100})` }} />
               ) : (
-                <img src={resolveMediaUrl(heroMedia.media_url)} alt="Aperçu de la bannière" className="h-full w-full object-cover" />
+                <img src={resolveMediaUrl(heroMedia.media_url)} alt="Aperçu de la bannière" className="h-full w-full object-cover" style={{ objectPosition: `${heroMedia.position_x}% ${heroMedia.position_y}%`, transform: `scale(${heroMedia.image_scale / 100})` }} />
               )}
               <div
                 className="pointer-events-none absolute inset-0 bg-gradient-to-br from-black/70 via-black/50 to-black/70"
@@ -532,6 +535,26 @@ const AdminSettings = () => {
             />
             <p className="text-xs text-gray-500">Une valeur élevée renforce le voile et la lisibilité du texte. Une valeur faible laisse davantage apparaître le média.</p>
           </div>
+          {heroMedia.media_url && heroMedia.media_type === 'image' && (
+            <div className="grid gap-4 sm:grid-cols-3">
+              {[
+                ['position_x', 'Cadrage horizontal'],
+                ['position_y', 'Cadrage vertical'],
+                ['image_scale', 'Zoom']
+              ].map(([field, label]) => {
+                const isZoom = field === 'image_scale';
+                const min = isZoom ? 100 : 0;
+                const max = isZoom ? 200 : 100;
+                return <div key={field} className="space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <Label htmlFor={`hero-${field}`}>{label}</Label>
+                    <span className="text-xs font-semibold text-amber-700">{isZoom ? `${heroMedia[field]}%` : `${heroMedia[field]}%`}</span>
+                  </div>
+                  <Input id={`hero-${field}`} type="range" min={min} max={max} step="1" value={heroMedia[field]} onChange={event => setHeroMedia(current => ({ ...current, [field]: Number(event.target.value) }))} disabled={savingHeroMedia} />
+                </div>;
+              })}
+            </div>
+          )}
           <p className="text-xs text-gray-500">Formats pris en charge : JPG, PNG, WebP, MP4, WebM et MOV. L’aperçu s’adapte automatiquement au type de média.</p>
           <div className="flex justify-end">
             <Button type="button" onClick={saveHeroMedia} disabled={uploadingHeroMedia || savingHeroMedia}>
