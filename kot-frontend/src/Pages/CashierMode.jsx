@@ -43,6 +43,9 @@ const printCashReceipt = order => {
   const code = order.order_code || `KOT-${order.id?.slice(-6) || ''}`;
   const createdAt = order.created_date ? format(new Date(order.created_date), 'dd/MM/yyyy HH:mm', { locale: fr }) : '';
   const total = Number(order.total_amount || 0);
+  const itemCount = (order.items || []).reduce((count, item) => count + Number(item.quantity || 0), 0);
+  const lineCount = (order.items || []).length;
+  const remainingAmount = order.payment_status === 'paid' ? 0 : total;
   const lineMarkup = (order.items || []).map(item => {
     const quantity = Number(item.quantity || 0);
     const unitPrice = Number(item.price || 0);
@@ -54,7 +57,8 @@ const printCashReceipt = order => {
     order.customer_phone && `Tél. : ${order.customer_phone}`,
     order.table_number && `Table : ${order.table_number}`,
     order.service_location_name && `Lieu : ${order.service_location_name}`,
-    order.order_type && `Commande : ${order.order_type}`
+    order.order_type && `Commande : ${order.order_type}`,
+    (order.validatedBy?.full_name || order.closedBy?.full_name) && `Vendu par : ${order.validatedBy?.full_name || order.closedBy?.full_name}`
   ].filter(Boolean).map(line => `<div>${escapeReceiptText(line)}</div>`).join('');
 
   printWindow.document.open();
@@ -66,6 +70,11 @@ const printCashReceipt = order => {
     header img { display: block; width: 24mm; height: 18mm; object-fit: contain; margin: 0 auto 4px; }
     h1 { margin: 0; font-size: 16px; letter-spacing: .4px; }
     .subtitle { margin-top: 2px; font-size: 10px; letter-spacing: 1px; }
+    .restaurant-details { margin-top: 3px; font-size: 9px; line-height: 1.25; }
+    .business-tagline { margin-top: 2px; font-size: 8px; letter-spacing: .3px; }
+    .counts { padding: 4px 0 2px; font-size: 9px; }
+    .balance { display: flex; justify-content: space-between; padding: 3px 0; font-size: 10px; }
+    .provisional { margin-top: 8px; font-size: 9px; }
     .meta { padding: 8px 0; border-bottom: 1px dashed #555; }
     .items { padding: 4px 0; }
     .item { padding: 6px 0; border-bottom: 1px dotted #aaa; }
@@ -77,12 +86,13 @@ const printCashReceipt = order => {
     footer { padding-top: 14px; text-align: center; font-size: 10px; }
     @media screen { body { margin: 12px auto; padding: 8px; box-shadow: 0 0 8px #aaa; } }
   </style></head><body>
-    <header><img class="receipt-logo" src="${window.location.origin}/Images/LOGO-KING-OF-TACOS.jpg" alt="King Of Tacos"><h1>KING OF TACOS</h1><div class="subtitle">TICKET DE CAISSE</div></header>
+    <header><img class="receipt-logo" src="${window.location.origin}/Images/LOGO-KING-OF-TACOS.jpg" alt="King Of Tacos"><h1>KING OF TACOS</h1><div class="restaurant-details">Le Camp de Gaulle, BP337<br>Libreville, Gabon<br>Tél. : 062 93 72 92</div><div class="business-tagline">FRENCH TACOS &amp; MEXICAN FOOD</div><div class="subtitle">TICKET DE CAISSE</div></header>
     <section class="meta"><div><strong>N° ${escapeReceiptText(code)}</strong></div><div>${escapeReceiptText(createdAt)}</div>${details}</section>
     <section class="items">${lineMarkup}</section>
+    <div class="counts">Articles : ${itemCount} · Lignes : ${lineCount}</div><div class="balance"><span>Restant à payer</span><strong>${remainingAmount.toLocaleString('fr-GA')} FCFA</strong></div>
     <div class="total"><span>TOTAL</span><span>${total.toLocaleString('fr-GA')} FCFA</span></div>
     <div class="payment">Paiement : ${escapeReceiptText(order.payment_method || 'Non renseigné')}<br>État : ${escapeReceiptText(order.payment_status || 'en attente')}</div>
-    <footer>Merci pour votre commande !<br>À très bientôt.</footer>
+    <footer><div class="provisional">Document provisoire de vente</div>Merci pour votre commande !<br>À très bientôt.</footer>
     <script>window.onload = async () => { const logo = document.querySelector(".receipt-logo"); if (logo) { try { await logo.decode(); } catch {} } window.focus(); window.print(); };</script>
   </body></html>`);
   printWindow.document.close();
