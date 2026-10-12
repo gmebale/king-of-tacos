@@ -77,13 +77,13 @@ const printCashReceipt = order => {
     footer { padding-top: 14px; text-align: center; font-size: 10px; }
     @media screen { body { margin: 12px auto; padding: 8px; box-shadow: 0 0 8px #aaa; } }
   </style></head><body>
-    <header><img src="${window.location.origin}/Images/LOGO-KING-OF-TACOS.jpg" alt="King Of Tacos"><h1>KING OF TACOS</h1><div class="subtitle">TICKET DE CAISSE</div></header>
+    <header><img class="receipt-logo" src="${window.location.origin}/Images/LOGO-KING-OF-TACOS.jpg" alt="King Of Tacos"><h1>KING OF TACOS</h1><div class="subtitle">TICKET DE CAISSE</div></header>
     <section class="meta"><div><strong>N° ${escapeReceiptText(code)}</strong></div><div>${escapeReceiptText(createdAt)}</div>${details}</section>
     <section class="items">${lineMarkup}</section>
     <div class="total"><span>TOTAL</span><span>${total.toLocaleString('fr-GA')} FCFA</span></div>
     <div class="payment">Paiement : ${escapeReceiptText(order.payment_method || 'Non renseigné')}<br>État : ${escapeReceiptText(order.payment_status || 'en attente')}</div>
     <footer>Merci pour votre commande !<br>À très bientôt.</footer>
-    <script>window.onload = () => { window.focus(); window.print(); };</script>
+    <script>window.onload = async () => { const logo = document.querySelector(".receipt-logo"); if (logo) { try { await logo.decode(); } catch {} } window.focus(); window.print(); };</script>
   </body></html>`);
   printWindow.document.close();
 };
