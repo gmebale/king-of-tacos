@@ -145,7 +145,7 @@ export default function ProductCard({ product, onAddToCart, cartItem, onUpdateQu
                   <Button
                     onClick={handleAddClick}
                     disabled={loadingOptions || isUnavailable}
-                    className="max-w-full rounded-lg bg-gradient-to-r from-yellow-400 to-amber-600 px-2.5 text-xs text-white shadow-lg hover:from-yellow-500 hover:to-amber-700 sm:rounded-xl sm:px-4 sm:text-base"
+                    className="max-w-full rounded-lg bg-gradient-to-r from-amber-700 to-amber-800 px-2.5 text-xs text-white shadow-lg hover:from-amber-800 hover:to-amber-900 sm:rounded-xl sm:px-4 sm:text-base"
                   >
                     <Plus className="w-4 h-4 mr-1" />
                     {loadingOptions ? "Chargement…" : product.type === 'combo' ? "Composer le menu" : "Personnaliser"}
@@ -155,7 +155,7 @@ export default function ProductCard({ product, onAddToCart, cartItem, onUpdateQu
               ) : quantity === 0 ? (
                 <Button
                   onClick={handleAddClick}
-                  className="max-w-full rounded-lg bg-gradient-to-r from-yellow-400 to-amber-600 px-2.5 text-xs text-white shadow-lg hover:from-yellow-500 hover:to-amber-700 sm:rounded-xl sm:px-4 sm:text-base"
+                  className="max-w-full rounded-lg bg-gradient-to-r from-amber-700 to-amber-800 px-2.5 text-xs text-white shadow-lg hover:from-amber-800 hover:to-amber-900 sm:rounded-xl sm:px-4 sm:text-base"
                 >
                   <Plus className="w-4 h-4 mr-1" />
                   {product.type === 'combo' ? "Composer le menu" : isConfigurable ? "Personnaliser" : "Ajouter"}
@@ -177,7 +177,7 @@ export default function ProductCard({ product, onAddToCart, cartItem, onUpdateQu
                     size="icon"
                     onClick={() => onUpdateQuantity(product.id, 1)}
                     disabled={isUnavailable}
-                    className="rounded-xl bg-gradient-to-r from-yellow-400 to-amber-600 text-white"
+                    className="rounded-xl bg-gradient-to-r from-amber-700 to-amber-800 text-white"
                   >
                     <Plus className="w-4 h-4" />
                   </Button>

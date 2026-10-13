@@ -148,7 +148,7 @@ export default function AdminStock() {
       accompagnements: "data-[state=active]:bg-orange-800",
       options: "data-[state=active]:bg-gray-700"
     };
-    return colors[categoryName] || "bg-gray-500";
+    return colors[categoryName] || "data-[state=active]:bg-amber-800";
   };
 
   const getFinalPrice = (product) => {
