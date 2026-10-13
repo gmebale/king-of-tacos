@@ -130,53 +130,53 @@ export default function Menu() {
   const cleanMenuText = value => String(value || '').replace(/[\p{Extended_Pictographic}\uFE0F]/gu, '').replace(/\s+/g, ' ').trim();
 
   return (
-    <div className="min-h-screen pb-32">
-      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
+    <div className="min-h-screen overflow-x-clip pb-32">
+      <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 sm:py-8">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mb-8"
+          className="mb-5 sm:mb-8"
         >
           <Button
             variant="ghost"
             onClick={() => navigate(createPageUrl("Home"))}
-            className="mb-4 text-amber-600 hover:text-amber-700"
+            className="mb-3 text-amber-600 hover:text-amber-700 sm:mb-4"
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
             Retour à l'accueil
           </Button>
-          <h1 className="mb-4 text-3xl font-bold bg-gradient-to-r from-amber-600 to-yellow-500 bg-clip-text text-transparent sm:text-4xl md:text-5xl">
+          <h1 className="mb-2 text-2xl font-bold leading-tight bg-gradient-to-r from-amber-600 to-yellow-500 bg-clip-text text-transparent sm:mb-4 sm:text-4xl md:text-5xl">
             Menu de King Of Tacos à Libreville
           </h1>
-          <p className="text-gray-600 text-lg">
+          <p className="text-sm leading-relaxed text-gray-600 sm:text-lg">
             Découvrez nos tacos, burgers, burritos et accompagnements à Libreville.
           </p>
         </motion.div>
 
         {/* Search & Filters */}
-        <div className="mb-8 space-y-4">
+        <div className="mb-4 space-y-3 sm:mb-8 sm:space-y-4">
           <div className="relative">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
             <Input
               placeholder="Rechercher un produit..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-12 h-12 rounded-2xl border-2 focus:border-amber-400"
+              className="h-11 rounded-xl border-2 pl-12 focus:border-amber-400 sm:h-12 sm:rounded-2xl"
             />
           </div>
 
-          <div className="sticky top-0 z-30 -mx-4 bg-amber-50/95 px-4 py-2 backdrop-blur sm:-mx-6 sm:px-6 md:static md:mx-0 md:bg-transparent md:p-0">
+          <div className="sticky top-0 z-30 -mx-4 min-w-0 overflow-hidden bg-amber-50/95 px-4 py-2 backdrop-blur sm:-mx-6 sm:px-6 md:static md:mx-0 md:bg-transparent md:p-0">
             <Tabs value={category} onValueChange={setCategory}>
-              <TabsList className="flex h-auto w-max min-w-full justify-start gap-1 overflow-x-auto rounded-xl border border-gray-200 bg-white p-1 scrollbar-hide md:w-full md:flex-wrap md:overflow-visible">
-                <TabsTrigger value="all" className="shrink-0 rounded-lg px-4 py-2 data-[state=active]:bg-gradient-to-r data-[state=active]:from-yellow-400 data-[state=active]:to-amber-500 data-[state=active]:text-white">
+              <TabsList className="flex h-auto w-full min-w-0 max-w-full justify-start gap-1 overflow-x-auto overflow-y-hidden rounded-xl border border-gray-200 bg-white p-1 scrollbar-hide md:flex-wrap md:overflow-visible">
+                <TabsTrigger value="all" className="shrink-0 whitespace-nowrap rounded-lg px-3 py-1.5 text-xs data-[state=active]:bg-gradient-to-r data-[state=active]:from-yellow-400 data-[state=active]:to-amber-500 data-[state=active]:text-white sm:px-4 sm:py-2 sm:text-sm">
                   Tous
                 </TabsTrigger>
                 {categories.map(cat => (
                   <TabsTrigger
                     key={cat.id}
                     value={cat.name}
-                    className="shrink-0 rounded-lg px-4 py-2 data-[state=active]:bg-gradient-to-r data-[state=active]:from-yellow-400 data-[state=active]:to-amber-500 data-[state=active]:text-white"
+                    className="shrink-0 whitespace-nowrap rounded-lg px-3 py-1.5 text-xs data-[state=active]:bg-gradient-to-r data-[state=active]:from-yellow-400 data-[state=active]:to-amber-500 data-[state=active]:text-white sm:px-4 sm:py-2 sm:text-sm"
                   >
                     {cleanMenuText(cat.displayName || cat.name)}
                   </TabsTrigger>

@@ -65,8 +65,8 @@ export default function ProductCard({ product, onAddToCart, cartItem, onUpdateQu
         whileHover={{ y: -5 }}
         transition={{ duration: 0.3 }}
       >
-        <Card className={`group flex flex-row overflow-hidden rounded-none border-x-0 border-t-0 border-b border-gray-200 shadow-none transition-all duration-300 md:flex-col md:rounded-xl md:border-2 md:hover:border-amber-400 md:hover:shadow-xl ${isUnavailable ? 'bg-gray-50' : 'bg-white'}`}>
-          <div className="relative order-2 h-24 w-24 flex-none self-center overflow-hidden bg-gradient-to-br from-amber-50 to-yellow-100 sm:h-28 sm:w-28 md:order-none md:h-48 md:w-full md:self-auto">
+        <Card className={`group w-full min-w-0 flex flex-row overflow-hidden rounded-none border-x-0 border-t-0 border-b border-gray-200 shadow-none transition-all duration-300 md:flex-col md:rounded-xl md:border-2 md:hover:border-amber-400 md:hover:shadow-xl ${isUnavailable ? 'bg-gray-50' : 'bg-white'}`}>
+          <div className="relative order-2 h-20 w-20 flex-none self-center overflow-hidden bg-gradient-to-br from-amber-50 to-yellow-100 sm:h-24 sm:w-24 md:order-none md:h-48 md:w-full md:self-auto">
             {product.image ? (
               <img
                 src={resolveMediaUrl(product.image)}
@@ -105,7 +105,7 @@ export default function ProductCard({ product, onAddToCart, cartItem, onUpdateQu
             </div>
           </div>
 
-          <CardContent className="flex min-w-0 flex-1 flex-col justify-center p-3 sm:p-4 md:flex-none md:p-6">
+          <CardContent className="flex min-w-0 flex-1 flex-col justify-center p-2.5 sm:p-4 md:flex-none md:p-6">
             <div className="mb-2 min-w-0 md:mb-4">
               <h3 className="mb-1 break-words text-base font-bold text-gray-900 sm:text-lg md:mb-2 md:text-xl">
                 {cleanText(product.name)}
@@ -115,7 +115,7 @@ export default function ProductCard({ product, onAddToCart, cartItem, onUpdateQu
                   {cleanText(product.description)}
                 </p>
               )}
-              {product.loyalty_points > 0 && <p className="mt-2 flex items-center gap-1 text-sm font-medium text-amber-700"><Star className="h-4 w-4" />{product.loyalty_points} point{product.loyalty_points > 1 ? 's' : ''} fidélité par unité pour les clients inscrits</p>}
+              {product.loyalty_points > 0 && <p className="mt-1 flex min-w-0 items-center gap-1 text-[11px] font-medium leading-tight text-amber-700 sm:text-sm"><Star className="h-3.5 w-3.5 flex-none" />{product.loyalty_points} pts fidélité / unité</p>}
             </div>
 
             <div className="flex flex-wrap items-center justify-between gap-2 md:gap-3">
@@ -145,7 +145,7 @@ export default function ProductCard({ product, onAddToCart, cartItem, onUpdateQu
                   <Button
                     onClick={handleAddClick}
                     disabled={loadingOptions || isUnavailable}
-                    className="max-w-full rounded-xl bg-gradient-to-r from-yellow-400 to-amber-600 px-3 text-sm text-white shadow-lg hover:from-yellow-500 hover:to-amber-700 sm:px-4 sm:text-base"
+                    className="max-w-full rounded-lg bg-gradient-to-r from-yellow-400 to-amber-600 px-2.5 text-xs text-white shadow-lg hover:from-yellow-500 hover:to-amber-700 sm:rounded-xl sm:px-4 sm:text-base"
                   >
                     <Plus className="w-4 h-4 mr-1" />
                     {loadingOptions ? "Chargement…" : product.type === 'combo' ? "Composer le menu" : "Personnaliser"}
@@ -155,7 +155,7 @@ export default function ProductCard({ product, onAddToCart, cartItem, onUpdateQu
               ) : quantity === 0 ? (
                 <Button
                   onClick={handleAddClick}
-                  className="max-w-full rounded-xl bg-gradient-to-r from-yellow-400 to-amber-600 px-3 text-sm text-white shadow-lg hover:from-yellow-500 hover:to-amber-700 sm:px-4 sm:text-base"
+                  className="max-w-full rounded-lg bg-gradient-to-r from-yellow-400 to-amber-600 px-2.5 text-xs text-white shadow-lg hover:from-yellow-500 hover:to-amber-700 sm:rounded-xl sm:px-4 sm:text-base"
                 >
                   <Plus className="w-4 h-4 mr-1" />
                   {product.type === 'combo' ? "Composer le menu" : isConfigurable ? "Personnaliser" : "Ajouter"}
