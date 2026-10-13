@@ -604,9 +604,12 @@ router.post('/pvit/callback', async (req, res) => {
     const details = parsePvitDetails(order);
     if (!order || !details || details.reference !== String(merchantReferenceId) || details.transactionId !== String(transactionId)) return res.status(409).json({ message: 'La notification PVit ne correspond à aucune tentative de paiement.' });
     if (Number(amount) !== order.total_amount || accountOperationCode !== config.accountCode || transactionOperation !== 'PAYMENT') return res.status(409).json({ message: 'Les données PVit ne correspondent pas à la commande.' });
-    const checked = await pvit.checkStatus(transactionId);
-    if (['SUCCESS', 'FAILED'].includes(checked.status)) await applyPvitStatus(order, checked.status);
-    else if (!['PENDING', 'AMBIGUOUS'].includes(String(status).toUpperCase())) console.warn('PVit callback/status disagreement for order', order.order_code);
+    const callbackStatus = String(status).toUpperCase();
+    if (['SUCCESS', 'FAILED'].includes(callbackStatus)) {
+      await applyPvitStatus(order, callbackStatus);
+    } else {
+      console.warn('PVit callback received a non-final status for order', order.order_code, callbackStatus);
+    }
     return res.status(200).json({ transactionId, responseCode: code });
   } catch (error) {
     console.error('PVit callback processing error:', error.message);
