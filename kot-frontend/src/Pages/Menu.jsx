@@ -17,7 +17,7 @@ export default function Menu() {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [filteredProducts, setFilteredProducts] = useState([]);
-  const [category, setCategory] = useState("all");
+  const [category, setCategory] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [cart, setCart] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -40,8 +40,15 @@ export default function Menu() {
         Product.list(),
         Product.getCategories()
       ]);
-      setProducts(productsData.filter(p => p.category?.is_menu_visible !== false));
-      setCategories(categoriesData.filter(cat => cat.is_menu_visible !== false));
+      const visibleProducts = productsData.filter(p => p.category?.is_menu_visible !== false);
+      const configuredCategories = categoriesData.filter(cat => cat.is_menu_visible !== false);
+      const inferredCategories = [...new Map(visibleProducts
+        .filter(product => product.category?.name)
+        .map(product => [product.category.name, product.category])).values()];
+      const visibleCategories = configuredCategories.length ? configuredCategories : inferredCategories;
+      setProducts(visibleProducts);
+      setCategories(visibleCategories);
+      setCategory(current => visibleCategories.some(cat => cat.name === current) ? current : (visibleCategories[0]?.name || ''));
     } catch (err) {
       setError('Erreur de chargement des produits. Vérifiez la connexion au serveur.');
       console.error('Error loading products:', err);
@@ -58,9 +65,7 @@ export default function Menu() {
   const filterProducts = () => {
     let filtered = products;
 
-    if (category !== "all") {
-      filtered = filtered.filter(p => p.category?.name === category);
-    }
+    filtered = filtered.filter(p => p.category?.name === category);
 
     if (searchQuery) {
       filtered = filtered.filter(p =>
@@ -128,6 +133,26 @@ export default function Menu() {
   }, 0);
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
   const cleanMenuText = value => String(value || '').replace(/[\p{Extended_Pictographic}\uFE0F]/gu, '').replace(/\s+/g, ' ').trim();
+  const categoryLabel = value => {
+    const label = cleanMenuText(value);
+    const knownLabels = {
+      'accompagnements': 'Nos accompagnements',
+      'boissons': 'Nos boissons',
+      'burger': 'Nos burgers',
+      'burgers': 'Nos burgers',
+      'burrito': 'Nos burritos',
+      'burritos': 'Nos burritos',
+      'dessert': 'Nos desserts',
+      'desserts': 'Nos desserts',
+      'taco': 'Nos tacos',
+      'tacos': 'Nos tacos',
+      'menu adulte': 'Nos menus adultes',
+      'menu enfant': 'Nos menus enfants',
+      'snacking': 'Nos snacks'
+    };
+    return knownLabels[label.toLocaleLowerCase('fr-FR')] || (/^(nos|notre|à l’unité|à l'unité)\b/i.test(label) ? label : `Nos ${label.toLocaleLowerCase('fr-FR')}`);
+  };
+  const selectedCategory = categories.find(item => item.name === category);
 
   return (
     <div className="min-h-screen overflow-x-clip bg-gray-100 pb-32">
@@ -147,10 +172,10 @@ export default function Menu() {
             Retour à l'accueil
           </Button>
           <h1 className="mb-2 text-2xl font-bold leading-tight bg-gradient-to-r from-amber-600 to-yellow-500 bg-clip-text text-transparent sm:mb-4 sm:text-4xl md:text-5xl">
-            Menu de King Of Tacos à Libreville
+            Le menu King Of Tacos
           </h1>
           <p className="text-sm leading-relaxed text-gray-600 sm:text-lg">
-            Découvrez nos tacos, burgers, burritos et accompagnements à Libreville.
+            À Libreville, nous préparons nos recettes avec soin. Choisissez une catégorie et découvrez notre menu.
           </p>
         </motion.div>
 
@@ -168,23 +193,27 @@ export default function Menu() {
 
           <div className="sticky top-0 z-30 -mx-4 min-w-0 overflow-hidden bg-amber-50/95 px-4 py-2 backdrop-blur sm:-mx-6 sm:px-6 md:static md:mx-0 md:bg-transparent md:p-0">
             <Tabs value={category} onValueChange={setCategory}>
-              <TabsList className="flex h-auto w-full min-w-0 max-w-full justify-start gap-1 overflow-x-auto overflow-y-hidden rounded-xl border border-gray-200 bg-white p-1 scrollbar-hide md:flex-wrap md:overflow-visible">
-                <TabsTrigger value="all" className="shrink-0 whitespace-nowrap rounded-lg px-3 py-1.5 text-xs data-[state=active]:bg-gradient-to-r data-[state=active]:from-yellow-400 data-[state=active]:to-amber-500 data-[state=active]:text-slate-900 sm:px-4 sm:py-2 sm:text-sm">
-                  Tous
-                </TabsTrigger>
+              <TabsList className="flex h-auto w-full min-w-0 max-w-full justify-start gap-1 overflow-x-auto overflow-y-hidden rounded-xl border border-gray-200 bg-white p-1 scrollbar-hide md:justify-center md:flex-wrap md:overflow-visible">
                 {categories.map(cat => (
                   <TabsTrigger
                     key={cat.id}
                     value={cat.name}
                     className="shrink-0 whitespace-nowrap rounded-lg px-3 py-1.5 text-xs data-[state=active]:bg-gradient-to-r data-[state=active]:from-yellow-400 data-[state=active]:to-amber-500 data-[state=active]:text-slate-900 sm:px-4 sm:py-2 sm:text-sm"
                   >
-                    {cleanMenuText(cat.displayName || cat.name)}
+                    {categoryLabel(cat.displayName || cat.name)}
                   </TabsTrigger>
                 ))}
               </TabsList>
             </Tabs>
           </div>
         </div>
+
+        {selectedCategory && <div className="mb-4 flex items-end justify-between gap-3 md:mb-5">
+          <div>
+            <h2 className="text-lg font-bold text-slate-900 sm:text-xl">{categoryLabel(selectedCategory.displayName || selectedCategory.name)}</h2>
+            <p className="mt-1 text-sm text-slate-600">Nous avons {filteredProducts.length} proposition{filteredProducts.length > 1 ? 's' : ''} pour vous.</p>
+          </div>
+        </div>}
 
         {/* Products Grid */}
         <AnimatePresence mode="wait">
@@ -195,7 +224,7 @@ export default function Menu() {
               ))}
             </div>
           ) : (
-            <motion.div
+            filteredProducts.length > 0 ? <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -218,7 +247,9 @@ export default function Menu() {
                   />
                 );
               })}
-            </motion.div>
+            </motion.div> : <p className="rounded-2xl border border-gray-200 bg-white px-5 py-8 text-center text-gray-600">
+              {categories.length ? 'Nous n’avons pas trouvé de produit dans cette catégorie.' : 'Notre menu sera bientôt disponible.'}
+            </p>
           )}
         </AnimatePresence>
 
