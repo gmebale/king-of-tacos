@@ -26,7 +26,25 @@ async function parseResponse(response, operation) {
   const body = await response.text();
   let payload;
   try { payload = body ? JSON.parse(body) : {}; } catch (_error) { payload = { message: body.slice(0, 300) }; }
-  if (!response.ok) throw new Error(`PVit ${operation}: ${payload?.message || payload?.error || `HTTP ${response.status}`}`);
+  if (!response.ok) {
+    const providerCode = payload?.code || payload?.error_code || payload?.errorCode;
+    const providerMessage = payload?.message || payload?.error;
+    const errors = payload?.errors;
+    let validation = '';
+    if (Array.isArray(errors)) {
+      validation = errors.map(issue => [issue?.field || issue?.path, issue?.code, issue?.message].filter(Boolean).join(': ')).filter(Boolean).join('; ');
+    } else if (errors && typeof errors === 'object') {
+      validation = Object.entries(errors).map(([field, issue]) => `${field}: ${typeof issue === 'string' ? issue : issue?.message || issue?.code || 'rejected'}`).join('; ');
+    }
+    const details = [
+      `HTTP ${response.status}`,
+      providerCode && `code=${providerCode}`,
+      providerMessage,
+      validation && `validation=${validation}`,
+      (payload?.requestId || payload?.traceId) && `requestId=${payload.requestId || payload.traceId}`
+    ].filter(Boolean).join(' | ');
+    throw new Error(`PVit ${operation}: ${details}`);
+  }
   return payload;
 }
 
