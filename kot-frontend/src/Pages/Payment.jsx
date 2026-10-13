@@ -14,6 +14,25 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { toast } from 'react-hot-toast';
 import api from "../services/api.service";
 
+function normalizeGabonPhone(value) {
+  const digits = String(value || '').replace(/\D/g, '');
+  if (digits.startsWith('00241')) {
+    const national = digits.slice(5);
+    if (national.length === 8) return `0${national}`;
+    if (national.length === 9 && national.startsWith('0')) return national;
+    return null;
+  }
+  if (digits.startsWith('241')) {
+    const national = digits.slice(3);
+    if (national.length === 8) return `0${national}`;
+    if (national.length === 9 && national.startsWith('0')) return national;
+    return null;
+  }
+  if (digits.startsWith('0') && digits.length === 9) return digits;
+  if (digits.length === 8) return `0${digits}`;
+  return null;
+}
+
 export default function Payment() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -26,6 +45,7 @@ export default function Payment() {
   const [paymentSettings, setPaymentSettings] = useState(null);
   const [paymentProvider, setPaymentProvider] = useState('pvit');
   const [paymentSystemName, setPaymentSystemName] = useState('AIRTEL_MONEY');
+  const [pvitPhone, setPvitPhone] = useState(formData?.customer_phone || '');
   const [simuMsisdn, setSimuMsisdn] = useState('077000001');
   const [createdOrder, setCreatedOrder] = useState(null);
   const isStaffOrder = user?.role === "serveur" && sessionStorage.getItem("kot_staff_order_mode") === "true";
@@ -76,6 +96,12 @@ export default function Payment() {
     }
     if (isStaffOrder && !/^[a-z0-9]{6}$/i.test(serverCode)) {
       setServerCodeError("Saisissez le code serveur de 6 caractères.");
+      return;
+    }
+
+    const normalizedPvitPhone = paymentProvider === 'pvit' && mobileMoneyAvailable ? normalizeGabonPhone(pvitPhone) : null;
+    if (paymentProvider === 'pvit' && mobileMoneyAvailable && !normalizedPvitPhone) {
+      toast.error('Saisissez un numéro gabonais valide pour recevoir le paiement.');
       return;
     }
 
@@ -136,12 +162,14 @@ export default function Payment() {
         if (useMobileMoney && paymentProvider === 'pvit') {
           let initiationError = null;
           try {
-            await api.post('/payments/pvit/create', { orderId: order.id, paymentStatusToken: order.payment_status_token, operatorCode: paymentSystemName });
+            await api.post('/payments/pvit/create', {
+              orderId: order.id, paymentStatusToken: order.payment_status_token, operatorCode: paymentSystemName, payerPhone: normalizedPvitPhone
+            });
           } catch (error) {
             initiationError = error.response?.data?.message || 'Le démarrage du paiement PVit n’a pas pu être confirmé.';
           }
           navigate(createPageUrl("OrderSuccess"), {
-            state: { pvitPayment: { orderId: order.id, orderCode: order.order_code, paymentStatusToken: order.payment_status_token, operatorCode: paymentSystemName, initiationError } }
+            state: { pvitPayment: { orderId: order.id, orderCode: order.order_code, paymentStatusToken: order.payment_status_token, operatorCode: paymentSystemName, payerPhone: normalizedPvitPhone, initiationError } }
           });
         } else if (useMobileMoney) {
           let initiationError = null;
@@ -255,14 +283,29 @@ export default function Payment() {
                         >
                           {availableOperators.map(operator => <option key={operator.value} value={operator.value}>{operator.label}</option>)}
                         </select>
-                        {paymentSystemName === 'SIMU' ? (
+                        {paymentProvider === 'pvit' ? (
+                          <>
+                            <Label htmlFor="pvit-payment-phone" className="mt-3 block">Numéro qui recevra la demande de paiement</Label>
+                            <Input
+                              id="pvit-payment-phone"
+                              type="tel"
+                              inputMode="tel"
+                              autoComplete="tel"
+                              value={pvitPhone}
+                              onChange={event => setPvitPhone(event.target.value)}
+                              placeholder="Ex. 074 12 34 56 ou +241 74 12 34 56"
+                              required
+                            />
+                            <p className="mt-2 text-sm text-gray-600">Ce numéro peut différer du numéro de contact de la commande. Formats acceptés : 0XXXXXXXX, +241XXXXXXXX ou 00241XXXXXXXX. La commande ne partira en préparation qu’après confirmation MyPVIT.</p>
+                          </>
+                        ) : paymentSystemName === 'SIMU' ? (
                           <>
                             <Label htmlFor="simu-msisdn" className="mt-3 block">Numéro de scénario SIMU</Label>
                             <Input id="simu-msisdn" value={simuMsisdn} onChange={event => setSimuMsisdn(event.target.value)} placeholder="077000001" />
                             <p className="mt-2 text-sm text-gray-600">Le simulateur ne déclenche pas d’appel sur un téléphone réel. Utilisez l’un des numéros de scénario du guide E-Billing.</p>
                           </>
                         ) : (
-                          <p className="mt-2 text-sm text-gray-600">Une demande de paiement sera envoyée au {formData.customer_phone}. La commande ne partira en préparation qu’après confirmation par {paymentProvider === 'pvit' ? 'MyPVIT' : 'E-Billing'}.</p>
+                          <p className="mt-2 text-sm text-gray-600">Une demande de paiement sera envoyée au {formData.customer_phone}. La commande ne partira en préparation qu’après confirmation par E-Billing.</p>
                         )}
                       </>
                     ) : (

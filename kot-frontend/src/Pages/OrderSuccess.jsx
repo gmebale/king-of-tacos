@@ -11,7 +11,7 @@ export default function OrderSuccess() {
   const pvitPayment = location.state?.pvitPayment;
   const statusProvider = pvitPayment ? 'pvit' : 'ebilling';
   const ebillingPayment = location.state?.ebillingPayment || pvitPayment;
-  const [paymentStatus, setPaymentStatus] = useState(ebillingPayment ? 'requires_action' : 'paid');
+  const [paymentStatus, setPaymentStatus] = useState(ebillingPayment ? (ebillingPayment.initiationError ? 'failed' : 'requires_action') : 'paid');
   const [providerState, setProviderState] = useState('');
   const [pushState, setPushState] = useState('');
   const [statusMessage, setStatusMessage] = useState(ebillingPayment?.initiationError || '');
@@ -20,7 +20,7 @@ export default function OrderSuccess() {
   const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
-    if (!ebillingPayment?.orderId || !ebillingPayment?.paymentStatusToken) return undefined;
+    if (!ebillingPayment?.orderId || !ebillingPayment?.paymentStatusToken || (ebillingPayment.initiationError && retryCount === 0)) return undefined;
     let active = true;
     let timer;
     let attempts = 0;
@@ -81,7 +81,8 @@ export default function OrderSuccess() {
     try {
       if (pvitPayment) {
         await api.post('/payments/pvit/create', {
-          orderId: pvitPayment.orderId, paymentStatusToken: pvitPayment.paymentStatusToken, operatorCode: pvitPayment.operatorCode
+          orderId: pvitPayment.orderId, paymentStatusToken: pvitPayment.paymentStatusToken,
+          operatorCode: pvitPayment.operatorCode, payerPhone: pvitPayment.payerPhone
         });
       } else {
         await api.post('/payments/ebilling/ussd-push', {
@@ -131,7 +132,7 @@ export default function OrderSuccess() {
               : isPaid
               ? (pvitPayment ? 'MyPVIT' : 'E-Billing') + ' a confirmé le paiement. Votre commande est en préparation.'
               : isFailed
-                ? 'E-Billing a signalé un échec. Vérifiez votre numéro et réessayez.'
+                ? (pvitPayment ? ((pvitPayment.initiationError && retryCount === 0) ? 'MyPVIT n’a pas accepté la demande. Vérifiez le numéro de paiement et l’opérateur puis réessayez.' : 'MyPVIT a signalé un échec. Vérifiez votre numéro et réessayez.') : 'E-Billing a signalé un échec. Vérifiez votre numéro et réessayez.')
                 : ebillingPayment.paymentSystemName === 'SIMU'
                   ? 'Demande transmise au simulateur E-Billing. Aucun appel ne sera envoyé à un téléphone réel.'
                   : (pvitPayment ? 'Une demande MyPVIT a été envoyée au téléphone associé à la commande.' : (ebillingPayment.paymentSystemName === 'moovmoney' ? 'Une demande Moov Money a été envoyée au téléphone associé à la commande.' : 'Une demande Airtel Money a été envoyée au téléphone associé à la commande.'))}
@@ -141,7 +142,7 @@ export default function OrderSuccess() {
         {ebillingPayment && !isPaid && !isFailed && !statusMessage && <p className="mb-5 flex items-center justify-center gap-2 text-sm text-gray-500"><Loader2 className="h-4 w-4 animate-spin" />Vérification du paiement…</p>}
 
         <div className="space-y-3">
-          {ebillingPayment && (isFailed || ebillingPayment.initiationError) && (
+          {ebillingPayment && (isFailed || (ebillingPayment.initiationError && retryCount === 0)) && (
             <Button onClick={retryPayment} disabled={retrying} className="w-full bg-amber-500 hover:bg-amber-600 py-5">
               {retrying ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
               Réessayer avec {pvitPayment ? 'MyPVIT' : ebillingPayment.paymentSystemName === 'moovmoney' ? 'Moov Money' : ebillingPayment.paymentSystemName === 'SIMU' ? 'SIMU' : 'Airtel Money'}

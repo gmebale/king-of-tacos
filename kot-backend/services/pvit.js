@@ -54,7 +54,18 @@ async function getSecret(forceRenew = false) {
 
 function normalizeGabonNumber(value) {
   const digits = String(value || '').replace(/\D/g, '');
-  if (digits.startsWith('241') && digits.length === 11) return `0${digits.slice(3)}`;
+  if (digits.startsWith('00241')) {
+    const national = digits.slice(5);
+    if (national.length === 8) return `0${national}`;
+    if (national.length === 9 && national.startsWith('0')) return national;
+    return null;
+  }
+  if (digits.startsWith('241')) {
+    const national = digits.slice(3);
+    if (national.length === 8) return `0${national}`;
+    if (national.length === 9 && national.startsWith('0')) return national;
+    return null;
+  }
   if (digits.startsWith('0') && digits.length === 9) return digits;
   if (digits.length === 8) return `0${digits}`;
   return null;

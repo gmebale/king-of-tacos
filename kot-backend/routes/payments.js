@@ -520,12 +520,14 @@ router.post('/pvit/create', async (req, res) => {
   let reservation = null;
   let previousProviderId = null;
   try {
-    const { orderId, paymentStatusToken, operatorCode } = req.body || {};
+    const { orderId, paymentStatusToken, operatorCode, payerPhone } = req.body || {};
     if (!orderId || !verifyPaymentStatusToken(paymentStatusToken, orderId)) return res.status(403).json({ message: 'Autorisation de paiement invalide ou expirée.' });
     const config = pvit.getConfig();
     if (!config.configured) return res.status(503).json({ message: 'Le paiement PVit n’est pas encore configuré.' });
     const allowedOperators = (process.env.PVIT_SUPPORTED_OPERATORS || 'AIRTEL_MONEY,MOOV_MONEY').split(',').map(value => value.trim()).filter(Boolean);
     if (!allowedOperators.includes(operatorCode)) return res.status(400).json({ message: 'Opérateur PVit invalide ou non autorisé.' });
+    const normalizedPayerPhone = pvit.normalizeGabonNumber(payerPhone);
+    if (!normalizedPayerPhone) return res.status(400).json({ message: 'Saisissez un numéro gabonais valide pour recevoir la demande de paiement (format 0XXXXXXXX, +241XXXXXXXX ou 00241XXXXXXXX).' });
     const settings = await prisma.settings.findMany({
       where: { key: { in: ['mobile_money_enabled', 'mobile_money_airtel_enabled', 'mobile_money_moov_enabled'] } }
     });
@@ -553,8 +555,8 @@ router.post('/pvit/create', async (req, res) => {
       data: { payment_provider_id: reservation }
     });
     if (!claimed.count) return res.status(409).json({ message: 'Cette commande a changé d’état. Actualisez-la avant de payer.' });
-    await pvit.verifyCustomer(order.customer_phone, operatorCode);
-    const initiated = await pvit.createPayment({ amount: order.total_amount, phone: order.customer_phone, reference, operatorCode, orderCode: order.order_code || order.id });
+    await pvit.verifyCustomer(normalizedPayerPhone, operatorCode);
+    const initiated = await pvit.createPayment({ amount: order.total_amount, phone: normalizedPayerPhone, reference, operatorCode, orderCode: order.order_code || order.id });
     const details = serializePvitDetails({ reference, transactionId: initiated.transactionId, operatorCode, state: initiated.status, initiatedAt: Date.now() });
     const saved = await prisma.order.updateMany({
       where: { id: order.id, payment_provider_id: reservation, payment_status: order.payment_status },
