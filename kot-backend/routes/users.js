@@ -1,10 +1,12 @@
 const express = require('express');
 const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcryptjs');
-const { authenticateToken, requireRole } = require('../middleware/auth');
+const { authenticateToken, requireRole, requirePermission, hasPermission } = require('../middleware/auth');
+const { ACCESS_PERMISSIONS, PROFILE_GRANTS, ROLE_PROFILES } = require('../config/accessControl');
 
 const router = express.Router();
 const prisma = new PrismaClient();
+let accessCatalogPromise = null;
 
 const getAllowedRoleValues = async () => {
   const dbRoles = await prisma.role.findMany({
@@ -25,8 +27,60 @@ const getAllowedRoleValues = async () => {
   ]);
 };
 
+const ensureAccessCatalog = () => {
+  if (!accessCatalogPromise) {
+    accessCatalogPromise = (async () => {
+      const permissionRecords = await Promise.all(ACCESS_PERMISSIONS.map(permission => prisma.permission.upsert({
+        where: { code: permission.code },
+        update: { label: permission.label, module: permission.module },
+        create: permission
+      })));
+      for (const roleData of ROLE_PROFILES) {
+        const role = await prisma.role.upsert({
+          where: { slug: roleData.slug },
+          update: { name: roleData.name, description: roleData.description },
+          create: { name: roleData.name, slug: roleData.slug, description: roleData.description }
+        });
+        const grants = new Set(PROFILE_GRANTS[roleData.profile] || []);
+        await prisma.rolePermission.createMany({
+          data: permissionRecords.map(permission => ({ role_id: role.id, permission_id: permission.id, granted: grants.has(permission.code) })),
+          skipDuplicates: true
+        });
+      }
+      const kitchenPermissions = await prisma.permission.findMany({ select: { id: true, code: true } });
+      const barRole = await prisma.role.findUnique({ where: { slug: 'bar' } });
+      if (barRole) {
+        const grants = new Set(PROFILE_GRANTS.cuisine);
+        await prisma.rolePermission.createMany({
+          data: kitchenPermissions.map(permission => ({ role_id: barRole.id, permission_id: permission.id, granted: grants.has(permission.code) })),
+          skipDuplicates: true
+        });
+      }
+      return true;
+    })().catch(error => {
+      accessCatalogPromise = null;
+      throw error;
+    });
+  }
+  return accessCatalogPromise;
+};
+
+const prepareAccessCatalog = async (_req, res, next) => {
+  try {
+    await ensureAccessCatalog();
+    next();
+  } catch (error) {
+    console.error('Prepare access catalog error:', error);
+    res.status(500).json({ message: 'Impossible de préparer les droits d’accès.' });
+  }
+};
+
+const recordAccessChange = (actor, action, details) => prisma.log.create({
+  data: { user_id: actor.id, role: actor.role || 'admin', action, details }
+}).catch(error => console.warn('Unable to write access audit entry:', error));
+
 // Get all users (admin only)
-router.get('/', authenticateToken, requireRole(['admin']), async (req, res) => {
+router.get('/', prepareAccessCatalog, authenticateToken, requirePermission('admin.users.create'), async (req, res) => {
   try {
     const users = await prisma.user.findMany({
       select: {
@@ -51,7 +105,7 @@ router.get('/', authenticateToken, requireRole(['admin']), async (req, res) => {
 });
 
 // Create user (admin only)
-router.post('/', authenticateToken, requireRole(['admin']), async (req, res) => {
+router.post('/', prepareAccessCatalog, authenticateToken, requirePermission('admin.users.create'), async (req, res) => {
   try {
     const { email, password, full_name, phone, role, pagePermissions } = req.body;
     const { server_code } = req.body;
@@ -63,6 +117,9 @@ router.post('/', authenticateToken, requireRole(['admin']), async (req, res) => 
     }
     if (role && !allowedRoles.has(role)) {
       return res.status(400).json({ message: 'Rôle utilisateur invalide' });
+    }
+    if (req.user.role !== 'admin' && ['admin', 'manager', 'responsable_service'].includes(role)) {
+      return res.status(403).json({ message: 'Vous ne pouvez pas attribuer ce niveau de rôle.' });
     }
     if (role === 'serveur' && !/^[a-z0-9]{6}$/i.test(server_code || '')) {
       return res.status(400).json({ message: 'Le code serveur doit contenir exactement 6 lettres ou chiffres' });
@@ -95,7 +152,7 @@ router.post('/', authenticateToken, requireRole(['admin']), async (req, res) => 
         role_id: roleRecord?.id,
         server_pin_hash: role === 'serveur' ? await bcrypt.hash(server_code.toUpperCase(), 10) : null,
         is_active: true,
-        pagePermissions: pagePermissions ? pagePermissions : undefined
+        pagePermissions: req.user.role === 'admin' && pagePermissions ? pagePermissions : undefined
       },
       select: {
         id: true,
@@ -110,6 +167,7 @@ router.post('/', authenticateToken, requireRole(['admin']), async (req, res) => 
       }
     });
 
+    await recordAccessChange(req.user, 'access_user_created', `Compte créé pour l’utilisateur ${user.full_name} (ID ${user.id}), profil ${user.role}.`);
     res.status(201).json(user);
   } catch (error) {
     if (error.code === 'P2002') {
@@ -121,8 +179,9 @@ router.post('/', authenticateToken, requireRole(['admin']), async (req, res) => 
 });
 
 // Get active roles for the staff editor (admin only)
-router.get('/roles', authenticateToken, requireRole(['admin']), async (req, res) => {
+router.get('/roles', prepareAccessCatalog, authenticateToken, requirePermission('admin.users.create'), async (req, res) => {
   try {
+    await ensureAccessCatalog();
     const roles = await prisma.role.findMany({
       where: { is_active: true },
       select: { name: true, slug: true },
@@ -132,6 +191,71 @@ router.get('/roles', authenticateToken, requireRole(['admin']), async (req, res)
   } catch (error) {
     console.error('Get roles error:', error);
     res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// Permission catalog and role matrix for the detailed access module.
+router.get('/access/roles', authenticateToken, requireRole(['admin']), async (_req, res) => {
+  try {
+    await ensureAccessCatalog();
+    const roles = await prisma.role.findMany({
+      where: { is_active: true, slug: { in: ROLE_PROFILES.map(role => role.slug) } },
+      include: { rolePermissions: { include: { permission: true } } },
+      orderBy: { id: 'asc' }
+    });
+    const orderedRoles = roles.sort((a, b) => ROLE_PROFILES.findIndex(profile => profile.slug === a.slug) - ROLE_PROFILES.findIndex(profile => profile.slug === b.slug));
+    res.json({ permissions: ACCESS_PERMISSIONS, roles: orderedRoles.map(role => ({
+      id: role.id, slug: role.slug, name: role.name, description: role.description,
+      permissions: Object.fromEntries(role.rolePermissions.map(entry => [entry.permission.code, entry.granted]))
+    })) });
+  } catch (error) {
+    console.error('Get access matrix error:', error);
+    res.status(500).json({ message: 'Impossible de charger la matrice des droits.' });
+  }
+});
+
+router.put('/access/roles/:slug', authenticateToken, requireRole(['admin']), async (req, res) => {
+  try {
+    await ensureAccessCatalog();
+    const role = await prisma.role.findUnique({ where: { slug: req.params.slug } });
+    if (!role || !ROLE_PROFILES.some(profile => profile.slug === role.slug)) return res.status(404).json({ message: 'Profil introuvable.' });
+    const permissions = req.body?.permissions;
+    if (!permissions || typeof permissions !== 'object' || Array.isArray(permissions)) return res.status(400).json({ message: 'Matrice de permissions invalide.' });
+    const knownCodes = new Set(ACCESS_PERMISSIONS.map(permission => permission.code));
+    if (Object.keys(permissions).some(code => !knownCodes.has(code)) || Object.values(permissions).some(value => typeof value !== 'boolean')) {
+      return res.status(400).json({ message: 'La matrice contient des droits inconnus ou des valeurs invalides.' });
+    }
+    if (role.slug === 'admin' && ACCESS_PERMISSIONS.some(({ code }) => permissions[code] !== true)) {
+      return res.status(400).json({ message: 'Le profil Direction conserve tous les droits.' });
+    }
+    // Resolve relation ids once to keep the bulk update explicit and deterministic.
+    const catalog = await prisma.permission.findMany({ where: { code: { in: ACCESS_PERMISSIONS.map(permission => permission.code) } }, select: { id: true, code: true } });
+    const permissionIds = new Map(catalog.map(permission => [permission.code, permission.id]));
+    const updates = ACCESS_PERMISSIONS.map(({ code }) => prisma.rolePermission.upsert({
+      where: { role_id_permission_id: { role_id: role.id, permission_id: permissionIds.get(code) } },
+      update: { granted: permissions[code] === true },
+      create: { role_id: role.id, permission_id: permissionIds.get(code), granted: permissions[code] === true }
+    }));
+    await prisma.$transaction(updates);
+    await recordAccessChange(req.user, 'access_role_permissions_updated', `Matrice de droits modifiée pour le profil ${role.name}.`);
+    res.json({ message: 'Droits du profil enregistrés.' });
+  } catch (error) {
+    console.error('Update access matrix error:', error);
+    res.status(500).json({ message: 'Impossible d’enregistrer la matrice des droits.' });
+  }
+});
+
+router.get('/access/audit', authenticateToken, requireRole(['admin']), async (req, res) => {
+  try {
+    const entries = await prisma.log.findMany({
+      where: { action: { startsWith: 'access_' } },
+      include: { user: { select: { id: true, full_name: true, role: true } } },
+      orderBy: { created_at: 'desc' }, take: 200
+    });
+    res.json(entries);
+  } catch (error) {
+    console.error('Get access audit error:', error);
+    res.status(500).json({ message: 'Impossible de charger le journal des droits.' });
   }
 });
 
@@ -166,7 +290,7 @@ router.get('/:id', authenticateToken, requireRole(['admin']), async (req, res) =
 });
 
 // Update user (admin only)
-router.put('/:id', authenticateToken, requireRole(['admin']), async (req, res) => {
+router.put('/:id', prepareAccessCatalog, authenticateToken, requirePermission('admin.users.create'), async (req, res) => {
   try {
     const { id } = req.params;
     const { full_name, phone, role, is_active, password, pagePermissions } = req.body;
@@ -185,6 +309,15 @@ router.put('/:id', authenticateToken, requireRole(['admin']), async (req, res) =
     const allowedRoles = await getAllowedRoleValues();
     if (role && !allowedRoles.has(role)) {
       return res.status(400).json({ message: 'Rôle utilisateur invalide' });
+    }
+    if (req.user.role !== 'admin' && role !== undefined && role !== existingUser.role) {
+      return res.status(403).json({ message: 'Seule la Direction peut modifier le rôle d’un utilisateur.' });
+    }
+    if (req.user.role !== 'admin' && is_active === false && !hasPermission(req.user, 'admin.users.disable')) {
+      return res.status(403).json({ message: 'Vous n’êtes pas autorisé à désactiver les comptes.' });
+    }
+    if (req.user.role !== 'admin' && (server_code || password)) {
+      return res.status(403).json({ message: 'Seule la Direction peut modifier les identifiants de connexion.' });
     }
     const targetRole = role !== undefined ? role : existingUser.role;
     if (server_code && !/^[a-z0-9]{6}$/i.test(server_code)) {
@@ -225,7 +358,7 @@ router.put('/:id', authenticateToken, requireRole(['admin']), async (req, res) =
     }
     if (server_code) updateData.server_pin_hash = await bcrypt.hash(server_code.toUpperCase(), 10);
     if (is_active !== undefined) updateData.is_active = is_active;
-    if (pagePermissions !== undefined) updateData.pagePermissions = pagePermissions;
+    if (pagePermissions !== undefined && req.user.role === 'admin') updateData.pagePermissions = pagePermissions;
     if (password) {
       updateData.password = await bcrypt.hash(password, 10);
     }
@@ -247,6 +380,7 @@ router.put('/:id', authenticateToken, requireRole(['admin']), async (req, res) =
       }
     });
 
+    await recordAccessChange(req.user, 'access_user_updated', `Compte mis à jour pour l’utilisateur ${user.full_name} (ID ${user.id}).`);
     res.json(user);
   } catch (error) {
     if (error.code === 'P2025') {
@@ -258,7 +392,7 @@ router.put('/:id', authenticateToken, requireRole(['admin']), async (req, res) =
 });
 
 // Toggle user active status (admin only)
-router.patch('/:id/toggle-active', authenticateToken, requireRole(['admin']), async (req, res) => {
+router.patch('/:id/toggle-active', prepareAccessCatalog, authenticateToken, requirePermission('admin.users.disable'), async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -305,6 +439,7 @@ router.patch('/:id/toggle-active', authenticateToken, requireRole(['admin']), as
       }
     });
 
+    await recordAccessChange(req.user, user.is_active ? 'access_user_activated' : 'access_user_disabled', `Compte ${user.is_active ? 'activé' : 'désactivé'} pour ${user.full_name} (ID ${user.id}).`);
     res.json(user);
   } catch (error) {
     if (error.code === 'P2025') {

@@ -17,6 +17,12 @@ const PAGE_PERMISSION_KEYS = [
   'staff', 'reviews', 'customers', 'loyalty'
 ];
 
+const PAGE_CODE_PREFIXES = {
+  dashboard: ['reports.sales_total'], orders: ['orders.'], kitchen: ['kitchen.'], cashier: ['payments.', 'cash.', 'discounts.'],
+  stock: ['stock.', 'admin.products', 'admin.prices', 'admin.menus'], finance: ['reports.sales_total', 'reports.sales_detail', 'reports.margins', 'reports.export'],
+  settings: ['admin.settings'], staff: ['admin.users.', 'admin.access.manage']
+};
+
 const addPermission = (map, permission, granted) => {
   if (!permission?.code) return;
 
@@ -27,9 +33,29 @@ const addPermission = (map, permission, granted) => {
   for (const pageKey of PAGE_PERMISSION_KEYS) {
     const tokens = code.split(/[._:-]/);
     if (module === pageKey || tokens.includes(pageKey)) {
-      map[pageKey] = granted;
+      map[pageKey] = map[pageKey] === true || granted;
     }
   }
+  for (const [pageKey, prefixes] of Object.entries(PAGE_CODE_PREFIXES)) {
+    if (prefixes.some((prefix) => prefix.endsWith('.') ? code.startsWith(prefix) : code === prefix)) {
+      map[pageKey] = map[pageKey] === true || granted;
+    }
+  }
+};
+
+const hasPermission = (user, code) => {
+  if (!user) return false;
+  if (normalizeRole(user) === 'admin') return true;
+  if (user.permissions && Object.prototype.hasOwnProperty.call(user.permissions, code)) return user.permissions[code] === true;
+  if (user.pagePermissions && Object.prototype.hasOwnProperty.call(user.pagePermissions, code)) return user.pagePermissions[code] === true;
+  const pageKey = String(code).split('.')[0];
+  return user.pagePermissions?.[pageKey] === true;
+};
+
+const requirePermission = (code) => (req, res, next) => {
+  if (!req.user) return res.status(401).json({ message: 'Authentication required' });
+  if (!hasPermission(req.user, code)) return res.status(403).json({ message: 'Accès refusé à cette opération' });
+  next();
 };
 
 const authenticateToken = async (req, res, next) => {
@@ -75,8 +101,8 @@ const authenticateToken = async (req, res, next) => {
     }
 
     const pagePermissions = {
-      ...permissionMap,
-      ...(user.pagePermissions && typeof user.pagePermissions === 'object' ? user.pagePermissions : {})
+      ...(user.pagePermissions && typeof user.pagePermissions === 'object' ? user.pagePermissions : {}),
+      ...permissionMap
     };
 
     req.user = {
@@ -133,5 +159,7 @@ module.exports = {
   authenticateToken,
   requireRole,
   requirePagePermission,
+  requirePermission,
+  hasPermission,
   normalizeRole
 };

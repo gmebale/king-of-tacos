@@ -25,6 +25,7 @@ import { Label } from "../Components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../Components/ui/select";
 import { Switch } from "../Components/ui/switch";
 import toast from "react-hot-toast";
+import { useAuthContext } from "../contexts/AuthContext";
 
 const PAGE_PERMISSIONS = [
   { key: "dashboard", label: "Dashboard" },
@@ -68,6 +69,7 @@ const createDefaultPermissions = () => ({
 });
 
 export default function AdminStaff() {
+  const { user: currentUser } = useAuthContext();
   const [users, setUsers] = useState([]);
   const [roleOptions, setRoleOptions] = useState(ROLE_OPTIONS);
   const [filteredUsers, setFilteredUsers] = useState([]);
@@ -98,6 +100,9 @@ export default function AdminStaff() {
   const [isUpdating, setIsUpdating] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isToggling, setIsToggling] = useState(null);
+  const assignableRoleOptions = currentUser?.role === 'admin'
+    ? roleOptions
+    : roleOptions.filter(option => !['admin', 'manager', 'responsable_service'].includes(option.value));
 
   useEffect(() => {
     loadUsers();
@@ -383,7 +388,7 @@ export default function AdminStaff() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {roleOptions.map((roleOption) => (
+                      {assignableRoleOptions.map((roleOption) => (
                         <SelectItem key={roleOption.value} value={roleOption.value}>
                           {roleOption.label}
                         </SelectItem>
@@ -399,7 +404,7 @@ export default function AdminStaff() {
                   </div>
                 )}
 
-                <div className="pt-2">
+                {currentUser?.role === 'admin' && <div className="pt-2">
                   <Label>Permissions d’accès</Label>
                   <div className="mt-2 grid gap-2 sm:grid-cols-2 sm:gap-3">
                     {PAGE_PERMISSIONS.map((permission) => (
@@ -420,7 +425,7 @@ export default function AdminStaff() {
                       </div>
                     ))}
                   </div>
-                </div>
+                </div>}
               </div>
               <DialogFooter>
                 <Button
@@ -587,14 +592,14 @@ export default function AdminStaff() {
                         </>
                       )}
                     </Button>
-                    <Button
+                    {currentUser?.role === 'admin' && <Button
                       variant="outline"
                       size="sm"
                       onClick={() => handleDeleteClick(user)}
                       className="text-red-600 hover:text-red-700 hover:bg-red-50"
                     >
                       <Trash2 className="w-4 h-4" />
-                    </Button>
+                    </Button>}
                   </div>
                 </CardContent>
               </Card>
@@ -645,11 +650,11 @@ export default function AdminStaff() {
                   value={editingUser.role}
                   onValueChange={(value) => setEditingUser({ ...editingUser, role: value })}
                 >
-                  <SelectTrigger className="mt-1">
+                  <SelectTrigger className="mt-1" disabled={currentUser?.role !== 'admin'}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {roleOptions.map((roleOption) => (
+                    {assignableRoleOptions.map((roleOption) => (
                       <SelectItem key={roleOption.value} value={roleOption.value}>
                         {roleOption.label}
                       </SelectItem>
@@ -658,14 +663,14 @@ export default function AdminStaff() {
                 </Select>
               </div>
 
-              {editingUser.role === "serveur" && (
+              {currentUser?.role === 'admin' && editingUser.role === "serveur" && (
                 <div>
                   <Label htmlFor="edit-server-code">Nouveau code serveur (6 lettres ou chiffres)</Label>
                   <Input id="edit-server-code" minLength={6} maxLength={6} autoComplete="off" placeholder="Laisser vide pour conserver le code actuel" value={editingUser.server_code || ""} onChange={(e) => setEditingUser({ ...editingUser, server_code: e.target.value.toUpperCase() })} className="mt-1 uppercase" />
                 </div>
               )}
 
-              <div className="pt-2">
+              {currentUser?.role === 'admin' && <div className="pt-2">
                 <Label>Permissions d’accès</Label>
                 <div className="mt-2 grid gap-2 sm:grid-cols-2 sm:gap-3">
                   {PAGE_PERMISSIONS.map((permission) => (
@@ -686,9 +691,9 @@ export default function AdminStaff() {
                     </div>
                   ))}
                 </div>
-              </div>
+              </div>}
 
-              <div>
+              {currentUser?.role === 'admin' && <div>
                 <Label htmlFor="edit-password">Nouveau mot de passe (laisser vide pour ne pas changer)</Label>
                 <Input
                   id="edit-password"
@@ -698,7 +703,7 @@ export default function AdminStaff() {
                   onChange={(e) => setEditingUser({ ...editingUser, password: e.target.value })}
                   className="mt-1"
                 />
-              </div>
+              </div>}
               <div className="flex items-center justify-between pt-2">
                 <Label htmlFor="edit-active">Compte actif</Label>
                 <Switch

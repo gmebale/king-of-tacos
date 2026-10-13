@@ -17,6 +17,7 @@ import AdminDashboard from './Pages/AdminDashboard';
 import AdminOrders from './Pages/AdminOrders';
 import AdminStock from './Pages/AdminStock';
 import AdminStaff from './Pages/AdminStaff';
+import AdminAccess from './Pages/AdminAccess';
 import AdminSettings from './Pages/AdminSettings';
 import AdminFinance from './Pages/AdminFinance';
 import AdminExpenses from './Pages/AdminExpenses';
@@ -45,17 +46,18 @@ function App() {
           <Route path="/profile" element={<Layout currentPageName="Profile"><Profile /></Layout>} />
           <Route path="/admin/dashboard" element={<ProtectedRoute requiredPermission="dashboard"><Layout currentPageName="AdminDashboard"><AdminDashboard /></Layout></ProtectedRoute>} />
           <Route path="/admin/orders" element={<ProtectedRoute requiredPermission="orders"><Layout currentPageName="AdminOrders"><AdminOrders /></Layout></ProtectedRoute>} />
-          <Route path="/admin/new-order" element={<ProtectedRoute requiredRoles={['serveur']}><Layout currentPageName="NewRestaurantOrder"><StaffOrderStart /></Layout></ProtectedRoute>} />
+          <Route path="/admin/new-order" element={<ProtectedRoute requiredPermission="orders"><Layout currentPageName="NewRestaurantOrder"><StaffOrderStart /></Layout></ProtectedRoute>} />
           <Route path="/admin/kitchen" element={<ProtectedRoute requiredPermission="kitchen"><Layout currentPageName="KitchenMode"><KitchenMode /></Layout></ProtectedRoute>} />
           <Route path="/admin/kitchen-hot" element={<ProtectedRoute requiredPermissions={['kitchen_hot', 'kitchen']}><Layout currentPageName="KitchenHotMode"><KitchenMode station="cuisine_chaude" /></Layout></ProtectedRoute>} />
           <Route path="/admin/kitchen-cold" element={<ProtectedRoute requiredPermissions={['kitchen_cold', 'kitchen']}><Layout currentPageName="KitchenColdMode"><KitchenMode station="cuisine_froide" /></Layout></ProtectedRoute>} />
-          <Route path="/admin/bar" element={<ProtectedRoute requiredRoles={['admin', 'bar']}><Layout currentPageName="BarMode"><KitchenMode station="bar" /></Layout></ProtectedRoute>} />
+          <Route path="/admin/bar" element={<ProtectedRoute requiredPermission="kitchen"><Layout currentPageName="BarMode"><KitchenMode station="bar" /></Layout></ProtectedRoute>} />
           <Route path="/admin/cashier" element={<ProtectedRoute requiredPermission="cashier"><Layout currentPageName="CashierMode"><CashierMode /></Layout></ProtectedRoute>} />
           <Route path="/admin/finance" element={<ProtectedRoute requiredPermission="finance"><Layout currentPageName="AdminFinance"><AdminFinance /></Layout></ProtectedRoute>} />
           <Route path="/admin/finance/expenses" element={<ProtectedRoute requiredPermission="finance"><Layout currentPageName="AdminExpenses"><AdminExpenses /></Layout></ProtectedRoute>} />
           <Route path="/admin/mobile-money" element={<ProtectedRoute requiredPermission="cashier"><Layout currentPageName="AdminMobileMoney"><AdminMobileMoney /></Layout></ProtectedRoute>} />
           <Route path="/admin/stock" element={<ProtectedRoute requiredPermission="stock"><Layout currentPageName="AdminStock"><AdminStock /></Layout></ProtectedRoute>} />
-          <Route path="/admin/staff" element={<ProtectedRoute requiredRoles={['admin']}><Layout currentPageName="AdminStaff"><AdminStaff /></Layout></ProtectedRoute>} />
+          <Route path="/admin/staff" element={<ProtectedRoute requiredPermission="staff"><Layout currentPageName="AdminStaff"><AdminStaff /></Layout></ProtectedRoute>} />
+          <Route path="/admin/access" element={<ProtectedRoute requiredRoles={['admin']}><Layout currentPageName="AdminAccess"><AdminAccess /></Layout></ProtectedRoute>} />
           <Route path="/admin/loyalty" element={<ProtectedRoute requiredPermission="loyalty"><Layout currentPageName="AdminLoyalty"><AdminLoyalty /></Layout></ProtectedRoute>} />
           <Route path="/admin/settings" element={<ProtectedRoute requiredPermission="settings"><Layout currentPageName="AdminSettings"><AdminSettings /></Layout></ProtectedRoute>} />
           <Route path="/admin/reviews" element={<ProtectedRoute requiredPermission="reviews"><Layout currentPageName="AdminReviews"><AdminReviews /></Layout></ProtectedRoute>} />

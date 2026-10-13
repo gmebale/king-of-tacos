@@ -1,6 +1,6 @@
 const express = require('express');
 const { PrismaClient } = require('@prisma/client');
-const { authenticateToken, requirePagePermission } = require('../middleware/auth');
+const { authenticateToken, requirePagePermission, requirePermission, hasPermission } = require('../middleware/auth');
 const PDFDocument = require('pdfkit');
 const ExcelJS = require('exceljs');
 const { format } = require('date-fns');
@@ -499,7 +499,7 @@ router.get('/session', authenticateToken, requirePagePermission('cashier'), asyn
 });
 
 // Open cash register
-router.post('/session/open', authenticateToken, requirePagePermission('cashier'), async (req, res) => {
+router.post('/session/open', authenticateToken, requirePagePermission('cashier'), requirePermission('cash.open_session'), requirePermission('cash.opening_amount'), async (req, res) => {
   try {
     const { opening_balance } = req.body;
 
@@ -558,7 +558,7 @@ router.post('/session/open', authenticateToken, requirePagePermission('cashier')
 });
 
 // Close cash register
-router.post('/session/close', authenticateToken, requirePagePermission('cashier'), async (req, res) => {
+router.post('/session/close', authenticateToken, requirePagePermission('cashier'), requirePermission('cash.count'), requirePermission('cash.close_session'), async (req, res) => {
   try {
     const { closing_balance, notes } = req.body;
 
@@ -1270,6 +1270,8 @@ router.put('/orders/:id/pay', authenticateToken, requirePagePermission('cashier'
     if (!['cash', 'card', 'mobile_money'].includes(payment_method)) {
       return res.status(400).json({ message: 'Moyen de paiement invalide' });
     }
+    const paymentPermission = { cash: 'payments.cash', card: 'payments.card', mobile_money: 'payments.mobile_money' }[payment_method];
+    if (!hasPermission(req.user, paymentPermission)) return res.status(403).json({ message: 'Vous n’êtes pas autorisé à utiliser ce moyen d’encaissement.' });
 
     const order = await prisma.order.findUnique({
       where: { id },
@@ -1335,7 +1337,7 @@ router.put('/orders/:id/pay', authenticateToken, requirePagePermission('cashier'
   }
 });
 
-router.put('/orders/:id/refund', authenticateToken, requirePagePermission('cashier'), async (req, res) => {
+router.put('/orders/:id/refund', authenticateToken, requirePagePermission('cashier'), requirePermission('payments.refund'), async (req, res) => {
   try {
     const { id } = req.params;
     const order = await prisma.order.findUnique({ where: { id } });

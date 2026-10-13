@@ -1,6 +1,6 @@
 const express = require('express');
 const { PrismaClient } = require('@prisma/client');
-const { authenticateToken, requirePagePermission } = require('../middleware/auth');
+const { authenticateToken, requirePagePermission, requirePermission, hasPermission } = require('../middleware/auth');
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -191,7 +191,7 @@ router.get('/:id/recommendations', async (req, res) => {
 });
 
 // Create product (admin only)
-router.post('/', authenticateToken, requirePagePermission('stock'), async (req, res) => {
+router.post('/', authenticateToken, requirePagePermission('stock'), requirePermission('admin.products'), async (req, res) => {
   try {
     const { name, description, price, discount_percentage, category, available, image, stock, stock_alert_threshold, customization, tax_rate_ids, loyalty_points, type } = req.body;
     const taxRateIds = parseTaxRateIds(tax_rate_ids);
@@ -257,8 +257,16 @@ router.post('/', authenticateToken, requirePagePermission('stock'), async (req, 
 // Update product (admin only)
 router.put('/:id', authenticateToken, requirePagePermission('stock'), async (req, res) => {
   try {
+    if (!hasPermission(req.user, 'admin.products')) return res.status(403).json({ message: 'Vous n’êtes pas autorisé à modifier les produits.' });
     const { id } = req.params;
     const { name, description, price, discount_percentage, category, available, image, stock, stock_alert_threshold, customization, tax_rate_ids, loyalty_points, type } = req.body;
+    if (price !== undefined || discount_percentage !== undefined || stock !== undefined) {
+      const currentValues = await prisma.product.findUnique({ where: { id: parseInt(id) }, select: { price: true, discount_percentage: true, stock: true } });
+      if (!currentValues) return res.status(404).json({ message: 'Produit introuvable.' });
+      const changesPrice = (price !== undefined && Number(price) !== currentValues.price) || (discount_percentage !== undefined && Number(discount_percentage) !== currentValues.discount_percentage);
+      if (changesPrice && !hasPermission(req.user, 'admin.prices')) return res.status(403).json({ message: 'Seule la Direction peut modifier les prix de vente.' });
+      if (stock !== undefined && Number(stock) !== currentValues.stock && !hasPermission(req.user, 'stock.correct')) return res.status(403).json({ message: 'Vous n’êtes pas autorisé à corriger le stock.' });
+    }
     const taxRateIds = parseTaxRateIds(tax_rate_ids);
     if (taxRateIds === null) return res.status(400).json({ message: 'Liste de taux de taxe invalide' });
 
@@ -354,7 +362,7 @@ router.put('/:id', authenticateToken, requirePagePermission('stock'), async (req
 });
 
 // Delete product (admin only)
-router.delete('/:id', authenticateToken, requirePagePermission('stock'), async (req, res) => {
+router.delete('/:id', authenticateToken, requirePagePermission('stock'), requirePermission('admin.products'), async (req, res) => {
   try {
     const { id } = req.params;
     const productId = parseInt(id);

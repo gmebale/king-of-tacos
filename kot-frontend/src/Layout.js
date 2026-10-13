@@ -21,7 +21,8 @@ import {
   X,
   TrendingUp,
   MessageSquare,
-  Smartphone
+  Smartphone,
+  ShieldCheck
 } from "lucide-react";
 import { Button } from "./Components/ui/button";
 import { motion } from "framer-motion";
@@ -67,7 +68,7 @@ export default function Layout({ children, currentPageName }) {
 
   const adminNavItems = [
     { name: "Dashboard", path: "AdminDashboard", permission: "dashboard", icon: LayoutDashboard },
-    { name: "Prendre une commande", path: "NewRestaurantOrder", permission: "orders", serverOnly: true, icon: ShoppingCart },
+    { name: "Prendre une commande", path: "NewRestaurantOrder", permission: "orders", icon: ShoppingCart },
     { name: "Commandes", path: "AdminOrders", permission: "orders", icon: ShoppingCart },
     { name: "Cuisine chaude", path: "KitchenHotMode", station: "cuisine_chaude", icon: ChefHat },
     { name: "Cuisine froide", path: "KitchenColdMode", station: "cuisine_froide", icon: ChefHat },
@@ -78,6 +79,7 @@ export default function Layout({ children, currentPageName }) {
     { name: "Mobile Money", path: "AdminMobileMoney", permission: "cashier", icon: Smartphone },
     { name: "Stock", path: "AdminStock", permission: "stock", icon: Package },
     { name: "Personnel", path: "AdminStaff", permission: "staff", icon: Users },
+    { name: "Droits d’accès", path: "AdminAccess", permission: "staff", icon: ShieldCheck },
     { name: "Fidélité", path: "AdminLoyalty", permission: "loyalty", icon: Star },
     { name: "Avis", path: "AdminReviews", permission: "reviews", icon: MessageSquare },
     { name: "Paramètres", path: "AdminSettings", permission: "settings", icon: Settings }
@@ -85,7 +87,7 @@ export default function Layout({ children, currentPageName }) {
 
   const canAccessAdminNavItem = (item) => {
     if (!item.station) return hasPagePermission(item.permission);
-    if (item.station === "bar") return user?.role === "admin" || user?.role === "bar";
+    if (item.station === "bar") return hasPagePermission("kitchen") || hasPagePermission("bar");
     const permission = item.station === "cuisine_chaude" ? "kitchen_hot" : "kitchen_cold";
     return hasPagePermission(permission) || hasPagePermission("kitchen");
   };
@@ -116,7 +118,7 @@ export default function Layout({ children, currentPageName }) {
           </div>
 
           <nav className="flex-1 overflow-y-auto p-4 space-y-1">
-            {adminNavItems.filter((item) => (item.serverOnly ? user?.role === "serveur" : canAccessAdminNavItem(item)) && (item.path !== "AdminStaff" || user?.role === "admin")).map((item) => {
+            {adminNavItems.filter((item) => (item.serverOnly ? user?.role === "serveur" : canAccessAdminNavItem(item)) && (item.path !== 'AdminAccess' || user?.role === "admin")).map((item) => {
               const isActive = location.pathname === createPageUrl(item.path);
               return (
                 <Link

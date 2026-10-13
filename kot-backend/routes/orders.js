@@ -3,7 +3,7 @@ const pvit = require('../services/pvit');
 const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { authenticateToken, requireRole, requirePagePermission } = require('../middleware/auth');
+const { authenticateToken, requireRole, requirePagePermission, requirePermission, hasPermission } = require('../middleware/auth');
 const { buildTaxSnapshot } = require('../utils/orderItemPricing');
 const { recognizeOrderStockSale } = require('../utils/inventory');
 const { awardOrderPoints } = require('../utils/loyalty');
@@ -675,7 +675,7 @@ router.post('/:id/cancel', authenticateToken, async (req, res) => {
 
     const order = await prisma.order.findUnique({ where: { id } });
     if (!order) return res.status(404).json({ message: 'Commande introuvable.' });
-    const isAdminOrStaff = ['admin', 'staff'].includes(req.user.role) || req.user.pagePermissions?.orders === true;
+    const isAdminOrStaff = hasPermission(req.user, 'orders.cancel_after_send');
     const isOwner = order.user_id === req.user.id;
     if (!isAdminOrStaff && !isOwner) return res.status(403).json({ message: 'Accès refusé.' });
     if (order.closed_at || !['en_attente', 'en_preparation', 'prete', 'en_livraison'].includes(order.status)) {
@@ -870,7 +870,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
 });
 
 // Validate order (serveurs only for on-site orders)
-router.post('/:id/validate', authenticateToken, requireRole(['serveur','admin','manager']), async (req, res) => {
+router.post('/:id/validate', authenticateToken, requirePermission('orders.send_to_kitchen'), async (req, res) => {
   try {
     const { id } = req.params;
 

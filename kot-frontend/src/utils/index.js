@@ -33,6 +33,7 @@ export function createPageUrl(pageName) {
     AdminMobileMoney: '/admin/mobile-money',
     AdminStock: '/admin/stock',
     AdminStaff: '/admin/staff',
+    AdminAccess: '/admin/access',
     AdminLoyalty: '/admin/loyalty',
     AdminSettings: '/admin/settings',
     AdminReviews: '/admin/reviews'
