@@ -1053,7 +1053,12 @@ function drawCashReport(doc, report, options = {}) {
     doc.fontSize(9).fillColor(palette.muted).text('Aucune vente par lieu sur la période.');
   } else {
     report.locationReport.forEach(location => {
-      reportMetric(doc, `${location.location} - ${location.orders} commande(s) - ${location.items} article(s)`, formatReportAmount(location.revenue), { fontSize: 9 });
+      ensureReportSpace(doc, 54);
+      doc.font('Helvetica-Bold').fontSize(11).fillColor(palette.secondary).text(location.location);
+      reportInlineMetric(doc, 'Commandes', location.orders);
+      reportInlineMetric(doc, 'Articles', location.items);
+      reportInlineMetric(doc, 'Ventes', formatReportAmount(location.revenue));
+      doc.moveDown(0.45);
     });
   }
   doc.moveDown();
