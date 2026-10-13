@@ -121,7 +121,7 @@ export default function AdminLoyalty() {
 
   const handleCreateReward = async () => {
     try {
-      const payload = { ...rewardForm, expires_at: new Date(rewardForm.expires_at).toISOString() };
+      const payload = { ...rewardForm, points_required: rewardForm.tier_level ? 0 : Number(rewardForm.points_required), expires_at: new Date(rewardForm.expires_at).toISOString() };
       await api.post('/loyalty/admin/rewards', payload);
       toast.success('Récompense créée avec succès');
       setShowRewardDialog(false);
@@ -135,7 +135,7 @@ export default function AdminLoyalty() {
 
   const handleUpdateReward = async () => {
     try {
-      const payload = { ...rewardForm, expires_at: new Date(rewardForm.expires_at).toISOString() };
+      const payload = { ...rewardForm, points_required: rewardForm.tier_level ? 0 : Number(rewardForm.points_required), expires_at: new Date(rewardForm.expires_at).toISOString() };
       await api.put(`/loyalty/admin/rewards/${editingReward.id}`, payload);
       toast.success('Récompense mise à jour avec succès');
       setShowRewardDialog(false);
@@ -278,7 +278,7 @@ export default function AdminLoyalty() {
       name: reward.name,
       description: reward.description || '',
       type: reward.type,
-      points_required: (tier?.threshold_points ?? reward.points_required).toString(),
+      points_required: tier ? '' : (reward.points_required || '').toString(),
       quantity_limit: reward.quantity_limit?.toString() || '',
       expires_at: expiryDate ? expiryDate.toISOString().slice(0, 16) : '',
       discount_percent: reward.discount_percent?.toString() || '',
@@ -464,32 +464,32 @@ export default function AdminLoyalty() {
                           </SelectContent>
                         </Select>
                       </div>
-                      <div>
-                        <Label htmlFor="points">{rewardForm.tier_level ? 'Coût de réclamation (points)' : 'Points requis'}</Label>
+                      {!rewardForm.tier_level && <div>
+                        <Label htmlFor="points">Points requis pour obtenir la récompense</Label>
                         <Input
                           id="points"
                           type="number"
+                          min="1"
+                          required
                           value={rewardForm.points_required}
                           onChange={(e) => setRewardForm({...rewardForm, points_required: e.target.value})}
                           placeholder="100"
-                          disabled={Boolean(rewardForm.tier_level)}
                         />
-                        {rewardForm.tier_level && <p className="mt-1 text-xs text-gray-500">Ce coût est automatiquement égal au seuil du palier et sera débité lorsque le client réclamera la récompense.</p>}
                       </div>
+                      }
                       <div>
-                        <Label htmlFor="reward-tier">Palier requis (facultatif)</Label>
+                        <Label htmlFor="reward-tier">Niveau requis (facultatif)</Label>
                         <Select value={rewardForm.tier_level || 'none'} onValueChange={value => {
-                          const selectedTier = tiers.find(tier => tier.level.toString() === value);
                           setRewardForm(current => ({
                             ...current,
                             tier_level: value === 'none' ? '' : value,
-                            points_required: selectedTier?.threshold_points != null ? String(selectedTier.threshold_points) : current.points_required
+                            points_required: ''
                           }));
                         }}>
                           <SelectTrigger id="reward-tier"><SelectValue /></SelectTrigger>
                           <SelectContent><SelectItem value="none">Aucun palier</SelectItem>{tiers.map(tier => <SelectItem key={tier.level} value={tier.level.toString()} disabled={!Number.isInteger(Number(tier.threshold_points)) || Number(tier.threshold_points) < 1}>{tier.title} · seuil {tier.threshold_points || 'à configurer'}</SelectItem>)}</SelectContent>
                         </Select>
-                        <p className="mt-1 text-xs text-gray-500">Le palier définit à la fois le seuil de déblocage et le coût débité lors de la réclamation.</p>
+                        <p className="mt-1 text-xs text-gray-500">Avec un niveau, le client doit l’avoir débloqué pour réclamer la récompense ; aucun point ne sera dépensé. Sans niveau, indiquez le coût en points ci-dessus.</p>
                       </div>
                       <div>
                         <Label htmlFor="reward-limit">Quantité totale disponible</Label>
@@ -553,7 +553,7 @@ export default function AdminLoyalty() {
                       <TableCell className="font-medium">{reward.name}</TableCell>
                       <TableCell>{getRewardTypeLabel(reward.type)}</TableCell>
                       <TableCell>{reward.tier?.title || 'Classique'}</TableCell>
-                      <TableCell>{reward.points_required} pts · {reward.quantity_claimed}/{reward.quantity_limit ?? '—'}</TableCell>
+                      <TableCell>{reward.tier_level ? 'Sans dépense de points' : `${reward.points_required} pts`} · {reward.quantity_claimed}/{reward.quantity_limit ?? '—'}</TableCell>
                       <TableCell>{reward.expires_at ? new Date(reward.expires_at).toLocaleDateString('fr-FR') : 'À configurer'}</TableCell>
                       <TableCell>
                         <Badge variant={reward.is_active ? 'default' : 'secondary'}>
@@ -610,7 +610,7 @@ export default function AdminLoyalty() {
                     <SelectContent>
                       {rewards.filter(r => r.is_active).map((reward) => (
                         <SelectItem key={reward.id} value={reward.id}>
-                          {reward.name} ({reward.points_required} points)
+                          {reward.name} ({reward.tier_level ? `${reward.tier?.title || `niveau ${reward.tier_level}`} · sans points` : `${reward.points_required} points`})
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -885,7 +885,7 @@ export default function AdminLoyalty() {
                         {redemption.user.full_name} ({redemption.user.email})
                       </TableCell>
                       <TableCell>{redemption.reward.name}</TableCell>
-                      <TableCell>{redemption.points_used}</TableCell>
+                      <TableCell>{redemption.points_used > 0 ? `${redemption.points_used} pts` : 'Aucun point'}</TableCell>
                       <TableCell>{redemption.status === 'used' ? 'Utilisée' : redemption.status === 'expired' ? 'Expirée' : 'En attente'}{redemption.promoCode?.code ? ` · ${redemption.promoCode.code}` : ''}</TableCell>
                       <TableCell>{new Date(redemption.created_at).toLocaleDateString('fr-FR')}</TableCell>
                     </TableRow>

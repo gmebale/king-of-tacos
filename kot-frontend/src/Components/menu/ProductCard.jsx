@@ -65,8 +65,8 @@ export default function ProductCard({ product, onAddToCart, cartItem, onUpdateQu
         whileHover={{ y: -5 }}
         transition={{ duration: 0.3 }}
       >
-        <Card className={`group w-full min-w-0 flex flex-row overflow-hidden rounded-none border-x-0 border-t-0 border-b border-gray-200 shadow-none transition-all duration-300 md:flex-col md:rounded-xl md:border-2 md:hover:border-amber-400 md:hover:shadow-xl ${isUnavailable ? 'bg-gray-50' : 'bg-white'}`}>
-          <div className="relative order-2 h-20 w-20 flex-none self-center overflow-hidden bg-gradient-to-br from-amber-50 to-yellow-100 sm:h-24 sm:w-24 md:order-none md:h-48 md:w-full md:self-auto">
+        <Card className={`group flex w-full min-w-0 flex-row overflow-hidden rounded-xl border border-gray-200 shadow-sm transition-all duration-300 md:flex-col md:rounded-2xl md:border-0 md:shadow-md md:hover:-translate-y-1 md:hover:shadow-xl ${isUnavailable ? 'bg-gray-50' : 'bg-white'}`}>
+          <div className="relative order-2 min-h-[150px] w-[38%] min-w-[120px] max-w-[155px] flex-none self-stretch overflow-hidden bg-gradient-to-br from-amber-50 to-yellow-100 sm:min-h-[170px] sm:w-40 sm:max-w-none md:order-none md:h-48 md:min-h-0 md:w-full md:self-auto">
             {product.image ? (
               <img
                 src={resolveMediaUrl(product.image)}
@@ -105,11 +105,19 @@ export default function ProductCard({ product, onAddToCart, cartItem, onUpdateQu
             </div>
           </div>
 
-          <CardContent className="flex min-w-0 flex-1 flex-col justify-center p-2.5 sm:p-4 md:flex-none md:p-6">
-            <div className="mb-2 min-w-0 md:mb-4">
-              <h3 className="mb-1 break-words text-base font-bold text-gray-900 sm:text-lg md:mb-2 md:text-xl">
-                {cleanText(product.name)}
-              </h3>
+          <CardContent className="flex min-w-0 flex-1 flex-col justify-center p-3 sm:p-4 md:flex-none md:p-5">
+            <div className="mb-2 min-w-0 md:mb-3">
+              <div className="flex items-start justify-between gap-2 md:gap-3">
+                <h3 className="min-w-0 break-words text-base font-bold leading-tight text-gray-900 sm:text-lg md:text-xl">
+                  {cleanText(product.name)}
+                </h3>
+                <div className="flex-none text-right">
+                  {hasDiscount ? <>
+                    <span className="block text-sm font-bold text-green-700 sm:text-lg md:text-xl">{Math.round(finalPrice).toLocaleString()} FCFA</span>
+                    <span className="text-xs text-gray-500 line-through">{product.price.toLocaleString()} FCFA</span>
+                  </> : <span className="block text-sm font-bold text-amber-700 sm:text-lg md:text-xl">{product.price.toLocaleString()} FCFA</span>}
+                </div>
+              </div>
               {product.description && (
                 <p className="line-clamp-2 text-xs text-gray-600 sm:text-sm">
                   {cleanText(product.description)}
@@ -118,26 +126,7 @@ export default function ProductCard({ product, onAddToCart, cartItem, onUpdateQu
               {product.loyalty_points > 0 && <p className="mt-1 flex min-w-0 items-center gap-1 text-[11px] font-medium leading-tight text-amber-700 sm:text-sm"><Star className="h-3.5 w-3.5 flex-none" />{product.loyalty_points} pts fidélité / unité</p>}
             </div>
 
-            <div className="flex flex-wrap items-center justify-between gap-2 md:gap-3">
-              <div>
-                {hasDiscount ? (
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-base font-bold text-green-600 sm:text-lg md:text-2xl">
-                        {Math.round(finalPrice).toLocaleString()} FCFA
-                      </span>
-                    </div>
-                    <span className="text-sm text-gray-500 line-through">
-                      {(product.price ).toLocaleString()} FCFA
-                    </span>
-                  </div>
-                ) : (
-                  <span className="text-base font-bold bg-gradient-to-r from-amber-600 to-yellow-500 bg-clip-text text-transparent sm:text-lg md:text-2xl">
-                    {(product.price ).toLocaleString()} FCFA
-                  </span>
-                )}
-              </div>
-
+            <div className="mt-auto flex flex-col items-stretch gap-2 md:gap-3">
               {isUnavailable ? (
                 <span className="text-xs font-semibold text-gray-500 md:hidden">Indisponible</span>
               ) : isConfigurable ? (
@@ -145,7 +134,7 @@ export default function ProductCard({ product, onAddToCart, cartItem, onUpdateQu
                   <Button
                     onClick={handleAddClick}
                     disabled={loadingOptions || isUnavailable}
-                    className="max-w-full rounded-lg bg-gradient-to-r from-yellow-400 to-amber-600 px-2.5 text-xs text-slate-900 shadow-lg hover:from-yellow-500 hover:to-amber-700 sm:rounded-xl sm:px-4 sm:text-base"
+                    className="w-full max-w-full rounded-lg bg-gradient-to-r from-yellow-400 to-amber-600 px-2.5 text-xs text-slate-900 shadow-lg hover:from-yellow-500 hover:to-amber-700 sm:rounded-xl sm:px-4 sm:text-base"
                   >
                     <Plus className="w-4 h-4 mr-1" />
                     {loadingOptions ? "Chargement…" : product.type === 'combo' ? "Composer le menu" : "Personnaliser"}
@@ -155,13 +144,13 @@ export default function ProductCard({ product, onAddToCart, cartItem, onUpdateQu
               ) : quantity === 0 ? (
                 <Button
                   onClick={handleAddClick}
-                  className="max-w-full rounded-lg bg-gradient-to-r from-yellow-400 to-amber-600 px-2.5 text-xs text-slate-900 shadow-lg hover:from-yellow-500 hover:to-amber-700 sm:rounded-xl sm:px-4 sm:text-base"
+                  className="w-full max-w-full rounded-lg bg-gradient-to-r from-yellow-400 to-amber-600 px-2.5 text-xs text-slate-900 shadow-lg hover:from-yellow-500 hover:to-amber-700 sm:rounded-xl sm:px-4 sm:text-base"
                 >
                   <Plus className="w-4 h-4 mr-1" />
                   {product.type === 'combo' ? "Composer le menu" : isConfigurable ? "Personnaliser" : "Ajouter"}
                 </Button>
               ) : (
-                <div className="flex items-center gap-2">
+                <div className="flex items-center justify-center gap-2">
                   <Button
                     size="icon"
                     variant="outline"

@@ -130,18 +130,18 @@ export default function Menu() {
   const cleanMenuText = value => String(value || '').replace(/[\p{Extended_Pictographic}\uFE0F]/gu, '').replace(/\s+/g, ' ').trim();
 
   return (
-    <div className="min-h-screen overflow-x-clip pb-32">
+    <div className="min-h-screen overflow-x-clip bg-gray-100 pb-32">
       <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 sm:py-8">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mb-5 sm:mb-8"
+          className="mb-5 text-center sm:mb-8"
         >
           <Button
             variant="ghost"
             onClick={() => navigate(createPageUrl("Home"))}
-            className="mb-3 text-amber-600 hover:text-amber-700 sm:mb-4"
+            className="mx-auto mb-3 text-amber-700 hover:text-amber-800 sm:mb-4"
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
             Retour à l'accueil
@@ -199,7 +199,7 @@ export default function Menu() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="mb-8 grid grid-cols-1 gap-0 md:grid-cols-2 md:gap-6 lg:grid-cols-3"
+              className="mb-8 grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2 md:gap-6 lg:grid-cols-3"
             >
               {filteredProducts.map((product) => {
                 // Find cart item for this product, considering customizations

@@ -75,7 +75,11 @@ router.get('/rewards', authenticateToken, async (req, res) => {
     const result = await Promise.all(rewards.map(async reward => {
       await expireRewardClaims(prisma, reward.id);
       const claimed = await prisma.loyaltyRedemption.count({ where: { reward_id: reward.id, status: { in: ['claimed', 'used'] } } });
-      return { ...reward, available_quantity: reward.quantity_limit == null ? null : Math.max(0, reward.quantity_limit - claimed) };
+      return {
+        ...reward,
+        points_required: reward.tier_level ? 0 : reward.points_required,
+        available_quantity: reward.quantity_limit == null ? null : Math.max(0, reward.quantity_limit - claimed)
+      };
     }));
     res.json(result);
   } catch (error) {
@@ -100,6 +104,7 @@ router.post('/redeem/:rewardId', authenticateToken, async (req, res) => {
           throw Object.assign(new Error(`Le niveau ${reward.tier_level} n’est pas encore débloqué.`), { status: 400 });
         }
       }
+      const pointsCost = reward.tier_level ? 0 : reward.points_required;
       if (!reward.expires_at || reward.expires_at <= now || !reward.quantity_limit || reward.quantity_claimed >= reward.quantity_limit) {
         throw Object.assign(new Error('Cette récompense n’est plus disponible'), { status: 400 });
       }
@@ -108,18 +113,20 @@ router.post('/redeem/:rewardId', authenticateToken, async (req, res) => {
         data: { quantity_claimed: { increment: 1 } }
       });
       if (!reservation.count) throw Object.assign(new Error('Cette récompense vient d’être réclamée par un autre client'), { status: 409 });
-      const debit = await tx.user.updateMany({
-        where: { id: req.user.id, ...clientRoleWhere, loyalty_points: { gte: reward.points_required } },
-        data: { loyalty_points: { decrement: reward.points_required } }
-      });
-      if (!debit.count) throw Object.assign(new Error('Points fidélité insuffisants'), { status: 400 });
+      if (pointsCost > 0) {
+        const debit = await tx.user.updateMany({
+          where: { id: req.user.id, ...clientRoleWhere, loyalty_points: { gte: pointsCost } },
+          data: { loyalty_points: { decrement: pointsCost } }
+        });
+        if (!debit.count) throw Object.assign(new Error('Points fidélité insuffisants'), { status: 400 });
+      }
       const created = await tx.loyaltyRedemption.create({ data: {
         user_id: req.user.id,
         reward_id: reward.id,
-        points_used: reward.points_required,
+        points_used: pointsCost,
         expires_at: reward.expires_at
       } });
-      await tx.loyaltyPointEntry.create({ data: { user_id: req.user.id, type: 'redemption', points: -reward.points_required, reason: `Récompense réclamée : ${reward.name}` } });
+      if (pointsCost > 0) await tx.loyaltyPointEntry.create({ data: { user_id: req.user.id, type: 'redemption', points: -pointsCost, reason: `Récompense réclamée : ${reward.name}` } });
       if (['discount', 'free_delivery'].includes(reward.type)) {
         const promo = await tx.promoCode.create({ data: {
           code: generateRewardCode(),
@@ -291,12 +298,7 @@ router.put('/admin/tiers', authenticateToken, requireRole(['admin']), async (req
           where: { level: tier.level },
           data: { title: tier.title, icon: tier.icon, threshold_points: tier.threshold_points }
         });
-        if (tier.threshold_points !== null) {
-          await tx.loyaltyReward.updateMany({
-            where: { tier_level: tier.level },
-            data: { points_required: tier.threshold_points }
-          });
-        }
+        await tx.loyaltyReward.updateMany({ where: { tier_level: tier.level }, data: { points_required: 0 } });
       }
     });
     res.json(await prisma.loyaltyTier.findMany({ include: { _count: { select: { rewards: true } } }, orderBy: { level: 'asc' } }));
@@ -314,7 +316,7 @@ router.get('/admin/rewards', authenticateToken, requirePagePermission('loyalty')
       orderBy: { created_at: 'desc' }
     });
 
-    res.json(rewards);
+    res.json(rewards.map(reward => ({ ...reward, points_required: reward.tier_level ? 0 : reward.points_required })));
   } catch (error) {
     console.error('Get all loyalty rewards error:', error);
     res.status(500).json({ message: 'Internal server error' });
@@ -331,9 +333,9 @@ router.post('/admin/rewards', authenticateToken, requireRole(['admin']), async (
     if (tierLevel !== null && (!Number.isInteger(tierLevel) || tierLevel < 1 || tierLevel > 3)) return res.status(400).json({ message: 'Palier de récompense invalide.' });
     const selectedTier = tierLevel === null ? null : await prisma.loyaltyTier.findUnique({ where: { level: tierLevel } });
     if (tierLevel !== null && !Number.isInteger(selectedTier?.threshold_points)) return res.status(400).json({ message: 'Configurez le seuil du niveau choisi avant d’y rattacher une récompense.' });
-    const points = selectedTier ? selectedTier.threshold_points : Number(points_required);
-    if (!name?.trim() || !['free_delivery', 'gifted_product', 'discount'].includes(type) || !Number.isInteger(points) || points <= 0 || !Number.isInteger(limit) || limit <= 0 || Number.isNaN(expiry.getTime()) || expiry <= new Date()) {
-      return res.status(400).json({ message: 'Nom, type, coût en points, quantité limitée et date d’expiration future sont obligatoires.' });
+    const points = selectedTier ? 0 : Number(points_required);
+    if (!name?.trim() || !['free_delivery', 'gifted_product', 'discount'].includes(type) || (!selectedTier && (!Number.isInteger(points) || points <= 0)) || !Number.isInteger(limit) || limit <= 0 || Number.isNaN(expiry.getTime()) || expiry <= new Date()) {
+      return res.status(400).json({ message: 'Nom, type, quantité limitée et date d’expiration future sont obligatoires ; les points sont requis uniquement sans niveau.' });
     }
     if (type === 'discount' && (!Number.isInteger(Number(discount_percent)) || Number(discount_percent) < 1 || Number(discount_percent) > 100)) return res.status(400).json({ message: 'La remise doit être comprise entre 1 et 100 %.' });
     if (type === 'gifted_product' && !(await prisma.product.findFirst({ where: { id: Number(gifted_product_id), available: true } }))) return res.status(400).json({ message: 'Sélectionnez un produit disponible à offrir.' });
@@ -379,8 +381,8 @@ router.put('/admin/rewards/:id', authenticateToken, requireRole(['admin']), asyn
     if (tierLevel !== null && (!Number.isInteger(tierLevel) || tierLevel < 1 || tierLevel > 3)) return res.status(400).json({ message: 'Palier de récompense invalide.' });
     const selectedTier = tierLevel === null ? null : await prisma.loyaltyTier.findUnique({ where: { level: tierLevel } });
     if (tierLevel !== null && !Number.isInteger(selectedTier?.threshold_points)) return res.status(400).json({ message: 'Configurez le seuil du niveau choisi avant d’y rattacher une récompense.' });
-    const points = selectedTier ? selectedTier.threshold_points : (points_required === undefined ? current.points_required : Number(points_required));
-    if (!Number.isInteger(points) || points <= 0) return res.status(400).json({ message: 'Les points requis doivent être un entier supérieur à zéro.' });
+    const points = selectedTier ? 0 : (points_required === undefined ? (current.tier_level ? null : current.points_required) : Number(points_required));
+    if (!selectedTier && (!Number.isInteger(points) || points <= 0)) return res.status(400).json({ message: 'Les points requis doivent être un entier supérieur à zéro lorsqu’aucun niveau n’est associé.' });
 
     const reward = await prisma.loyaltyReward.update({
       where: { id },
@@ -444,10 +446,13 @@ router.post('/admin/grant/:userId/:rewardId', authenticateToken, requireRole(['a
       if (!reward || !reward.is_active || !reward.expires_at || reward.expires_at <= now || !reward.quantity_limit || reward.quantity_claimed >= reward.quantity_limit) throw Object.assign(new Error('Récompense indisponible'), { status: 400 });
       const reservation = await tx.loyaltyReward.updateMany({ where: { id: rewardId, quantity_claimed: { lt: reward.quantity_limit } }, data: { quantity_claimed: { increment: 1 } } });
       if (!reservation.count) throw Object.assign(new Error('Récompense épuisée'), { status: 400 });
-      const debit = await tx.user.updateMany({ where: { id: targetId, ...clientRoleWhere, loyalty_points: { gte: reward.points_required } }, data: { loyalty_points: { decrement: reward.points_required } } });
-      if (!debit.count) throw Object.assign(new Error('Solde de points insuffisant'), { status: 400 });
-      const created = await tx.loyaltyRedemption.create({ data: { user_id: targetId, reward_id: rewardId, points_used: reward.points_required, expires_at: reward.expires_at } });
-      await tx.loyaltyPointEntry.create({ data: { user_id: targetId, actor_id: req.user.id, type: 'redemption', points: -reward.points_required, reason: `Récompense attribuée par l’administration : ${reward.name}` } });
+      const pointsCost = reward.tier_level ? 0 : reward.points_required;
+      if (pointsCost > 0) {
+        const debit = await tx.user.updateMany({ where: { id: targetId, ...clientRoleWhere, loyalty_points: { gte: pointsCost } }, data: { loyalty_points: { decrement: pointsCost } } });
+        if (!debit.count) throw Object.assign(new Error('Solde de points insuffisant'), { status: 400 });
+      }
+      const created = await tx.loyaltyRedemption.create({ data: { user_id: targetId, reward_id: rewardId, points_used: pointsCost, expires_at: reward.expires_at } });
+      if (pointsCost > 0) await tx.loyaltyPointEntry.create({ data: { user_id: targetId, actor_id: req.user.id, type: 'redemption', points: -pointsCost, reason: `Récompense attribuée par l’administration : ${reward.name}` } });
       if (['discount', 'free_delivery'].includes(reward.type)) {
         const promo = await tx.promoCode.create({ data: { code: generateRewardCode(), description: reward.name, type: reward.type === 'discount' ? 'percentage' : 'free_delivery', value: reward.type === 'discount' ? reward.discount_percent : 0, max_uses: 1, user_id: targetId, expires_at: reward.expires_at } });
         return tx.loyaltyRedemption.update({ where: { id: created.id }, data: { promo_code_id: promo.id }, include: { reward: true, promoCode: true } });

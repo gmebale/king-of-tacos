@@ -48,7 +48,7 @@ export default function LoyaltyCard() {
     <Card>
       <CardHeader><CardTitle className="flex items-center gap-2"><Star className="h-5 w-5 text-amber-500" />Programme de fidélité</CardTitle></CardHeader>
       <CardContent className="space-y-4">
-        <div><p className="text-3xl font-bold text-amber-700">{points} points</p><p className="mt-1 text-sm text-gray-600">Les points sont crédités après paiement et clôture de la commande, selon les produits achetés. Le palier suit votre solde : il baisse lorsque vous réclamez une récompense.</p></div>
+        <div><p className="text-3xl font-bold text-amber-700">{points} points</p><p className="mt-1 text-sm text-gray-600">Les points sont crédités après paiement et clôture de la commande, selon les produits achetés. Une récompense avec niveau requis ne dépense aucun point ; les récompenses classiques déduisent leur coût du solde.</p></div>
         {progression?.configured ? <div className="space-y-3" aria-label="Progression des niveaux fidélité">
           <div className="flex items-start">
             {progression.tiers.map((tier, index) => {
@@ -77,16 +77,17 @@ export default function LoyaltyCard() {
         {rewards.map(reward => {
           const available = reward.available_quantity == null ? 0 : reward.available_quantity;
           const tierUnlocked = !reward.tier_level || progression?.tiers?.some(tier => tier.level === reward.tier_level && tier.unlocked);
-          const canClaim = points >= reward.points_required && available > 0 && tierUnlocked;
+          const pointsCost = reward.tier_level ? 0 : reward.points_required;
+          const canClaim = points >= pointsCost && available > 0 && tierUnlocked;
           return <div key={reward.id} className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between">
             <div><h3 className="font-semibold">{reward.name}</h3><p className="text-sm text-gray-600">{reward.description}</p>
-              <p className="mt-1 text-sm font-medium text-amber-700">{reward.points_required} points · {available} disponible(s)</p>
+              <p className="mt-1 text-sm font-medium text-amber-700">{reward.tier_level ? 'Aucun point dépensé' : `${pointsCost} points`} · {available} disponible(s)</p>
               {reward.tier_level && <p className="text-sm text-gray-600">Débloquée au {reward.tier?.title || `niveau ${reward.tier_level}`} · {tierUnlocked ? 'vous pouvez la réclamer' : `solde requis : ${reward.tier?.threshold_points ?? '—'} points`}</p>}
               {reward.type === 'discount' && <p className="text-sm">Remise de {reward.discount_percent}% · code valable jusqu’au {new Date(reward.expires_at).toLocaleDateString('fr-FR')}</p>}
               {reward.type === 'gifted_product' && <p className="text-sm">Produit offert : {reward.giftedProduct?.name || '—'} · à ajouter au panier</p>}
               {reward.type === 'free_delivery' && <p className="text-sm">Code de livraison gratuite valable jusqu’au {new Date(reward.expires_at).toLocaleDateString('fr-FR')}</p>}
             </div>
-            <Button onClick={() => claim(reward)} disabled={!canClaim}>{available < 1 ? 'Épuisée' : !tierUnlocked ? 'Palier verrouillé' : points < reward.points_required ? 'Points insuffisants' : 'Réclamer'}</Button>
+            <Button onClick={() => claim(reward)} disabled={!canClaim}>{available < 1 ? 'Épuisée' : !tierUnlocked ? 'Palier verrouillé' : points < pointsCost ? 'Points insuffisants' : 'Réclamer'}</Button>
           </div>;
         })}
       </CardContent>
@@ -106,7 +107,7 @@ export default function LoyaltyCard() {
     </Card>
 
     {history.length > 0 && <Card><CardHeader><CardTitle>Historique des récompenses</CardTitle></CardHeader><CardContent className="space-y-2">
-      {history.map(item => <div key={item.id} className="flex flex-col gap-2 border-b py-2 last:border-0 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-medium">{item.reward?.name}</p><p className="text-xs text-gray-500">{new Date(item.created_at).toLocaleString('fr-FR')}</p>{item.promoCode?.code && <p className="font-mono text-sm">Code : {item.promoCode.code}</p>}</div><Badge variant="secondary">{item.status === 'used' ? 'Utilisée' : item.status === 'expired' ? 'Expirée' : 'En attente'} · -{item.points_used} pts</Badge></div>)}
+      {history.map(item => <div key={item.id} className="flex flex-col gap-2 border-b py-2 last:border-0 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-medium">{item.reward?.name}</p><p className="text-xs text-gray-500">{new Date(item.created_at).toLocaleString('fr-FR')}</p>{item.promoCode?.code && <p className="font-mono text-sm">Code : {item.promoCode.code}</p>}</div><Badge variant="secondary">{item.status === 'used' ? 'Utilisée' : item.status === 'expired' ? 'Expirée' : 'En attente'} · {item.points_used > 0 ? `-${item.points_used} pts` : 'aucun point dépensé'}</Badge></div>)}
     </CardContent></Card>}
   </div>;
 }
