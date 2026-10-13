@@ -80,7 +80,7 @@ export default function Home() {
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
               transition={{ delay: 0.2, type: "spring" }}
-              className="inline-flex max-w-full items-center gap-2 rounded-full bg-gradient-to-r from-yellow-400 to-amber-500 px-3 py-2 text-xs font-medium text-white shadow-lg mb-6 sm:px-4 sm:text-sm">
+              className="inline-flex max-w-full items-center gap-2 rounded-full bg-gradient-to-r from-yellow-400 to-amber-500 px-3 py-2 text-xs font-medium text-slate-900 shadow-lg mb-6 sm:px-4 sm:text-sm">
 
               <Sparkles className="w-4 h-4" />
               <span>Votre restaurant de tacos à Libreville</span>
@@ -100,7 +100,7 @@ export default function Home() {
               <Link to={createPageUrl("Menu")} className="w-full max-w-xs sm:w-auto">
                 <Button
                   size="lg"
-                  className="group w-full max-w-xs rounded-2xl bg-gradient-to-r from-yellow-400 to-amber-600 px-4 py-6 text-base text-white shadow-2xl transition-all duration-300 hover:from-yellow-500 hover:to-amber-700 hover:shadow-3xl sm:w-auto sm:px-8 sm:text-lg">
+                  className="group w-full max-w-xs rounded-2xl bg-gradient-to-r from-yellow-400 to-amber-600 px-4 py-6 text-base text-slate-900 shadow-2xl transition-all duration-300 hover:from-yellow-500 hover:to-amber-700 hover:shadow-3xl sm:w-auto sm:px-8 sm:text-lg">
 
                   Commander maintenant
                   <motion.div
