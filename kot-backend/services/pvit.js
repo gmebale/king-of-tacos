@@ -135,7 +135,7 @@ async function createPayment({ amount, phone, reference, operatorCode, orderCode
     agent: 'AGENT-1', amount, callback_url_code: config.callbackUrlCode,
     customer_account_number: customerNumber, merchant_operation_account_code: config.accountCode,
     transaction_type: 'PAYMENT', owner_charge: 'CUSTOMER', owner_charge_operator: 'CUSTOMER',
-    free_info: `Commande ${orderCode}`, product: 'Commande King Of Tacos',
+    free_info: 'INFORMATION', product: 'PRODUIT TEL',
     operator_code: operatorCode, reference, service: 'RESTFUL'
   }, 'payment');
   if (String(payload.merchant_reference_id || payload.reference || '') !== reference) throw new Error('La référence renvoyée par PVit ne correspond pas à la commande.');
