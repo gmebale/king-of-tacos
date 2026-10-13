@@ -27,20 +27,22 @@ async function parseResponse(response, operation) {
   let payload;
   try { payload = body ? JSON.parse(body) : {}; } catch (_error) { payload = { message: body.slice(0, 300) }; }
   if (!response.ok) {
-    const providerCode = payload?.code || payload?.error_code || payload?.errorCode;
-    const providerMessage = payload?.message || payload?.error;
+    const providerCode = payload?.code || payload?.error_code || payload?.errorCode || payload?.error;
     const errors = payload?.errors;
-    let validation = '';
+    let fields = [];
+    let issueCodes = [];
     if (Array.isArray(errors)) {
-      validation = errors.map(issue => [issue?.field || issue?.path, issue?.code, issue?.message].filter(Boolean).join(': ')).filter(Boolean).join('; ');
+      fields = errors.map(issue => issue?.field || issue?.path).filter(value => typeof value === 'string');
+      issueCodes = errors.map(issue => issue?.code).filter(value => typeof value === 'string');
     } else if (errors && typeof errors === 'object') {
-      validation = Object.entries(errors).map(([field, issue]) => `${field}: ${typeof issue === 'string' ? issue : issue?.message || issue?.code || 'rejected'}`).join('; ');
+      fields = Object.keys(errors);
+      issueCodes = Object.values(errors).map(issue => issue?.code).filter(value => typeof value === 'string');
     }
     const details = [
       `HTTP ${response.status}`,
       providerCode && `code=${providerCode}`,
-      providerMessage,
-      validation && `validation=${validation}`,
+      fields.length && `fields=${[...new Set(fields)].join(',')}`,
+      issueCodes.length && `validationCodes=${[...new Set(issueCodes)].join(',')}`,
       (payload?.requestId || payload?.traceId) && `requestId=${payload.requestId || payload.traceId}`
     ].filter(Boolean).join(' | ');
     throw new Error(`PVit ${operation}: ${details}`);
