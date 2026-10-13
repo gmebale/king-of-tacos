@@ -43,6 +43,8 @@ export default function Payment() {
   const [serverCodeError, setServerCodeError] = useState("");
   const [isCodeDialogOpen, setIsCodeDialogOpen] = useState(false);
   const [paymentSettings, setPaymentSettings] = useState(null);
+  const [paymentSettingsLoading, setPaymentSettingsLoading] = useState(true);
+  const [paymentSettingsError, setPaymentSettingsError] = useState(false);
   const [paymentProvider, setPaymentProvider] = useState('pvit');
   const [paymentSystemName, setPaymentSystemName] = useState('AIRTEL_MONEY');
   const [pvitPhone, setPvitPhone] = useState(formData?.customer_phone || '');
@@ -56,8 +58,8 @@ export default function Payment() {
       ...(paymentSettings?.mobile_money_moov_enabled ? [{ value: 'moovmoney', label: 'Moov Money' }] : [])
     ];
   const pvitOperators = [
-    ...(paymentSettings?.mobile_money_airtel_enabled ? [{ value: 'AIRTEL_MONEY', label: 'Airtel Money' }] : []),
-    ...(paymentSettings?.mobile_money_moov_enabled ? [{ value: 'MOOV_MONEY', label: 'Moov Money' }] : [])
+    ...(paymentSettings?.pvit_airtel_enabled ? [{ value: 'AIRTEL_MONEY', label: 'Airtel Money' }] : []),
+    ...(paymentSettings?.pvit_moov_enabled ? [{ value: 'MOOV_MONEY', label: 'Moov Money' }] : [])
   ];
   const ebillingAvailable = Boolean(paymentSettings?.ebilling_enabled && paymentSettings.mobile_money_enabled && ebillingOperators.length);
   const pvitAvailable = Boolean(paymentSettings?.pvit_enabled && paymentSettings.mobile_money_enabled && pvitOperators.length);
@@ -72,7 +74,7 @@ export default function Payment() {
         setPaymentSettings(response.data);
         if (response.data.pvit_enabled) {
           setPaymentProvider('pvit');
-          setPaymentSystemName(response.data.mobile_money_airtel_enabled ? 'AIRTEL_MONEY' : 'MOOV_MONEY');
+          setPaymentSystemName(response.data.pvit_airtel_enabled ? 'AIRTEL_MONEY' : 'MOOV_MONEY');
         } else {
           setPaymentProvider('ebilling');
           const firstAvailable = response.data.mobile_money_airtel_enabled ? 'airtelmoney' : response.data.mobile_money_moov_enabled ? 'moovmoney' : '';
@@ -80,7 +82,8 @@ export default function Payment() {
           else if (firstAvailable) setPaymentSystemName(firstAvailable);
         }
       })
-      .catch(() => { if (active) setPaymentSettings({ ebilling_enabled: false }); });
+      .catch(() => { if (active) setPaymentSettingsError(true); })
+      .finally(() => { if (active) setPaymentSettingsLoading(false); });
     return () => { active = false; };
   }, []);
 
@@ -90,6 +93,10 @@ export default function Payment() {
   }
 
   const handlePayment = async () => {
+    if (!isStaffOrder && (paymentSettingsLoading || paymentSettingsError || !paymentSettings)) {
+      toast.error(paymentSettingsError ? 'Impossible de charger les moyens de paiement. Actualisez la page pour réessayer.' : 'Patientez pendant le chargement des moyens de paiement.');
+      return;
+    }
     if (isStaffOrder && !isCodeDialogOpen) {
       setIsCodeDialogOpen(true);
       return;
@@ -251,7 +258,12 @@ export default function Payment() {
                   </div>
                   {loyalty_discount > 0 && <p className="mt-2 text-right text-sm text-green-700">Avantage fidélité / promo : −{loyalty_discount.toLocaleString()} FCFA</p>}
                 </div>
-                {!isStaffOrder && paymentSettings && (
+                {!isStaffOrder && (paymentSettingsLoading || paymentSettingsError) && (
+                  <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-gray-700" role="status">
+                    {paymentSettingsLoading ? "Chargement des moyens de paiement..." : "Impossible de charger les moyens de paiement. Actualisez la page pour réessayer."}
+                  </div>
+                )}
+                {!isStaffOrder && paymentSettings && !paymentSettingsLoading && !paymentSettingsError && (
                   <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4">
                     {mobileMoneyAvailable ? (
                       <>
@@ -318,10 +330,10 @@ export default function Payment() {
 
             <Button
               onClick={handlePayment}
-              disabled={isSubmitting}
+              disabled={isSubmitting || (!isStaffOrder && (paymentSettingsLoading || paymentSettingsError || !paymentSettings))}
               className="w-full mt-6 bg-gradient-to-r from-yellow-400 to-amber-600 hover:from-yellow-500 hover:to-amber-700 text-slate-900 py-6 rounded-2xl text-lg font-semibold shadow-lg"
             >
-              {isSubmitting ? "Traitement..." : isStaffOrder ? "Confirmer la commande" : mobileMoneyAvailable ? "Continuer avec Mobile Money" : "Confirmer la commande"}
+              {isSubmitting ? "Traitement..." : !isStaffOrder && paymentSettingsLoading ? "Chargement des moyens de paiement..." : isStaffOrder ? "Confirmer la commande" : mobileMoneyAvailable ? "Continuer avec Mobile Money" : "Confirmer la commande"}
               <CreditCard className="ml-2 w-5 h-5" />
             </Button>
           </div>

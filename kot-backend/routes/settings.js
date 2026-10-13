@@ -374,6 +374,8 @@ router.get('/payment', async (req, res) => {
       mobile_money_airtel_enabled: toBoolean(settingsObj.mobile_money_airtel_enabled, true),
       mobile_money_moov_enabled: toBoolean(settingsObj.mobile_money_moov_enabled, true),
       pvit_enabled: pvit.getConfig().configured,
+      pvit_airtel_enabled: pvit.getConfig('AIRTEL_MONEY').operatorConfigured && toBoolean(settingsObj.mobile_money_enabled, true) && toBoolean(settingsObj.mobile_money_airtel_enabled, true),
+      pvit_moov_enabled: pvit.getConfig('MOOV_MONEY').operatorConfigured && toBoolean(settingsObj.mobile_money_enabled, true) && toBoolean(settingsObj.mobile_money_moov_enabled, true),
       pvit_test_mode: pvit.getConfig().mode === 'test',
       ebilling_enabled: process.env.EBILLING_ENABLED === 'true',
       ebilling_test_mode: (() => {

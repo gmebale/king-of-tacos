@@ -1,16 +1,23 @@
 const fetch = require('node-fetch');
 
-let cachedSecret = null;
-let secretExpiresAt = 0;
-let renewalPromise = null;
+const secretCache = new Map();
+const renewalPromises = new Map();
 
-function getConfig() {
+function getConfig(operatorCode) {
   const apiBase = (process.env.PVIT_API_BASE || 'https://api.mypvit.pro').replace(/\/+$/, '');
+  const mode = (process.env.PVIT_MODE || 'test').toLowerCase();
+  const legacyTestAccount = mode === 'test' ? process.env.PVIT_OPERATION_ACCOUNT_CODE : undefined;
+  const accountCodes = {
+    AIRTEL_MONEY: process.env.PVIT_AIRTEL_OPERATION_ACCOUNT_CODE || legacyTestAccount,
+    MOOV_MONEY: process.env.PVIT_MOOV_OPERATION_ACCOUNT_CODE || legacyTestAccount
+  };
+  const accountCode = operatorCode ? accountCodes[operatorCode] : Object.values(accountCodes).find(Boolean);
   const config = {
     enabled: process.env.PVIT_ENABLED === 'true',
-    mode: (process.env.PVIT_MODE || 'test').toLowerCase(),
+    mode,
     apiBase,
-    accountCode: process.env.PVIT_OPERATION_ACCOUNT_CODE,
+    accountCode,
+    accountCodes,
     secretUrlCode: process.env.PVIT_SECRET_API_CODE,
     secretPassword: process.env.PVIT_SECRET_PASSWORD,
     paymentUrlCode: process.env.PVIT_PAYMENT_API_CODE,
@@ -18,8 +25,15 @@ function getConfig() {
     statusUrlCode: process.env.PVIT_STATUS_API_CODE,
     kycUrlCode: process.env.PVIT_KYC_API_CODE
   };
-  config.configured = Boolean(config.enabled && config.accountCode && config.secretUrlCode && config.secretPassword && config.paymentUrlCode && config.callbackUrlCode && config.statusUrlCode && config.kycUrlCode);
+  const apiConfigured = Boolean(config.enabled && config.secretUrlCode && config.secretPassword && config.paymentUrlCode && config.callbackUrlCode && config.statusUrlCode && config.kycUrlCode);
+  config.configuredOperators = Object.keys(accountCodes).filter(code => apiConfigured && accountCodes[code]);
+  config.configured = apiConfigured && config.configuredOperators.length > 0;
+  config.operatorConfigured = apiConfigured && Boolean(accountCode);
   return config;
+}
+
+function getAccountCode(operatorCode) {
+  return getConfig(operatorCode).accountCode || null;
 }
 
 async function parseResponse(response, operation) {
@@ -50,26 +64,30 @@ async function parseResponse(response, operation) {
   return payload;
 }
 
-async function renewSecret() {
-  const config = getConfig();
-  if (!config.configured) throw new Error('La configuration PVit est incomplète.');
+async function renewSecret(config) {
+  if (!config.operatorConfigured) throw new Error('La configuration PVit de cet opérateur est incomplète.');
   const body = new URLSearchParams({ operationAccountCode: config.accountCode, password: config.secretPassword });
   const response = await fetch(`${config.apiBase}/v2/${encodeURIComponent(config.secretUrlCode)}/renew-secret`, {
     method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
     body: body.toString(), timeout: 15000
   });
   const payload = await parseResponse(response, 'renew-secret');
-  if (!payload.secret || payload.operation_account_code !== config.accountCode) throw new Error('PVit n’a pas renvoyé de clé valide pour le compte d’opération configuré.');
+  if (!payload.secret || payload.operation_account_code !== config.accountCode) throw new Error('PVit n’a pas renvoyé de clé valide pour le compte d’opération demandé.');
   const lifetime = Math.max(60, Number(payload.expires_in) || 3600);
-  cachedSecret = payload.secret;
-  secretExpiresAt = Date.now() + Math.max(30, lifetime - 60) * 1000;
-  return cachedSecret;
+  secretCache.set(config.accountCode, { secret: payload.secret, expiresAt: Date.now() + Math.max(30, lifetime - 60) * 1000 });
+  return payload.secret;
 }
 
-async function getSecret(forceRenew = false) {
-  if (!forceRenew && cachedSecret && Date.now() < secretExpiresAt) return cachedSecret;
-  if (!renewalPromise) renewalPromise = renewSecret().finally(() => { renewalPromise = null; });
-  return renewalPromise;
+async function getSecret(config, forceRenew = false) {
+  const cacheKey = config.accountCode;
+  const cached = secretCache.get(cacheKey);
+  if (!forceRenew && cached && Date.now() < cached.expiresAt) return cached.secret;
+  if (forceRenew) secretCache.delete(cacheKey);
+  if (!renewalPromises.has(cacheKey)) {
+    const renewal = renewSecret(config).finally(() => renewalPromises.delete(cacheKey));
+    renewalPromises.set(cacheKey, renewal);
+  }
+  return renewalPromises.get(cacheKey);
 }
 
 function normalizeGabonNumber(value) {
@@ -91,32 +109,32 @@ function normalizeGabonNumber(value) {
   return null;
 }
 
-async function requestJson(url, payload, operation) {
-  let secret = await getSecret();
+async function requestJson(url, payload, operation, config) {
+  let secret = await getSecret(config);
   const send = token => fetch(url, {
     method: 'POST', headers: { 'X-Secret': token, Accept: 'application/json', 'Content-Type': 'application/json' },
     body: JSON.stringify(payload), timeout: 20000
   });
   let response = await send(secret);
   if (response.status === 401 || response.status === 403) {
-    secret = await getSecret(true);
+    secret = await getSecret(config, true);
     response = await send(secret);
   }
   return parseResponse(response, operation);
 }
 
 async function verifyCustomer(phone, operatorCode) {
-  const config = getConfig();
-  if (!config.configured) throw new Error('La configuration PVit est incomplète.');
+  const config = getConfig(operatorCode);
+  if (!config.operatorConfigured) throw new Error('Le compte PVit de cet opérateur n’est pas configuré.');
   const customerNumber = normalizeGabonNumber(phone);
   if (!customerNumber) throw new Error('Le numéro de téléphone doit être un numéro gabonais valide.');
   const query = new URLSearchParams({ customerAccountNumber: customerNumber, operatorCode });
-  let secret = await getSecret();
+  let secret = await getSecret(config);
   const url = `${config.apiBase}/v2/${encodeURIComponent(config.kycUrlCode)}/kyc?${query}`;
   const send = token => fetch(url, { method: 'GET', headers: { 'X-Secret': token, Accept: 'application/json' }, timeout: 15000 });
   let response = await send(secret);
   if (response.status === 401 || response.status === 403) {
-    secret = await getSecret(true);
+    secret = await getSecret(config, true);
     response = await send(secret);
   }
   const payload = await parseResponse(response, 'kyc');
@@ -125,9 +143,9 @@ async function verifyCustomer(phone, operatorCode) {
   return { verified: true };
 }
 
-async function createPayment({ amount, phone, reference, operatorCode, orderCode }) {
-  const config = getConfig();
-  if (!config.configured) throw new Error('Le paiement PVit n’est pas encore configuré.');
+async function createPayment({ amount, phone, reference, operatorCode }) {
+  const config = getConfig(operatorCode);
+  if (!config.operatorConfigured) throw new Error('Le compte PVit de cet opérateur n’est pas configuré.');
   const customerNumber = normalizeGabonNumber(phone);
   if (!customerNumber) throw new Error('Le numéro de téléphone doit être un numéro gabonais valide.');
   if (!Number.isInteger(amount) || amount < 100 || amount > 490000) throw new Error('Le montant PVit doit être compris entre 100 et 490 000 FCFA.');
@@ -137,7 +155,7 @@ async function createPayment({ amount, phone, reference, operatorCode, orderCode
     transaction_type: 'PAYMENT', owner_charge: 'CUSTOMER', owner_charge_operator: 'CUSTOMER',
     free_info: 'INFORMATION', product: 'PRODUIT TEL',
     operator_code: operatorCode, reference, service: 'RESTFUL'
-  }, 'payment');
+  }, 'payment', config);
   if (String(payload.merchant_reference_id || payload.reference || '') !== reference) throw new Error('La référence renvoyée par PVit ne correspond pas à la commande.');
   if (payload.merchant_operation_account_code && payload.merchant_operation_account_code !== config.accountCode) throw new Error('PVit a traité la demande sur un autre compte d’opération.');
   const transactionId = payload.reference_id || payload.transactionId;
@@ -145,10 +163,10 @@ async function createPayment({ amount, phone, reference, operatorCode, orderCode
   return { transactionId: String(transactionId), status: 'PENDING', operator: payload.operator || operatorCode };
 }
 
-async function checkStatus(transactionId) {
-  const config = getConfig();
-  if (!config.configured) throw new Error('Le contrôle de statut PVit n’est pas configuré.');
-  const secret = await getSecret();
+async function checkStatus(transactionId, operatorCode) {
+  const config = getConfig(operatorCode);
+  if (!config.operatorConfigured) throw new Error('Le compte PVit de cet opérateur n’est pas configuré.');
+  const secret = await getSecret(config);
   const query = new URLSearchParams({ transactionId: String(transactionId), accountOperationCode: config.accountCode, transactionOperation: 'PAYMENT' });
   const response = await fetch(`${config.apiBase}/v1/${encodeURIComponent(config.statusUrlCode)}/status?${query}`, {
     method: 'GET', headers: { 'X-Secret': secret, Accept: 'application/json' }, timeout: 15000
@@ -159,4 +177,4 @@ async function checkStatus(transactionId) {
   return { status, payload };
 }
 
-module.exports = { getConfig, normalizeGabonNumber, verifyCustomer, createPayment, checkStatus };
+module.exports = { getConfig, getAccountCode, normalizeGabonNumber, verifyCustomer, createPayment, checkStatus };

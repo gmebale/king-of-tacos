@@ -13,8 +13,8 @@ const prisma = new PrismaClient();
 const pvitStatusCache = new Map();
 const PVIT_STATUS_CACHE_MS = 15000;
 
-async function checkPvitStatusCached(transactionId) {
-  const key = String(transactionId);
+async function checkPvitStatusCached(transactionId, operatorCode) {
+  const key = `${operatorCode}:${transactionId}`;
   if (pvitStatusCache.size > 1000) {
     const cutoff = Date.now() - 10 * 60 * 1000;
     for (const [cachedKey, item] of pvitStatusCache) {
@@ -25,7 +25,7 @@ async function checkPvitStatusCached(transactionId) {
   if (cached?.promise) return cached.promise;
   if (cached?.checkedAt && Date.now() - cached.checkedAt < PVIT_STATUS_CACHE_MS) return cached.result;
   const entry = { promise: null, checkedAt: 0, result: null };
-  entry.promise = pvit.checkStatus(key).then(result => {
+  entry.promise = pvit.checkStatus(transactionId, operatorCode).then(result => {
     entry.promise = null;
     entry.checkedAt = Date.now();
     entry.result = result;
@@ -522,10 +522,11 @@ router.post('/pvit/create', async (req, res) => {
   try {
     const { orderId, paymentStatusToken, operatorCode, payerPhone } = req.body || {};
     if (!orderId || !verifyPaymentStatusToken(paymentStatusToken, orderId)) return res.status(403).json({ message: 'Autorisation de paiement invalide ou expirée.' });
-    const config = pvit.getConfig();
-    if (!config.configured) return res.status(503).json({ message: 'Le paiement PVit n’est pas encore configuré.' });
+    const baseConfig = pvit.getConfig();
+    if (!baseConfig.configured) return res.status(503).json({ message: 'Le paiement PVit n’est pas encore configuré.' });
     const allowedOperators = (process.env.PVIT_SUPPORTED_OPERATORS || 'AIRTEL_MONEY,MOOV_MONEY').split(',').map(value => value.trim()).filter(Boolean);
     if (!allowedOperators.includes(operatorCode)) return res.status(400).json({ message: 'Opérateur PVit invalide ou non autorisé.' });
+    if (!pvit.getConfig(operatorCode).operatorConfigured) return res.status(503).json({ message: 'Le compte de production de cet opérateur PVit n’est pas configuré.' });
     const normalizedPayerPhone = pvit.normalizeGabonNumber(payerPhone);
     if (!normalizedPayerPhone) return res.status(400).json({ message: 'Saisissez un numéro gabonais valide pour recevoir la demande de paiement (format 0XXXXXXXX, +241XXXXXXXX ou 00241XXXXXXXX).' });
     const settings = await prisma.settings.findMany({
@@ -583,7 +584,7 @@ router.get('/pvit/status/:orderId', async (req, res) => {
     const paymentStartedAt = details.initiatedAt || new Date(order.created_date).getTime();
     const statusCheckDue = paymentStartedAt && Date.now() - paymentStartedAt >= fallbackDelayMs;
     if (!['paid', 'failed', 'refunded'].includes(order.payment_status) && statusCheckDue) {
-      const checked = await checkPvitStatusCached(details.transactionId);
+      const checked = await checkPvitStatusCached(details.transactionId, details.operatorCode);
       if (['SUCCESS', 'FAILED'].includes(checked.status)) result = await applyPvitStatus(order, checked.status);
       else result = { ...result, providerState: checked.status };
     }
@@ -599,11 +600,11 @@ router.post('/pvit/callback', async (req, res) => {
   const { transactionId, merchantReferenceId, status, amount, accountOperationCode, transactionOperation, code } = callback;
   if (!transactionId || !merchantReferenceId || code === undefined) return res.status(400).json({ message: 'Notification PVit incomplète.' });
   try {
-    const config = pvit.getConfig();
     const order = await prisma.order.findFirst({ where: { payment_method: 'mobile_money', payment_provider_id: { contains: String(merchantReferenceId) } } });
     const details = parsePvitDetails(order);
     if (!order || !details || details.reference !== String(merchantReferenceId) || details.transactionId !== String(transactionId)) return res.status(409).json({ message: 'La notification PVit ne correspond à aucune tentative de paiement.' });
-    if (Number(amount) !== order.total_amount || accountOperationCode !== config.accountCode || transactionOperation !== 'PAYMENT') return res.status(409).json({ message: 'Les données PVit ne correspondent pas à la commande.' });
+    const expectedAccountCode = pvit.getAccountCode(details.operatorCode);
+    if (!expectedAccountCode || Number(amount) !== order.total_amount || accountOperationCode !== expectedAccountCode || transactionOperation !== 'PAYMENT') return res.status(409).json({ message: 'Les données PVit ne correspondent pas à la commande.' });
     const callbackStatus = String(status).toUpperCase();
     if (['SUCCESS', 'FAILED'].includes(callbackStatus)) {
       await applyPvitStatus(order, callbackStatus);

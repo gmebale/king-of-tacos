@@ -96,9 +96,10 @@ successful payment.
 
 ### MyPVIT (sandbox)
 La collecte MyPVIT reste désactivée par défaut. Pour l’activer en sandbox, renseignez dans le fichier
-kot-backend/.env.production les variables PVIT_ENABLED=true, PVIT_MODE=test, le code du compte
-d’opération de test, les codes URL des APIs Renew Secret Key v2, REST Payment v2, Check Status et KYC,
-le mot de passe de Renew Secret Key et le code URL callback. Gardez ces valeurs uniquement sur le
+kot-backend/.env.production les variables PVIT_ENABLED=true, PVIT_MODE=test, les codes de compte d’opération dédiés à chaque opérateur (PVIT_AIRTEL_OPERATION_ACCOUNT_CODE et
+PVIT_MOOV_OPERATION_ACCOUNT_CODE), les codes URL des APIs Renew Secret Key v2, REST Payment v2,
+Check Status et KYC, le mot de passe de Renew Secret Key et le code URL callback. En test,
+PVIT_OPERATION_ACCOUNT_CODE reste accepté pour le compte de test partagé. Gardez ces valeurs uniquement sur le
 serveur et ne les ajoutez jamais au dépôt.
 
 Enregistrez dans MyPVIT une URL Callback de type Callback vers
@@ -107,7 +108,9 @@ La clé X-Secret est renouvelée automatiquement et reste côté serveur. Le sui
 Status après trois minutes si le callback n’a pas déjà confirmé le paiement.
 
 Avant la production, PVit exige au minimum deux paiements de test réussis, deux échecs, le traitement
-des callbacks et les APIs KYC et Check Status. Avant chaque paiement, le backend vérifie le numéro client et l’opérateur avec l’API KYC MyPVIT. Ne basculez pas PVIT_MODE en production avant cette validation et l’activation du compte marchand.
+des callbacks et les APIs KYC et Check Status. Avant chaque paiement, le backend vérifie le numéro client et l’opérateur avec l’API KYC MyPVIT. En production, chaque opérateur doit avoir son propre code de compte d’opération. Le backend renouvelle
+une clé X-Secret séparée par compte et utilise le compte associé à l’opérateur choisi. Ne basculez pas
+PVIT_MODE en production avant cette validation et l’activation du compte marchand.
 
 ### Base de données
 Assurez-vous que XAMPP est démarré et que la base `king_of_tacos` existe.
