@@ -112,7 +112,7 @@ async function createPayment({ amount, phone, reference, operatorCode, orderCode
   if (!customerNumber) throw new Error('Le numéro de téléphone doit être un numéro gabonais valide.');
   if (!Number.isInteger(amount) || amount < 100 || amount > 490000) throw new Error('Le montant PVit doit être compris entre 100 et 490 000 FCFA.');
   const payload = await requestJson(`${config.apiBase}/v2/${encodeURIComponent(config.paymentUrlCode)}/rest`, {
-    agent: 'KingOfTacos', amount, callback_url_code: config.callbackUrlCode,
+    agent: 'AGENT-1', amount, callback_url_code: config.callbackUrlCode,
     customer_account_number: customerNumber, merchant_operation_account_code: config.accountCode,
     transaction_type: 'PAYMENT', owner_charge: 'CUSTOMER', owner_charge_operator: 'CUSTOMER',
     free_info: `Commande ${orderCode}`, product: 'Commande King Of Tacos',
