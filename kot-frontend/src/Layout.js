@@ -207,7 +207,7 @@ export default function Layout({ children, currentPageName }) {
                     to={createPageUrl(item.path)}
                     className={`relative flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-200 ${
                       isActive
-                        ? 'bg-gradient-to-r from-amber-700 to-amber-800 text-white shadow-lg'
+                        ? 'bg-gradient-to-r from-yellow-400 to-amber-500 text-slate-900 shadow-lg'
                         : 'text-gray-700 hover:bg-gray-100'
                     }`}
                   >

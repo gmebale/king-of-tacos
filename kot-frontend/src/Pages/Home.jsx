@@ -116,7 +116,8 @@ export default function Home() {
                 <Button
                   size="lg"
                   variant="outline"
-                  className="w-full max-w-xs rounded-2xl border-2 border-white bg-black/20 px-4 py-6 text-base text-white hover:bg-white/15 sm:w-auto sm:px-8 sm:text-lg">
+                  className="w-full max-w-xs rounded-2xl border-2 border-yellow-300 px-4 py-6 text-base text-white hover:bg-white/15 sm:w-auto sm:px-8 sm:text-lg"
+                  style={{ backgroundColor: 'rgba(0, 0, 0, 0.55)', color: '#ffffff' }}>
 
                   Voir le menu
                 </Button>

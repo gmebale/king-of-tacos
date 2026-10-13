@@ -140,15 +140,15 @@ export default function AdminStock() {
 
   const getCategoryColor = (categoryName) => {
     const colors = {
-      tacos: "data-[state=active]:bg-amber-800",
-      burritos: "data-[state=active]:bg-blue-800",
-      burger: "data-[state=active]:bg-red-800",
-      boissons: "data-[state=active]:bg-purple-800",
-      desserts: "data-[state=active]:bg-green-800",
-      accompagnements: "data-[state=active]:bg-orange-800",
-      options: "data-[state=active]:bg-gray-700"
+      tacos: "data-[state=active]:bg-yellow-400",
+      burritos: "data-[state=active]:bg-yellow-400",
+      burger: "data-[state=active]:bg-yellow-400",
+      boissons: "data-[state=active]:bg-yellow-400",
+      desserts: "data-[state=active]:bg-yellow-400",
+      accompagnements: "data-[state=active]:bg-yellow-400",
+      options: "data-[state=active]:bg-yellow-400"
     };
-    return colors[categoryName] || "data-[state=active]:bg-amber-800";
+    return colors[categoryName] || "data-[state=active]:bg-yellow-400";
   };
 
   const getFinalPrice = (product) => {
@@ -264,7 +264,7 @@ export default function AdminStock() {
               >
                 <TabsTrigger 
                   value="all" 
-                  className="rounded-xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-amber-700 data-[state=active]:to-amber-800 data-[state=active]:text-white whitespace-nowrap flex-shrink-0 text-xs sm:text-sm px-3 sm:px-4"
+                  className="rounded-xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-yellow-400 data-[state=active]:to-amber-500 data-[state=active]:text-slate-900 whitespace-nowrap flex-shrink-0 text-xs sm:text-sm px-3 sm:px-4"
                 >
                   Tous ({stats.total})
                 </TabsTrigger>
