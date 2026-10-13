@@ -245,7 +245,7 @@ export default function CashierMode() {
       const link = document.createElement('a');
       link.href = url;
       const extension = formatType === 'excel' ? 'xlsx' : 'pdf';
-      link.setAttribute('download', `rapport-ventes-${selectedPeriod}-${format(new Date(), 'yyyy-MM-dd-HH-mm')}.${extension}`);
+      link.setAttribute('download', `rapport-caisse-${selectedPeriod}-${format(new Date(), 'yyyy-MM-dd-HH-mm')}.${extension}`);
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -477,7 +477,7 @@ export default function CashierMode() {
             </h1>
           </div>
           <p className="text-gray-600">
-            Gestion des factures et rapports de ventes
+            Gestion des factures et rapports de caisse
           </p>
           <p className="mt-1 text-sm text-gray-500">
             Alertes : commandes sur place servies, autres commandes prêtes.
@@ -799,11 +799,11 @@ export default function CashierMode() {
                 <div className="flex gap-2">
                   <Button onClick={() => downloadReport('pdf')} variant="outline" size="sm" disabled={isDownloadingReport} className="flex items-center gap-2">
                     <Download className="w-4 h-4" />
-                    {isDownloadingReport ? 'Génération...' : 'Rapport PDF'}
+                    {isDownloadingReport ? 'Génération...' : 'Rapport de caisse PDF'}
                   </Button>
                   <Button onClick={() => downloadReport('excel')} variant="outline" size="sm" disabled={isDownloadingReport} className="flex items-center gap-2">
                     <Download className="w-4 h-4" />
-                    {isDownloadingReport ? 'Génération...' : 'Rapport Excel'}
+                    {isDownloadingReport ? 'Génération...' : 'Rapport de caisse Excel'}
                   </Button>
                 </div>
               </CardTitle>

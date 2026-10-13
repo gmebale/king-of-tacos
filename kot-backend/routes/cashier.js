@@ -181,19 +181,20 @@ function pill(doc, text, color = palette.secondary) {
 }
 
 // Build detailed sales report used by both JSON and PDF endpoints
-async function buildSalesReport(period) {
-  const { startDate, endDate } = getPeriodRange(period);
+async function buildSalesReport(period, options = {}) {
+  const periodRange = options.startDate && options.endDate
+    ? { startDate: options.startDate, endDate: options.endDate }
+    : getPeriodRange(period);
+  const { startDate, endDate } = periodRange;
+  const orderWhere = {
+    closed_at: { gte: startDate, lte: endDate, not: null },
+    payment_status: 'paid',
+    status: { in: ['livree', 'servie', 'recuperee'] }
+  };
+  if (options.sessionId != null) orderWhere.cash_register_session_id = options.sessionId;
 
   const orders = await prisma.order.findMany({
-    where: {
-      closed_at: {
-        gte: startDate,
-        lte: endDate,
-        not: null
-      },
-      payment_status: 'paid',
-      status: { in: ['livree', 'servie', 'recuperee'] }
-    },
+    where: orderWhere,
     include: {
       items: true,
       promoCode: { select: { type: true } },
@@ -242,6 +243,7 @@ async function buildSalesReport(period) {
   let totalRevenue = 0;
   let totalItems = 0;
   let totalTaxes = 0;
+  let totalDiscounts = 0;
   const taxBreakdown = new Map();
   const paymentBreakdown = {
     cash: 0,
@@ -262,6 +264,7 @@ async function buildSalesReport(period) {
     );
     const orderRevenue = order.total_amount ?? orderItemsTotal;
     totalRevenue += orderRevenue;
+    totalDiscounts += Math.max(0, order.discount_amount || 0);
     const locationKey = order.order_type === 'sur_place'
       ? (order.service_location || 'non_renseigne')
       : order.order_type === 'emporter' ? 'a_emporter' : order.order_type === 'livraison' ? 'livraison' : 'non_renseigne';
@@ -280,16 +283,19 @@ async function buildSalesReport(period) {
       paymentBreakdown[paymentMethod] += orderRevenue;
     }
 
-    const userKey = order.user?.id ?? 'guest';
-    if (!userSales[userKey]) {
-      userSales[userKey] = {
-        name: order.user?.full_name || 'Caisse / invité',
+    const staffMember = order.closedBy || order.validatedBy;
+    const staffKey = staffMember?.id ?? 'unassigned';
+    if (!userSales[staffKey]) {
+      userSales[staffKey] = {
+        id: staffMember?.id ?? null,
+        name: staffMember?.full_name || 'Vente en ligne / non attribuée',
         orders: 0,
         quantity: 0,
         revenue: 0
       };
     }
-    userSales[userKey].orders += 1;
+    userSales[staffKey].orders += 1;
+    userSales[staffKey].revenue += orderRevenue;
 
     for (const item of order.items) {
       const taxQuantity = getOrderItemTaxQuantity(item);
@@ -297,8 +303,10 @@ async function buildSalesReport(period) {
       const itemTaxes = Array.isArray(item.tax_breakdown) ? item.tax_breakdown : [];
       for (const tax of itemTaxes) {
         const current = taxBreakdown.get(tax.id) || {
-          id: tax.id, name: tax.name, percentage: tax.percentage_basis_points / 100, amount: 0
+          id: tax.id, name: tax.name, percentage: tax.percentage_basis_points / 100,
+          base: 0, amount: 0
         };
+        current.base += Math.round((item.unit_tax_base || 0) * taxQuantity * taxMultiplier);
         current.amount += Math.round((tax.amount || 0) * taxQuantity * taxMultiplier);
         taxBreakdown.set(tax.id, current);
       }
@@ -306,8 +314,7 @@ async function buildSalesReport(period) {
       const unitPrice = item.price ?? product?.price ?? 0;
       const lineTotal = Math.round(unitPrice * getOrderItemTaxQuantity(item) * taxMultiplier);
 
-      userSales[userKey].quantity += item.quantity;
-      userSales[userKey].revenue += lineTotal;
+      userSales[staffKey].quantity += item.quantity;
 
       const productId = product?.id ?? item.product_name;
       if (!productSales[productId]) {
@@ -377,8 +384,41 @@ async function buildSalesReport(period) {
     }))
     .sort((a, b) => b.revenue - a.revenue);
 
+  const sessionWhere = options.sessionId != null
+    ? { id: options.sessionId }
+    : { opened_at: { lte: endDate }, OR: [{ closed_at: null }, { closed_at: { gte: startDate } }] };
+  const cashSessions = options.includeCashDetails
+    ? await prisma.cashRegisterSession.findMany({
+        where: sessionWhere,
+        orderBy: { opened_at: 'asc' }
+      })
+    : [];
+  const sessionReport = cashSessions.map(session => ({
+    id: session.id,
+    opened_at: session.opened_at,
+    closed_at: session.closed_at,
+    opening_balance: session.opening_balance,
+    expected_balance: session.current_balance,
+    closing_balance: session.closing_balance,
+    difference: session.closing_balance == null ? null : session.closing_balance - session.current_balance,
+    notes: session.notes
+  }));
+  const expenseWhere = options.sessionId != null
+    ? { session_id: options.sessionId }
+    : { expense_date: { gte: startDate, lte: endDate } };
+  const expenses = options.includeCashDetails
+    ? await prisma.cashExpense.findMany({
+        where: expenseWhere,
+        include: {
+          items: { include: { product: { select: { name: true } } } },
+          createdBy: { select: { full_name: true } }
+        },
+        orderBy: { expense_date: 'asc' }
+      })
+    : [];
+
   return {
-    period,
+    period: period || 'session',
     startDate,
     endDate,
     totalRevenue,
@@ -387,12 +427,33 @@ async function buildSalesReport(period) {
     taxBreakdown: [...taxBreakdown.values()].sort((a, b) => b.amount - a.amount),
     totalOrders,
     totalItems,
+    totalDiscounts,
+    revenueBeforeDiscount: totalRevenue + totalDiscounts,
     averageOrderValue: totalOrders > 0 ? totalRevenue / totalOrders : 0,
     paymentBreakdown,
     locationReport,
     topProducts,
     categoryReport,
     userReport,
+    sessionReport,
+    expenses,
+    totalExpenses: expenses.reduce((sum, expense) => sum + expense.amount, 0),
+    cashExpenses: expenses.filter(expense => expense.payment_method === 'cash').reduce((sum, expense) => sum + expense.amount, 0),
+    orderDetails: options.includeCashDetails ? orders.map(order => ({
+      id: order.id,
+      order_code: order.order_code,
+      status: order.status,
+      order_type: order.order_type,
+      service_location: order.service_location,
+      service_location_label: locationLabels.get(order.service_location) || order.service_location,
+      total_amount: order.total_amount,
+      payment_method: order.payment_method,
+      payment_status: order.payment_status,
+      validated_by: order.validatedBy?.full_name || null,
+      closed_by: order.closedBy?.full_name || null,
+      closed_at: order.closed_at,
+      items: order.items.map(item => ({ product_name: item.product_name, quantity: item.quantity }))
+    })) : [],
     orders: orders.map(order => ({
       id: order.id,
       order_code: order.order_code,
@@ -870,6 +931,158 @@ router.get('/invoice/:orderId', authenticateToken, requirePagePermission('cashie
   }
 });
 
+function formatReportAmount(amount) {
+  return `${Number(amount || 0).toLocaleString('fr-GA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} FCFA`;
+}
+
+function ensureReportSpace(doc, height = 24) {
+  if (doc.y + height > doc.page.height - doc.page.margins.bottom) doc.addPage();
+}
+
+function reportMetric(doc, label, value, options = {}) {
+  const fontSize = options.fontSize || 10;
+  const x = doc.page.margins.left;
+  const width = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+  const labelWidth = Math.floor(width * 0.66);
+  const valueWidth = width - labelWidth;
+  doc.font('Helvetica').fontSize(fontSize);
+  const labelHeight = doc.heightOfString(String(label), { width: labelWidth });
+  doc.font('Helvetica-Bold');
+  const valueHeight = doc.heightOfString(String(value), { width: valueWidth, align: 'right' });
+  const rowHeight = Math.max(labelHeight, valueHeight) + 5;
+  ensureReportSpace(doc, rowHeight);
+  const y = doc.y;
+  doc.font('Helvetica').fontSize(fontSize).fillColor(palette.muted)
+    .text(String(label), x, y, { width: labelWidth });
+  doc.font('Helvetica-Bold').fillColor(palette.text)
+    .text(String(value), x + labelWidth, y, { width: valueWidth, align: 'right' });
+  doc.y = y + rowHeight;
+  doc.x = x;
+}
+
+function drawCashReport(doc, report, options = {}) {
+  const title = options.title || 'RAPPORT DE CAISSE';
+  doc.font('Helvetica-Bold').fontSize(18).fillColor(palette.secondary).text(title, { align: 'center' });
+  doc.moveDown(0.3);
+  const dateLabel = title === 'RAPPORT DE FERMETURE DE CAISSE' ? 'Service' : 'Période';
+  doc.font('Helvetica').fontSize(10).fillColor(palette.muted)
+    .text(`${dateLabel} du ${format(report.startDate, 'dd/MM/yyyy HH:mm')}`, { align: 'center' })
+    .text(`au ${format(report.endDate, 'dd/MM/yyyy HH:mm')}`, { align: 'center' })
+    .text(`Généré le : ${format(new Date(), 'dd/MM/yyyy HH:mm')}`, { align: 'center' });
+  doc.moveDown();
+
+  sectionTitle(doc, 'Résumé du service');
+  reportMetric(doc, "Chiffre d'affaires TTC net", formatReportAmount(report.totalRevenue));
+  reportMetric(doc, "Chiffre d'affaires TTC avant remises", formatReportAmount(report.revenueBeforeDiscount));
+  reportMetric(doc, 'Remises et offres enregistrées', formatReportAmount(report.totalDiscounts));
+  reportMetric(doc, "Chiffre d'affaires HT", formatReportAmount(report.revenueExcludingTax));
+  reportMetric(doc, 'Taxes collectées', formatReportAmount(report.totalTaxes));
+  reportMetric(doc, 'Commandes clôturées', report.totalOrders);
+  reportMetric(doc, 'Articles vendus', report.totalItems);
+  reportMetric(doc, 'Panier moyen', formatReportAmount(report.averageOrderValue));
+  doc.moveDown();
+
+  sectionTitle(doc, 'Statistiques des ventes');
+  if (!report.categoryReport?.length) {
+    reportMetric(doc, 'Aucune vente enregistrée', formatReportAmount(0));
+  } else {
+    report.categoryReport.filter(category => category.quantity || category.revenue).forEach(category => {
+      reportMetric(doc, `${category.name} - ${category.quantity} article(s)`, formatReportAmount(category.revenue), { fontSize: 10 });
+      category.products.filter(product => product.quantity || product.revenue).forEach(product => {
+        reportMetric(doc, `  ${product.name} - ${product.quantity} vendu(s)`, formatReportAmount(product.revenue), { fontSize: 9 });
+      });
+    });
+  }
+  doc.moveDown();
+
+  sectionTitle(doc, 'Modes de paiement');
+  const paymentLabels = { cash: 'Espèces', card: 'Carte', mobile_money: 'Mobile money', loyalty_points: 'Points fidélité', other: 'Autres' };
+  Object.entries(report.paymentBreakdown || {}).forEach(([method, amount]) => {
+    reportMetric(doc, paymentLabels[method] || method, formatReportAmount(amount));
+  });
+  reportMetric(doc, 'Total des paiements', formatReportAmount(report.totalRevenue));
+  doc.moveDown();
+
+  sectionTitle(doc, 'Fonds de caisse');
+  if (!report.sessionReport?.length) {
+    doc.fontSize(9).fillColor(palette.muted).text('Aucune session de caisse sur la période.');
+  } else {
+    report.sessionReport.forEach(session => {
+      reportMetric(doc, `Session ${session.id} - ouverture ${format(session.opened_at, 'dd/MM/yyyy HH:mm')}`, session.closed_at ? format(session.closed_at, 'dd/MM/yyyy HH:mm') : 'Encore ouverte', { fontSize: 9 });
+      reportMetric(doc, 'Fonds de caisse initial', formatReportAmount(session.opening_balance));
+      reportMetric(doc, 'Solde attendu en caisse', formatReportAmount(session.expected_balance));
+      reportMetric(doc, 'Fonds de caisse compté à la fermeture', session.closing_balance == null ? 'Non clôturée' : formatReportAmount(session.closing_balance));
+      reportMetric(doc, 'Écart de caisse (compté - attendu)', session.difference == null ? 'Non clôturée' : formatReportAmount(session.difference));
+      if (session.notes) reportMetric(doc, 'Note de clôture', session.notes, { fontSize: 9 });
+      doc.moveDown(0.4);
+    });
+  }
+  doc.moveDown();
+
+  sectionTitle(doc, 'Ventes par membre du personnel');
+  if (!report.userReport?.length) {
+    doc.fontSize(9).fillColor(palette.muted).text('Aucune vente attribuée sur la période.');
+  } else {
+    report.userReport.forEach(staff => {
+      reportMetric(doc, staff.name, formatReportAmount(staff.revenue));
+      reportMetric(doc, 'Commandes / articles', `${staff.orders} commande(s) / ${staff.quantity} article(s)`, { fontSize: 9 });
+    });
+  }
+  doc.moveDown();
+
+  sectionTitle(doc, 'Ventes par lieu');
+  if (!report.locationReport?.length) {
+    doc.fontSize(9).fillColor(palette.muted).text('Aucune vente par lieu sur la période.');
+  } else {
+    report.locationReport.forEach(location => {
+      reportMetric(doc, `${location.location} - ${location.orders} commande(s) - ${location.items} article(s)`, formatReportAmount(location.revenue), { fontSize: 9 });
+    });
+  }
+  doc.moveDown();
+
+  sectionTitle(doc, 'Taxes par taux');
+  if (!report.taxBreakdown?.length) {
+    doc.fontSize(9).fillColor(palette.muted).text('Aucune taxe enregistrée sur la période.');
+  } else {
+    report.taxBreakdown.forEach(tax => {
+      reportMetric(doc, `${tax.name} (${Number(tax.percentage || 0).toFixed(2)} %)`, `Base ${formatReportAmount(tax.base)} - Taxe ${formatReportAmount(tax.amount)}`, { fontSize: 9 });
+    });
+  }
+  reportMetric(doc, 'Total HT / taxes / TTC', `${formatReportAmount(report.revenueExcludingTax)} / ${formatReportAmount(report.totalTaxes)} / ${formatReportAmount(report.totalRevenue)}`, { fontSize: 9 });
+  doc.moveDown();
+
+  sectionTitle(doc, 'Dépenses');
+  reportMetric(doc, 'Total des dépenses', formatReportAmount(report.totalExpenses));
+  reportMetric(doc, 'Dont dépenses payées en espèces', formatReportAmount(report.cashExpenses));
+  if (report.expenses?.length) {
+    report.expenses.forEach(expense => {
+      const products = expense.items?.map(item => `${item.quantity} x ${item.product?.name || 'Article'}`).join(', ');
+      reportMetric(doc, `${format(expense.expense_date, 'dd/MM HH:mm')} - ${expense.category} - ${expense.payment_method}`, formatReportAmount(expense.amount), { fontSize: 9 });
+      doc.fontSize(8).fillColor(palette.muted)
+        .text([expense.description, expense.supplier ? `Fournisseur : ${expense.supplier}` : '', products || '', expense.createdBy?.full_name ? `Saisi par : ${expense.createdBy.full_name}` : ''].filter(Boolean).join(' - '));
+    });
+  } else {
+    doc.fontSize(9).fillColor(palette.muted).text('Aucune dépense enregistrée sur la période.');
+  }
+  doc.moveDown();
+
+  sectionTitle(doc, 'Détail des commandes');
+  if (!report.orderDetails?.length) {
+    doc.fontSize(9).fillColor(palette.muted).text('Aucune commande clôturée sur la période.');
+  } else {
+    report.orderDetails.forEach(order => {
+      const code = order.order_code || order.id.slice(-8);
+      reportMetric(doc, `Commande #${code} - ${order.order_type || 'Type non renseigné'} - ${order.service_location_label || 'Lieu non renseigné'}`, formatReportAmount(order.total_amount), { fontSize: 9 });
+      doc.fontSize(8).fillColor(palette.muted)
+        .text(`Paiement : ${order.payment_method || 'Non renseigné'} - Validée par : ${order.validated_by || 'Client en ligne'} - Clôturée par : ${order.closed_by || 'Non attribuée'}`);
+      order.items?.forEach(item => {
+        doc.fontSize(8).fillColor(palette.text).text(`  ${item.quantity} x ${item.product_name}`);
+      });
+      doc.moveDown(0.3);
+    });
+  }
+}
+
 // Get sales reports
 router.get('/reports/:period', authenticateToken, requirePagePermission('cashier'), async (req, res) => {
   try {
@@ -885,228 +1098,140 @@ router.get('/reports/:period', authenticateToken, requirePagePermission('cashier
   }
 });
 
-// Generate detailed sales report PDF
+// Generate detailed cash report PDF for a selected period
 router.get('/reports/:period/pdf', authenticateToken, requirePagePermission('cashier'), async (req, res) => {
   try {
-    const { period } = req.params;
-    const report = await buildSalesReport(period);
-
-    const filename = `rapport-ventes-${period}-${format(new Date(), 'yyyy-MM-dd-HH-mm')}.pdf`;
+    const report = await buildSalesReport(req.params.period, { includeCashDetails: true });
+    const filename = `rapport-caisse-${req.params.period}-${format(new Date(), 'yyyy-MM-dd-HH-mm')}.pdf`;
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
 
     const doc = new PDFDocument({ margin: 40 });
     doc.pipe(res);
-
-    // Header
-    doc
-      .font('Helvetica-Bold')
-      .fontSize(18)
-      .fillColor(palette.secondary)
-      .text('RAPPORT DE VENTES', { align: 'center' });
-    doc.moveDown(0.3);
-    doc
-      .font('Helvetica')
-      .fontSize(10)
-      .fillColor(palette.muted)
-      .text(`Période: ${format(report.startDate, 'dd/MM/yyyy')} - ${format(report.endDate, 'dd/MM/yyyy')}`, { align: 'center' })
-      .text(`Généré le: ${format(new Date(), 'dd/MM/yyyy HH:mm')}`, { align: 'center' });
-    doc.moveDown(1);
-
-    // Résumé général
-    sectionTitle(doc, 'Résumé général');
-    metricRow(doc, "Chiffre d'affaires", formatAmount(report.totalRevenue));
-    metricRow(doc, 'Taxes incluses dans les ventes', formatAmount(report.totalTaxes));
-    metricRow(doc, 'Ventes hors taxes', formatAmount(report.revenueExcludingTax));
-    metricRow(doc, 'Nombre de commandes', report.totalOrders);
-    metricRow(doc, "Nombre d'articles vendus", report.totalItems);
-    metricRow(doc, 'Panier moyen', formatAmount(report.averageOrderValue));
-    doc.moveDown();
-
-    // Paiements
-    sectionTitle(doc, 'Répartition par moyen de paiement');
-    const paymentLabels = {
-      cash: 'Espèces',
-      card: 'Carte',
-      mobile_money: 'Mobile money',
-      loyalty_points: 'Points fidélité',
-      other: 'Autres'
-    };
-    Object.entries(report.paymentBreakdown).forEach(([method, amount]) => {
-      pill(doc, paymentLabels[method] || method, palette.primary);
-      doc.moveUp(0.8);
-      doc.x += 90;
-      doc.fontSize(10).fillColor(palette.text).text(formatAmount(amount));
-      doc.x = doc.page.margins.left;
-      doc.moveDown(0.4);
-    });
-    doc.moveDown();
-
-    sectionTitle(doc, 'Ventes par lieu');
-    if (!report.locationReport.length) {
-      doc.fontSize(10).fillColor(palette.muted).text('Aucune vente par lieu sur la période.');
-    } else {
-      report.locationReport.forEach(location => {
-        metricRow(doc, `${location.location} · ${location.orders} commande(s) · ${location.items} article(s)`, formatAmount(location.revenue));
-      });
-    }
-    doc.moveDown();
-
-    sectionTitle(doc, 'Taxes collectées par taux');
-    if (!report.taxBreakdown.length) {
-      doc.fontSize(10).fillColor(palette.muted).text('Aucune taxe enregistrée sur la période.');
-    } else {
-      report.taxBreakdown.forEach(tax => metricRow(doc, `${tax.name} (${tax.percentage.toFixed(2)} %)`, formatAmount(tax.amount)));
-    }
-    doc.moveDown();
-
-    // Utilisateurs
-    sectionTitle(doc, 'Ventes par utilisateur');
-    if (report.userReport.length === 0) {
-      doc.fontSize(10).fillColor(palette.muted).text('Aucune vente sur la période.');
-    } else {
-      report.userReport.forEach(user => {
-        doc
-          .fontSize(10)
-          .fillColor(palette.text)
-          .font('Helvetica-Bold')
-          .text(user.name);
-        doc.font('Helvetica').fillColor(palette.muted);
-        metricRow(doc, 'Commandes', user.orders);
-        metricRow(doc, 'Articles', user.quantity);
-        metricRow(doc, 'Ventes', formatAmount(user.revenue));
-        doc.moveDown(0.6);
-      });
-    }
-    doc.moveDown();
-
-    // Catégories + produits
-    sectionTitle(doc, 'Ventes par catégorie et produits');
-    report.categoryReport.forEach(category => {
-      doc
-        .fontSize(11)
-        .font('Helvetica-Bold')
-        .fillColor(palette.secondary)
-        .text(`${category.name}`);
-      doc.font('Helvetica').fillColor(palette.muted);
-      metricRow(doc, 'Articles', category.quantity);
-      metricRow(doc, 'Ventes', formatAmount(category.revenue));
-      if (!category.products || category.products.length === 0) {
-        doc.fontSize(9).fillColor(palette.muted).text('Aucune vente pour cette catégorie.', { indent: 12 });
-      } else {
-        category.products.forEach(product => {
-          doc
-            .fontSize(9)
-            .fillColor(palette.text)
-            .text(`• ${product.name}`, { indent: 12 });
-          doc.fontSize(9).fillColor(palette.muted);
-          metricRow(doc, 'Articles', product.quantity);
-          metricRow(doc, 'Ventes', formatAmount(product.revenue));
-        });
-      }
-      doc.moveDown(0.8);
-    });
-
-    sectionTitle(doc, 'Traçabilité des commandes clôturées');
-    if (!report.orders.length) {
-      doc.fontSize(9).fillColor(palette.muted).text('Aucune commande clôturée sur la période.');
-    } else {
-      report.orders.forEach(order => {
-        const code = order.order_code || order.id.slice(-8);
-        doc.fontSize(9).fillColor(palette.text)
-        .text(`Commande #${code} — ${order.order_type || '—'}${order.service_location ? ` · ${order.service_location_label || order.service_location}` : ''} — ${order.status} — ${formatAmount(order.total_amount)}`);
-        doc.fontSize(8).fillColor(palette.muted)
-          .text(`Paiement : ${order.payment_method || '—'} (${order.payment_status}) | Validé par : ${order.validated_by || 'Client en ligne'} | Clôturé par : ${order.closed_by || '—'}`);
-        doc.moveDown(0.4);
-      });
-    }
-
+    drawCashReport(doc, report, { title: 'RAPPORT DE CAISSE' });
     doc.end();
   } catch (error) {
-    console.error('Generate sales report PDF error:', error);
-    if (error.message === 'Invalid period') {
-      return res.status(400).json({ message: 'Invalid period' });
-    }
+    console.error('Generate cash report PDF error:', error);
+    if (error.message === 'Invalid period') return res.status(400).json({ message: 'Invalid period' });
     res.status(500).json({ message: 'Internal server error' });
   }
 });
 
 router.get('/reports/:period/excel', authenticateToken, requirePagePermission('cashier'), async (req, res) => {
   try {
-    const report = await buildSalesReport(req.params.period);
+    const report = await buildSalesReport(req.params.period, { includeCashDetails: true });
     const workbook = new ExcelJS.Workbook();
     workbook.creator = 'King of Tacos';
     workbook.created = new Date();
 
     const summary = workbook.addWorksheet('Synthèse');
     summary.addRows([
-      ['Rapport de ventes'],
-      ['Période', format(report.startDate, 'dd/MM/yyyy'), format(report.endDate, 'dd/MM/yyyy')],
-      ["Chiffre d'affaires (FCFA)", report.totalRevenue],
-      ['Taxes incluses (FCFA)', report.totalTaxes],
-      ['Ventes hors taxes (FCFA)', report.revenueExcludingTax],
+      ['Rapport de caisse'],
+      ['Période', format(report.startDate, 'dd/MM/yyyy HH:mm'), format(report.endDate, 'dd/MM/yyyy HH:mm')],
+      ["Chiffre d'affaires TTC net (FCFA)", report.totalRevenue],
+      ["Chiffre d'affaires TTC avant remises (FCFA)", report.revenueBeforeDiscount],
+      ['Remises et offres enregistrées (FCFA)', report.totalDiscounts],
+      ["Chiffre d'affaires HT (FCFA)", report.revenueExcludingTax],
+      ['Taxes collectées (FCFA)', report.totalTaxes],
       ['Nombre de commandes', report.totalOrders],
-      ["Nombre d'articles vendus", report.totalItems],
+      ['Articles vendus', report.totalItems],
       ['Panier moyen (FCFA)', report.averageOrderValue],
       [],
-      ['Moyen de paiement', 'Montant (FCFA)'],
-      ...Object.entries(report.paymentBreakdown).map(([method, amount]) => [method, amount])
+      ['Mode de paiement', 'Montant (FCFA)'],
+      ...Object.entries(report.paymentBreakdown).map(([method, amount]) => [method, amount]),
+      ['Total des paiements', report.totalRevenue],
+      [],
+      ['Catégorie', 'Articles vendus', 'Ventes TTC (FCFA)'],
+      ...report.categoryReport.filter(category => category.quantity || category.revenue).map(category => [category.name, category.quantity, category.revenue])
     ]);
     summary.getRow(1).font = { bold: true, size: 16 };
-    summary.getRow(10).font = { bold: true };
-    summary.columns = [{ width: 32 }, { width: 22 }, { width: 22 }];
+    [12, 18, 20].forEach(row => { summary.getRow(row).font = { bold: true }; });
+    summary.columns = [{ width: 38 }, { width: 24 }, { width: 24 }];
+
+    const sessions = workbook.addWorksheet('Fonds de caisse');
+    sessions.addRow(['Session', 'Ouverture', 'Fermeture', 'Fonds initial (FCFA)', 'Solde attendu (FCFA)', 'Montant compté (FCFA)', 'Écart (FCFA)', 'Note']).font = { bold: true };
+    report.sessionReport.forEach(session => sessions.addRow([
+      session.id, session.opened_at, session.closed_at, session.opening_balance,
+      session.expected_balance, session.closing_balance, session.difference, session.notes || ''
+    ]));
+    sessions.columns = [
+      { width: 12 }, { width: 22, style: { numFmt: 'dd/mm/yyyy hh:mm' } },
+      { width: 22, style: { numFmt: 'dd/mm/yyyy hh:mm' } }, { width: 20 },
+      { width: 22 }, { width: 22 }, { width: 18 }, { width: 40 }
+    ];
+
+    const payments = workbook.addWorksheet('Modes de paiement');
+    payments.addRow(['Mode de paiement', 'Montant (FCFA)']).font = { bold: true };
+    const paymentLabels = { cash: 'Espèces', card: 'Carte', mobile_money: 'Mobile money', loyalty_points: 'Points fidélité', other: 'Autres' };
+    Object.entries(report.paymentBreakdown).forEach(([method, amount]) => payments.addRow([paymentLabels[method] || method, amount]));
+    payments.addRow(['Total', report.totalRevenue]).font = { bold: true };
+    payments.columns = [{ width: 32 }, { width: 24 }];
 
     const locations = workbook.addWorksheet('Ventes par lieu');
-    locations.addRow(['Lieu', 'Commandes', 'Articles', 'Ventes (FCFA)']).font = { bold: true };
+    locations.addRow(['Lieu', 'Commandes', 'Articles', 'Ventes TTC (FCFA)']).font = { bold: true };
     report.locationReport.forEach(location => locations.addRow([location.location, location.orders, location.items, location.revenue]));
-    locations.columns = [{ width: 32 }, { width: 16 }, { width: 16 }, { width: 22 }];
-    locations.views = [{ state: 'frozen', ySplit: 1 }];
-    const summaryLocationHeaderRow = summary.rowCount + 2;
-    summary.addRows([
-      [],
-      ['Ventes par lieu', 'Commandes', 'Articles', 'Ventes (FCFA)'],
-      ...report.locationReport.map(location => [location.location, location.orders, location.items, location.revenue])
-    ]);
-    summary.getRow(summaryLocationHeaderRow).font = { bold: true };
+    locations.columns = [{ width: 32 }, { width: 16 }, { width: 16 }, { width: 24 }];
 
-    const taxes = workbook.addWorksheet('Taxes');
-    taxes.addRow(['Taux', 'Pourcentage', 'Montant collecté (FCFA)']).font = { bold: true };
-    report.taxBreakdown.forEach(tax => taxes.addRow([tax.name, tax.percentage, tax.amount]));
-    taxes.columns = [{ width: 32 }, { width: 18 }, { width: 28 }];
+    const taxes = workbook.addWorksheet('Taxes et remises');
+    taxes.addRow(['Taux', 'Pourcentage', 'Base HT (FCFA)', 'Taxe (FCFA)', 'Base + taxe (FCFA)']).font = { bold: true };
+    report.taxBreakdown.forEach(tax => taxes.addRow([tax.name, tax.percentage, tax.base, tax.amount, tax.base + tax.amount]));
+    taxes.addRow(['Total rapport', '', report.revenueExcludingTax, report.totalTaxes, report.totalRevenue]).font = { bold: true };
+    taxes.addRow(['Remises et offres', '', '', '', report.totalDiscounts]);
+    taxes.columns = [{ width: 28 }, { width: 16 }, { width: 22 }, { width: 20 }, { width: 24 }];
 
-    const products = workbook.addWorksheet('Produits');
-    products.addRow(['Produit', 'Catégorie', 'Quantité', 'Ventes (FCFA)']).font = { bold: true };
+    const products = workbook.addWorksheet('Ventes par produit');
+    products.addRow(['Catégorie', 'Produit', 'Quantité vendue', 'Ventes TTC (FCFA)']).font = { bold: true };
     report.categoryReport.forEach(category => category.products.forEach(product => {
-      products.addRow([product.name, category.name, product.quantity, product.revenue]);
+      products.addRow([category.name, product.name, product.quantity, product.revenue]);
     }));
-    products.columns = [{ width: 36 }, { width: 24 }, { width: 14 }, { width: 20 }];
+    products.columns = [{ width: 28 }, { width: 36 }, { width: 18 }, { width: 24 }];
 
-    const staff = workbook.addWorksheet('Ventes par utilisateur');
-    staff.addRow(['Utilisateur', 'Commandes', 'Articles', 'Ventes (FCFA)']).font = { bold: true };
+    const staff = workbook.addWorksheet('Ventes par personnel');
+    staff.addRow(['Membre du personnel', 'Commandes', 'Articles', 'Ventes TTC (FCFA)']).font = { bold: true };
     report.userReport.forEach(user => staff.addRow([user.name, user.orders, user.quantity, user.revenue]));
-    staff.columns = [{ width: 32 }, { width: 14 }, { width: 14 }, { width: 20 }];
+    staff.columns = [{ width: 34 }, { width: 16 }, { width: 16 }, { width: 24 }];
 
-    const orders = workbook.addWorksheet('Commandes clôturées');
-    orders.addRow(['N° commande', 'Date', 'Type', 'Lieu', 'Statut', 'Moyen de paiement', 'Paiement', 'Montant (FCFA)', 'Validé par', 'Clôturé par']).font = { bold: true };
-    report.orders.forEach(order => orders.addRow([
+    const expenses = workbook.addWorksheet('Dépenses');
+    expenses.addRow(['Date', 'Catégorie', 'Description', 'Fournisseur', 'Mode de paiement', 'Montant (FCFA)', 'Saisi par', 'Articles reçus']).font = { bold: true };
+    report.expenses.forEach(expense => expenses.addRow([
+      expense.expense_date, expense.category, expense.description, expense.supplier || '',
+      expense.payment_method, expense.amount, expense.createdBy?.full_name || '',
+      expense.items?.map(item => `${item.quantity} x ${item.product?.name || 'Article'}`).join(', ') || ''
+    ]));
+    expenses.addRow(['', '', 'Total des dépenses', '', '', report.totalExpenses]).font = { bold: true };
+    expenses.addRow(['', '', 'Dont payées en espèces', '', '', report.cashExpenses]).font = { bold: true };
+    expenses.columns = [
+      { width: 22, style: { numFmt: 'dd/mm/yyyy hh:mm' } }, { width: 24 }, { width: 42 },
+      { width: 24 }, { width: 20 }, { width: 20 }, { width: 28 }, { width: 40 }
+    ];
+
+    const orders = workbook.addWorksheet('Commandes');
+    orders.addRow(['N° commande', 'Date', 'Type', 'Lieu', 'Statut', 'Moyen de paiement', 'Montant (FCFA)', 'Validé par', 'Clôturé par', 'Articles']).font = { bold: true };
+    report.orderDetails.forEach(order => orders.addRow([
       order.order_code || order.id, order.closed_at ? new Date(order.closed_at) : null,
       order.order_type || '', order.service_location_label || '', order.status,
-      order.payment_method || '', order.payment_status, order.total_amount,
-      order.validated_by || 'Client en ligne', order.closed_by || ''
+      order.payment_method || '', order.total_amount, order.validated_by || 'Client en ligne',
+      order.closed_by || '', order.items.map(item => `${item.quantity} x ${item.product_name}`).join(', ')
     ]));
     orders.columns = [
       { width: 24 }, { width: 20, style: { numFmt: 'dd/mm/yyyy hh:mm' } }, { width: 18 },
-      { width: 24 }, { width: 16 }, { width: 20 }, { width: 18 }, { width: 20 }, { width: 28 }, { width: 28 }
+      { width: 26 }, { width: 16 }, { width: 20 }, { width: 20 }, { width: 28 }, { width: 28 }, { width: 50 }
     ];
-    for (const sheet of [taxes, products, staff, orders]) sheet.views = [{ state: 'frozen', ySplit: 1 }];
 
-    const filename = `rapport-ventes-${req.params.period}-${format(new Date(), 'yyyy-MM-dd-HH-mm')}.xlsx`;
+    for (const sheet of workbook.worksheets) {
+      sheet.views = [{ state: 'frozen', ySplit: 1 }];
+    }
+    for (const sheet of [sessions, payments, locations, taxes, products, staff, expenses, orders]) {
+      sheet.autoFilter = { from: 'A1', to: sheet.getRow(1).getCell(sheet.columnCount).address };
+    }
+
+    const filename = `rapport-caisse-${req.params.period}-${format(new Date(), 'yyyy-MM-dd-HH-mm')}.xlsx`;
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     await workbook.xlsx.write(res);
     res.end();
   } catch (error) {
-    console.error('Generate sales Excel report error:', error);
+    console.error('Generate cash Excel report error:', error);
     if (error.message === 'Invalid period') return res.status(400).json({ message: 'Invalid period' });
     res.status(500).json({ message: 'Internal server error' });
   }
@@ -1288,147 +1413,39 @@ router.put('/orders/:id/deliver', authenticateToken, requirePagePermission('cash
   }
 });
 
-// Generate cash register closing report PDF
+// Generate the detailed cash register closing report PDF
 router.get('/session/close-report', authenticateToken, requirePagePermission('cashier'), async (req, res) => {
   try {
     const { sessionId } = req.query;
-
-    // Prefer the provided session id, otherwise use the last closed session
     let session;
     if (sessionId) {
-      session = await prisma.cashRegisterSession.findUnique({
-        where: { id: Number(sessionId) }
-      });
+      session = await prisma.cashRegisterSession.findUnique({ where: { id: Number(sessionId) } });
     } else {
       session = await prisma.cashRegisterSession.findFirst({
         where: { closed_at: { not: null } },
         orderBy: { closed_at: 'desc' }
       });
     }
-
-    if (!session) {
-      return res.status(404).json({ message: 'Aucune session de caisse fermée trouvée' });
-    }
+    if (!session) return res.status(404).json({ message: 'Aucune session de caisse fermée trouvée' });
 
     const reportEndDate = session.closed_at || new Date();
-
-    // Fetch orders in the session window
-    const orders = await prisma.order.findMany({
-      where: {
-        cash_register_session_id: session.id,
-        closed_at: {
-          gte: session.opened_at,
-          lte: reportEndDate
-        },
-        status: { in: ['livree', 'servie', 'recuperee'] },
-        payment_status: 'paid'
-      },
-      include: {
-        items: true,
-        validatedBy: { select: { full_name: true } },
-        closedBy: { select: { full_name: true } }
-      }
+    const report = await buildSalesReport('session', {
+      startDate: session.opened_at,
+      endDate: reportEndDate,
+      sessionId: session.id,
+      includeCashDetails: true
     });
-    const locationNames = new Map((await prisma.restaurantLocation.findMany({ select: { slug: true, name: true } }))
-      .map(location => [location.slug, location.name]));
-    const expenses = await prisma.cashExpense.findMany({
-      where: { session_id: session.id },
-      include: { items: { include: { product: { select: { name: true } } } }, createdBy: { select: { full_name: true } } },
-      orderBy: { expense_date: 'asc' }
-    });
-
-    // Compute the payment breakdown in whole FCFA.
-    const paymentTotals = {
-      cash: 0,
-      card: 0,
-      mobile_money: 0,
-      loyalty_points: 0
-    };
-
-    let totalRevenue = 0;
-    orders.forEach(order => {
-      const amount = order.total_amount || 0;
-      totalRevenue += amount;
-      const method = order.payment_method || 'cash';
-      if (paymentTotals[method] !== undefined) {
-        paymentTotals[method] += amount;
-      } else {
-        paymentTotals.cash += amount;
-      }
-    });
-
-    const doc = new PDFDocument();
-    const filename = `fermeture-caisse-${format(new Date(), 'yyyy-MM-dd-HH-mm')}.pdf`;
-
+    const filename = `fermeture-caisse-${session.id}-${format(reportEndDate, 'yyyy-MM-dd-HH-mm')}.pdf`;
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
 
+    const doc = new PDFDocument({ margin: 40 });
     doc.pipe(res);
-
-    // Header
-    doc.fontSize(20).text('RAPPORT DE FERMETURE DE CAISSE', { align: 'center' });
-    doc.moveDown();
-    doc.fontSize(12).text(`Généré le: ${format(new Date(), 'dd/MM/yyyy HH:mm')}`, { align: 'center' });
-    doc.moveDown(2);
-
-    // Session info
-    doc.fontSize(14).text('Informations de la session:');
-    doc.fontSize(10);
-    doc.text(`Ouverture: ${format(session.opened_at, 'dd/MM/yyyy HH:mm')}`);
-    doc.text(`Fermeture: ${session.closed_at ? format(session.closed_at, 'dd/MM/yyyy HH:mm') : 'Non clôturée'}`);
-    doc.text(`Solde d'ouverture: ${formatAmount(session.opening_balance)}`);
-    if (session.closing_balance !== null && session.closing_balance !== undefined) {
-      doc.text(`Solde de clôture: ${formatAmount(session.closing_balance)}`);
-    }
-    doc.text(`Solde actuel (après clôture): ${formatAmount(session.current_balance)}`);
-    doc.moveDown();
-
-    // Summary
-    doc.fontSize(14).text('Résumé des ventes:');
-    doc.fontSize(10);
-    doc.text(`Revenus totaux: ${formatAmount(totalRevenue)}`);
-    doc.text(`Paiements en espèces: ${formatAmount(paymentTotals.cash)}`);
-    doc.text(`Paiements par carte: ${formatAmount(paymentTotals.card)}`);
-    doc.text(`Paiements mobile money: ${formatAmount(paymentTotals.mobile_money)}`);
-    doc.text(`Paiements points fidélité: ${formatAmount(paymentTotals.loyalty_points)}`);
-    const cashExpenseTotal = expenses.reduce((sum, expense) => sum + expense.amount, 0);
-    const cashPaidExpenseTotal = expenses.filter(expense => expense.payment_method === 'cash').reduce((sum, expense) => sum + expense.amount, 0);
-    doc.text(`Dépenses enregistrées: ${formatAmount(cashExpenseTotal)} (dont espèces : ${formatAmount(cashPaidExpenseTotal)})`);
-    doc.moveDown();
-
-    // Orders summary
-    doc.fontSize(14).text('Détail des commandes:');
-    doc.moveDown();
-
-    orders.forEach((order, index) => {
-      const displayCode = order.order_code || order.id.substring(0, 8);
-      doc.fontSize(10).text(
-        `${index + 1}. Commande #${displayCode} - ${formatAmount(order.total_amount)} - ${order.payment_method || 'cash'}`
-      );
-      doc.fontSize(8).text(`Validé par : ${order.validatedBy?.full_name || 'Client en ligne'} | Clôturé par : ${order.closedBy?.full_name || 'Non clôturée'}`);
-      if (order.service_location) doc.fontSize(8).text(`Lieu : ${locationNames.get(order.service_location) || order.service_location}${order.table_number ? ` · Table ${order.table_number}` : ''}`);
-      order.items.forEach(item => {
-        doc.text(`   - ${item.quantity}x ${item.product_name}`, { indent: 20 });
-      });
-      doc.moveDown(0.5);
-    });
-
-    doc.moveDown();
-    doc.fontSize(14).text('Détail des dépenses de caisse:');
-    doc.moveDown(0.5);
-    if (!expenses.length) {
-      doc.fontSize(10).text('Aucune dépense enregistrée sur cette session.');
-    } else {
-      expenses.forEach((expense, index) => {
-        const products = expense.items.map(item => `${item.quantity} × ${item.product.name}`).join(', ');
-        doc.fontSize(10).text(`${index + 1}. ${expense.category} — ${formatAmount(expense.amount)} — ${expense.payment_method}`);
-        doc.fontSize(8).text(`${expense.description}${expense.supplier ? ` · Fournisseur : ${expense.supplier}` : ''}${products ? ` · ${products}` : ''}`);
-      });
-    }
-
+    drawCashReport(doc, report, { title: 'RAPPORT DE FERMETURE DE CAISSE' });
     doc.end();
   } catch (error) {
     console.error('Generate closing report error:', error);
+    if (error.message === 'Invalid period') return res.status(400).json({ message: 'Invalid period' });
     res.status(500).json({ message: 'Internal server error' });
   }
 });
