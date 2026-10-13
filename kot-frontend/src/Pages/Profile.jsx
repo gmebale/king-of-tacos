@@ -141,7 +141,7 @@ export default function Profile() {
                     />
                   </div>
                   <div className="flex gap-2">
-                    <Button onClick={handleSave} className="bg-gradient-to-r from-yellow-400 to-amber-600 text-white rounded-xl">
+                    <Button onClick={handleSave} className="bg-gradient-to-r from-yellow-400 to-amber-600 text-slate-900 rounded-xl">
                       <Save className="w-4 h-4 mr-2" />
                       Sauvegarder
                     </Button>

@@ -30,7 +30,7 @@ export default function Cart() {
           <p className="text-gray-600 mb-8">Découvrez notre délicieux menu</p>
           <Button
             onClick={() => navigate(createPageUrl("Menu"))}
-            className="bg-gradient-to-r from-yellow-400 to-amber-600 hover:from-yellow-500 hover:to-amber-700 text-white px-8 py-6 rounded-2xl"
+            className="bg-gradient-to-r from-yellow-400 to-amber-600 hover:from-yellow-500 hover:to-amber-700 text-slate-900 px-8 py-6 rounded-2xl"
           >
             Voir le menu
           </Button>
@@ -127,7 +127,7 @@ export default function Cart() {
                           <Button
                             size="icon"
                             onClick={() => updateQuantity(item.product.id, item.quantity + 1, item.customization)}
-                            className="h-11 w-11 rounded-xl bg-gradient-to-r from-yellow-400 to-amber-600 text-white sm:h-8 sm:w-8"
+                            className="h-11 w-11 rounded-xl bg-gradient-to-r from-yellow-400 to-amber-600 text-slate-900 sm:h-8 sm:w-8"
                           >
                             <Plus className="w-3 h-3" />
                           </Button>
@@ -164,7 +164,7 @@ export default function Cart() {
             <div className="space-y-3">
               <Button
                 onClick={() => navigate(createPageUrl("Checkout"))}
-                className="w-full bg-gradient-to-r from-yellow-400 to-amber-600 hover:from-yellow-500 hover:to-amber-700 text-white py-6 rounded-2xl text-lg font-semibold shadow-lg group"
+                className="w-full bg-gradient-to-r from-yellow-400 to-amber-600 hover:from-yellow-500 hover:to-amber-700 text-slate-900 py-6 rounded-2xl text-lg font-semibold shadow-lg group"
               >
                 Passer la commande
                 <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />

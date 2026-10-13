@@ -194,7 +194,7 @@ export default function OrderCard({ order, onUpdateStatus, onCancel }) {
               {getNextStatus(order.status) && (
                 <Button
                   onClick={() => onUpdateStatus(order.id, getNextStatus(order.status))}
-                  className="w-full bg-gradient-to-r from-yellow-400 to-amber-600 hover:from-yellow-500 hover:to-amber-700 text-white rounded-xl"
+                  className="w-full bg-gradient-to-r from-yellow-400 to-amber-600 hover:from-yellow-500 hover:to-amber-700 text-slate-900 rounded-xl"
                 >
                   {getNextStatusLabel(order.status)}
                 </Button>

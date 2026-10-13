@@ -276,7 +276,7 @@ export default function Payment() {
             <Button
               onClick={handlePayment}
               disabled={isSubmitting}
-              className="w-full mt-6 bg-gradient-to-r from-yellow-400 to-amber-600 hover:from-yellow-500 hover:to-amber-700 text-white py-6 rounded-2xl text-lg font-semibold shadow-lg"
+              className="w-full mt-6 bg-gradient-to-r from-yellow-400 to-amber-600 hover:from-yellow-500 hover:to-amber-700 text-slate-900 py-6 rounded-2xl text-lg font-semibold shadow-lg"
             >
               {isSubmitting ? "Traitement..." : isStaffOrder ? "Confirmer la commande" : mobileMoneyAvailable ? "Continuer avec Mobile Money" : "Confirmer la commande"}
               <CreditCard className="ml-2 w-5 h-5" />

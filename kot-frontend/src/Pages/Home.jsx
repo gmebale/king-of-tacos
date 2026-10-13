@@ -229,7 +229,7 @@ export default function Home() {
                     </div>
                     <p className="flex-1 text-lg leading-relaxed text-slate-700">“{review.comment}”</p>
                     <div className="mt-6 flex items-center gap-3 border-t border-slate-100 pt-5">
-                      <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-yellow-400 to-amber-600 font-bold text-white">
+                      <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-yellow-400 to-amber-600 font-bold text-slate-900">
                         {(review.customer_name || 'C').charAt(0).toUpperCase()}
                       </div>
                       <div>

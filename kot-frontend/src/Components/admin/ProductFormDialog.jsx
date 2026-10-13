@@ -421,7 +421,7 @@ export default function ProductFormDialog({ open, onOpenChange, product, onSave 
             </Button>
             <Button
               type="submit"
-              className="flex-1 bg-gradient-to-r from-yellow-400 to-amber-600 hover:from-yellow-500 hover:to-amber-700 text-white"
+              className="flex-1 bg-gradient-to-r from-yellow-400 to-amber-600 hover:from-yellow-500 hover:to-amber-700 text-slate-900"
             >
               {product ? "Mettre à jour" : "Créer le produit"}
             </Button>

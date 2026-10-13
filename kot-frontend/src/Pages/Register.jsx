@@ -197,7 +197,7 @@ export default function Register() {
               <Button
                 type="submit"
                 disabled={isSubmitting}
-                className="w-full bg-gradient-to-r from-yellow-400 to-amber-600 hover:from-yellow-500 hover:to-amber-700 text-white py-3 rounded-xl text-lg font-semibold shadow-lg"
+                className="w-full bg-gradient-to-r from-yellow-400 to-amber-600 hover:from-yellow-500 hover:to-amber-700 text-slate-900 py-3 rounded-xl text-lg font-semibold shadow-lg"
               >
                 {isSubmitting ? 'Inscription...' : 'S\'inscrire'}
               </Button>

@@ -421,7 +421,7 @@ export default function Checkout() {
 
               <Button
                 type="submit"
-                className="w-full bg-gradient-to-r from-yellow-400 to-amber-600 hover:from-yellow-500 hover:to-amber-700 text-white py-6 rounded-2xl text-lg font-semibold shadow-lg"
+                className="w-full bg-gradient-to-r from-yellow-400 to-amber-600 hover:from-yellow-500 hover:to-amber-700 text-slate-900 py-6 rounded-2xl text-lg font-semibold shadow-lg"
               >
                 {isStaffOrder ? "Continuer vers la confirmation" : "Procéder au paiement"}
                 <Check className="ml-2 w-5 h-5" />

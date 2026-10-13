@@ -148,7 +148,7 @@ export default function OrderSuccess() {
             </Button>
           )}
           <Link to={createPageUrl("OrdersPage")}>
-            <Button className="w-full bg-gradient-to-r from-yellow-400 to-amber-600 hover:from-yellow-500 hover:to-amber-700 text-white py-5 rounded-2xl text-lg">
+            <Button className="w-full bg-gradient-to-r from-yellow-400 to-amber-600 hover:from-yellow-500 hover:to-amber-700 text-slate-900 py-5 rounded-2xl text-lg">
               <List className="mr-2 h-5 w-5" />Suivre ma commande
             </Button>
           </Link>

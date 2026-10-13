@@ -72,7 +72,7 @@ export default function AdminAccess() {
 
     <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
       <Card className="h-fit"><CardHeader><CardTitle>Profils</CardTitle></CardHeader><CardContent className="space-y-2">
-        {roles.map(role => <button key={role.slug} type="button" onClick={() => setSelectedRole(role.slug)} className={`w-full rounded-lg border p-3 text-left transition ${selectedRole === role.slug ? 'border-amber-500 bg-amber-50' : 'hover:bg-gray-50'}`}>
+        {roles.map(role => <button key={role.slug} type="button" onClick={() => setSelectedRole(role.slug)} className={`w-full rounded-lg border p-3 text-left transition ${selectedRole === role.slug ? 'border-amber-500 bg-yellow-100 text-slate-900 ring-1 ring-amber-300' : 'hover:bg-gray-50'}`}>
           <span className="block font-semibold">{role.name}</span><span className="mt-1 block text-xs text-gray-500">{role.description}</span>
         </button>)}
       </CardContent></Card>

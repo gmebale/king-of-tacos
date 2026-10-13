@@ -30,7 +30,7 @@ class ErrorBoundary extends React.Component {
             </p>
             <button
               onClick={() => window.location.reload()}
-              className="w-full py-2 px-4 bg-gradient-to-r from-yellow-400 to-amber-500 text-white rounded-lg hover:from-yellow-500 hover:to-amber-600 transition-all duration-200"
+              className="w-full py-2 px-4 bg-gradient-to-r from-yellow-400 to-amber-500 text-slate-900 rounded-lg hover:from-yellow-500 hover:to-amber-600 transition-all duration-200"
             >
               Rafraîchir la page
             </button>

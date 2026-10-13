@@ -194,7 +194,7 @@ export default function TacosCustomizationDialog({ open, onOpenChange, product, 
                 type="button"
                 onClick={handleConfirm}
                 disabled={customization.sauces.length === 0}
-                className="flex-1 bg-gradient-to-r from-yellow-400 to-amber-600 hover:from-yellow-500 hover:to-amber-700 text-white"
+                className="flex-1 bg-gradient-to-r from-yellow-400 to-amber-600 hover:from-yellow-500 hover:to-amber-700 text-slate-900"
               >
                 Ajouter au panier
               </Button>

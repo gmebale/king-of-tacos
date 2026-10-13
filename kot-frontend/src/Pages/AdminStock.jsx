@@ -202,7 +202,7 @@ export default function AdminStock() {
                 setEditingProduct(null);
                 setShowDialog(true);
               }}
-              className="bg-gradient-to-r from-yellow-400 to-amber-600 hover:from-yellow-500 hover:to-amber-700 text-white rounded-xl shadow-lg w-full md:w-auto"
+              className="bg-gradient-to-r from-yellow-400 to-amber-600 hover:from-yellow-500 hover:to-amber-700 text-slate-900 rounded-xl shadow-lg w-full md:w-auto"
             >
               <Plus className="w-4 h-4 mr-2" />
               <span className="hidden sm:inline">Nouveau produit</span>

@@ -419,7 +419,7 @@ export default function AdminLoyalty() {
                 </div>
                 <Button
                   onClick={() => { resetRewardForm(); setEditingReward(null); setShowRewardDialog(true); }}
-                  className="bg-amber-500 hover:bg-amber-600 text-white"
+                  className="bg-amber-500 hover:bg-amber-600 text-slate-900"
                 >
                   <Plus className="w-4 h-4 mr-2" />
                   Nouvelle Récompense
@@ -679,7 +679,7 @@ export default function AdminLoyalty() {
                 </div>
                 <Button
                   onClick={() => { resetPromoForm(); setEditingPromo(null); setShowPromoDialog(true); }}
-                  className="bg-amber-500 hover:bg-amber-600 text-white"
+                  className="bg-amber-500 hover:bg-amber-600 text-slate-900"
                 >
                   <Plus className="w-4 h-4 mr-2" />
                   Créer un code

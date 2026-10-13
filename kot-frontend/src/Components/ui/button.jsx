@@ -4,7 +4,7 @@ export function Button({ children, variant = 'default', size = 'default', classN
   const baseClasses = 'inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-60 disabled:pointer-events-none ring-offset-background';
 
   const variantClasses = {
-    default: 'bg-primary text-primary-foreground hover:bg-amber-800',
+    default: 'bg-primary text-primary-foreground hover:bg-yellow-500',
     ghost: 'hover:bg-accent hover:text-accent-foreground',
     outline: 'border border-slate-500 bg-white text-gray-900 hover:bg-accent hover:text-accent-foreground',
     destructive: 'bg-destructive text-destructive-foreground hover:bg-red-800',
