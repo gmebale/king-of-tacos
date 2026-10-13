@@ -160,37 +160,37 @@ export default function AdminOrders() {
           <TabsList className="bg-white border-2 border-gray-200 flex-wrap h-auto">
             <TabsTrigger 
               value="all" 
-              className="rounded-xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-yellow-400 data-[state=active]:to-amber-500 data-[state=active]:text-white"
+              className="rounded-xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-amber-700 data-[state=active]:to-amber-800 data-[state=active]:text-white"
             >
               Toutes ({statusCounts.all})
             </TabsTrigger>
             <TabsTrigger 
               value="en_attente"
-              className="rounded-xl data-[state=active]:bg-yellow-500 data-[state=active]:text-white"
+              className="rounded-xl data-[state=active]:bg-yellow-800 data-[state=active]:text-white"
             >
               En attente ({statusCounts.en_attente})
             </TabsTrigger>
             <TabsTrigger 
               value="en_preparation"
-              className="rounded-xl data-[state=active]:bg-blue-500 data-[state=active]:text-white"
+              className="rounded-xl data-[state=active]:bg-blue-800 data-[state=active]:text-white"
             >
               En préparation ({statusCounts.en_preparation})
             </TabsTrigger>
             <TabsTrigger 
               value="prete"
-              className="rounded-xl data-[state=active]:bg-green-500 data-[state=active]:text-white"
+              className="rounded-xl data-[state=active]:bg-green-800 data-[state=active]:text-white"
             >
               Prêtes ({statusCounts.prete})
             </TabsTrigger>
             <TabsTrigger 
               value="en_livraison" // Added new status tab
-              className="rounded-xl data-[state=active]:bg-purple-500 data-[state=active]:text-white"
+              className="rounded-xl data-[state=active]:bg-purple-800 data-[state=active]:text-white"
             >
               En livraison ({statusCounts.en_livraison})
             </TabsTrigger>
             <TabsTrigger 
               value="livree"
-              className="rounded-xl data-[state=active]:bg-gray-500 data-[state=active]:text-white"
+              className="rounded-xl data-[state=active]:bg-gray-700 data-[state=active]:text-white"
             >
               Livrées ({statusCounts.livree})
             </TabsTrigger>

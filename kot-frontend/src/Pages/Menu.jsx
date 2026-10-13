@@ -169,14 +169,14 @@ export default function Menu() {
           <div className="sticky top-0 z-30 -mx-4 min-w-0 overflow-hidden bg-amber-50/95 px-4 py-2 backdrop-blur sm:-mx-6 sm:px-6 md:static md:mx-0 md:bg-transparent md:p-0">
             <Tabs value={category} onValueChange={setCategory}>
               <TabsList className="flex h-auto w-full min-w-0 max-w-full justify-start gap-1 overflow-x-auto overflow-y-hidden rounded-xl border border-gray-200 bg-white p-1 scrollbar-hide md:flex-wrap md:overflow-visible">
-                <TabsTrigger value="all" className="shrink-0 whitespace-nowrap rounded-lg px-3 py-1.5 text-xs data-[state=active]:bg-gradient-to-r data-[state=active]:from-yellow-400 data-[state=active]:to-amber-500 data-[state=active]:text-white sm:px-4 sm:py-2 sm:text-sm">
+                <TabsTrigger value="all" className="shrink-0 whitespace-nowrap rounded-lg px-3 py-1.5 text-xs data-[state=active]:bg-gradient-to-r data-[state=active]:from-amber-700 data-[state=active]:to-amber-800 data-[state=active]:text-white sm:px-4 sm:py-2 sm:text-sm">
                   Tous
                 </TabsTrigger>
                 {categories.map(cat => (
                   <TabsTrigger
                     key={cat.id}
                     value={cat.name}
-                    className="shrink-0 whitespace-nowrap rounded-lg px-3 py-1.5 text-xs data-[state=active]:bg-gradient-to-r data-[state=active]:from-yellow-400 data-[state=active]:to-amber-500 data-[state=active]:text-white sm:px-4 sm:py-2 sm:text-sm"
+                    className="shrink-0 whitespace-nowrap rounded-lg px-3 py-1.5 text-xs data-[state=active]:bg-gradient-to-r data-[state=active]:from-amber-700 data-[state=active]:to-amber-800 data-[state=active]:text-white sm:px-4 sm:py-2 sm:text-sm"
                   >
                     {cleanMenuText(cat.displayName || cat.name)}
                   </TabsTrigger>

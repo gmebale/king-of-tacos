@@ -140,13 +140,13 @@ export default function AdminStock() {
 
   const getCategoryColor = (categoryName) => {
     const colors = {
-      tacos: "bg-amber-500",
-      burritos: "bg-blue-500",
-      burger: "bg-red-500",
-      boissons: "bg-purple-500",
-      desserts: "bg-green-500",
-      accompagnements: "bg-orange-500",
-      options: "bg-gray-500"
+      tacos: "data-[state=active]:bg-amber-800",
+      burritos: "data-[state=active]:bg-blue-800",
+      burger: "data-[state=active]:bg-red-800",
+      boissons: "data-[state=active]:bg-purple-800",
+      desserts: "data-[state=active]:bg-green-800",
+      accompagnements: "data-[state=active]:bg-orange-800",
+      options: "data-[state=active]:bg-gray-700"
     };
     return colors[categoryName] || "bg-gray-500";
   };
@@ -264,7 +264,7 @@ export default function AdminStock() {
               >
                 <TabsTrigger 
                   value="all" 
-                  className="rounded-xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-yellow-400 data-[state=active]:to-amber-500 data-[state=active]:text-white whitespace-nowrap flex-shrink-0 text-xs sm:text-sm px-3 sm:px-4"
+                  className="rounded-xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-amber-700 data-[state=active]:to-amber-800 data-[state=active]:text-white whitespace-nowrap flex-shrink-0 text-xs sm:text-sm px-3 sm:px-4"
                 >
                   Tous ({stats.total})
                 </TabsTrigger>
@@ -272,7 +272,7 @@ export default function AdminStock() {
                   <TabsTrigger
                     key={category.id}
                     value={category.name}
-                    className={`rounded-xl data-[state=active]:${getCategoryColor(category.name)} data-[state=active]:text-white whitespace-nowrap flex-shrink-0 text-xs sm:text-sm px-3 sm:px-4`}
+                    className={`rounded-xl ${getCategoryColor(category.name)} data-[state=active]:text-white whitespace-nowrap flex-shrink-0 text-xs sm:text-sm px-3 sm:px-4`}
                   >
                     {getCategoryLabel(category)} ({stats[category.name] || 0})
                   </TabsTrigger>
