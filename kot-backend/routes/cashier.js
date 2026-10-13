@@ -932,7 +932,7 @@ router.get('/invoice/:orderId', authenticateToken, requirePagePermission('cashie
 });
 
 function formatReportAmount(amount) {
-  return `${Number(amount || 0).toLocaleString('fr-GA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} FCFA`;
+  return `${Number(amount || 0).toFixed(2)} FCFA`;
 }
 
 function ensureReportSpace(doc, height = 24) {
@@ -960,6 +960,16 @@ function reportMetric(doc, label, value, options = {}) {
   doc.x = x;
 }
 
+function reportInlineMetric(doc, label, value, options = {}) {
+  const fontSize = options.fontSize || 10;
+  ensureReportSpace(doc, 18);
+  doc.font('Helvetica').fontSize(fontSize).fillColor(palette.muted)
+    .text(`${label}: `, { indent: options.indent || 0, continued: true })
+    .font('Helvetica-Bold').fillColor(palette.text)
+    .text(String(value));
+  doc.font('Helvetica').fillColor(palette.text).moveDown(0.05);
+}
+
 function drawCashReport(doc, report, options = {}) {
   const title = options.title || 'RAPPORT DE CAISSE';
   doc.font('Helvetica-Bold').fontSize(18).fillColor(palette.secondary).text(title, { align: 'center' });
@@ -982,15 +992,23 @@ function drawCashReport(doc, report, options = {}) {
   reportMetric(doc, 'Panier moyen', formatReportAmount(report.averageOrderValue));
   doc.moveDown();
 
-  sectionTitle(doc, 'Statistiques des ventes');
-  if (!report.categoryReport?.length) {
-    reportMetric(doc, 'Aucune vente enregistrée', formatReportAmount(0));
+  sectionTitle(doc, 'Ventes par catégorie et produits');
+  const soldCategories = report.categoryReport?.filter(category => category.quantity || category.revenue) || [];
+  if (!soldCategories.length) {
+    doc.fontSize(9).fillColor(palette.muted).text('Aucune vente enregistrée sur la période.');
   } else {
-    report.categoryReport.filter(category => category.quantity || category.revenue).forEach(category => {
-      reportMetric(doc, `${category.name} - ${category.quantity} article(s)`, formatReportAmount(category.revenue), { fontSize: 10 });
+    soldCategories.forEach(category => {
+      ensureReportSpace(doc, 54);
+      doc.font('Helvetica-Bold').fontSize(11).fillColor(palette.secondary).text(category.name);
+      reportInlineMetric(doc, 'Articles', category.quantity);
+      reportInlineMetric(doc, 'Ventes', formatReportAmount(category.revenue));
       category.products.filter(product => product.quantity || product.revenue).forEach(product => {
-        reportMetric(doc, `  ${product.name} - ${product.quantity} vendu(s)`, formatReportAmount(product.revenue), { fontSize: 9 });
+        ensureReportSpace(doc, 50);
+        doc.font('Helvetica-Bold').fontSize(9).fillColor(palette.text).text(`• ${product.name}`, { indent: 12 });
+        reportInlineMetric(doc, 'Articles', product.quantity, { fontSize: 9, indent: 12 });
+        reportInlineMetric(doc, 'Ventes', formatReportAmount(product.revenue), { fontSize: 9, indent: 12 });
       });
+      doc.moveDown(0.45);
     });
   }
   doc.moveDown();
