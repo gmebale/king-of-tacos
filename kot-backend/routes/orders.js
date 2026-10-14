@@ -29,10 +29,10 @@ function getPreparationStation(category) {
   return 'cuisine_chaude';
 }
 
-function calculatePromoDiscount(promo, amount, orderType, totalAmount = amount) {
+function calculatePromoDiscount(promo, amount) {
   if (promo.type === 'percentage') return Math.min(amount, Math.round(amount * promo.value / 100));
   if (promo.type === 'fixed_amount') return Math.min(amount, promo.value);
-  if (promo.type === 'free_delivery') return orderType === 'livraison' ? Math.min(totalAmount, 2000) : 0;
+  if (promo.type === 'free_delivery') return 0;
   return 0;
 }
 
@@ -561,8 +561,8 @@ router.post('/', async (req, res) => {
 
     const orderItems = await buildOrderItems(items);
     const promoBasis = orderItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
-    const deliveryFee = order_type === 'livraison' ? 2000 : 0;
-    const baseTotal = promoBasis + deliveryFee;
+    // Partner delivery fees are collected by the courier and never form part of restaurant sales or online payment.
+    const baseTotal = promoBasis;
     if (!Number.isFinite(baseTotal) || baseTotal < 0) return res.status(400).json({ message: 'Montant de commande invalide' });
     if (promo_code && gifted_redemption_id) return res.status(400).json({ message: 'Un seul avantage peut être utilisé par commande.' });
     let promo = null;
@@ -574,8 +574,9 @@ router.post('/', async (req, res) => {
         return res.status(400).json({ message: 'Ce code promo est invalide, expiré ou déjà utilisé.' });
       }
       if (promo.user_id && promo.user_id !== userId) return res.status(403).json({ message: 'Ce code promo est réservé à son bénéficiaire.' });
+      if (promo.type === 'free_delivery') return res.status(400).json({ message: 'Les frais de livraison sont réglés directement au livreur partenaire. Ce code ne peut pas être déduit du paiement des produits King Of Tacos.' });
       if (promo.min_order_amount && promoBasis < promo.min_order_amount) return res.status(400).json({ message: 'Le montant minimum requis pour ce code promo n’est pas atteint.' });
-      discountAmount = calculatePromoDiscount(promo, promoBasis, order_type, baseTotal);
+      discountAmount = calculatePromoDiscount(promo, promoBasis);
       if (!discountAmount) return res.status(400).json({ message: 'Ce code promo ne s’applique pas à cette commande.' });
       if (promo.user_id) {
         loyaltyRedemption = await prisma.loyaltyRedemption.findFirst({ where: { promo_code_id: promo.id, user_id: userId, status: 'claimed' } });

@@ -350,7 +350,10 @@ export default function Payment() {
                 {formData.table_number && <p><strong>Table:</strong> {formData.table_number}</p>}
                 {formData.service_location && <p><strong>Lieu:</strong> {formData.service_location_name || formData.service_location}</p>}
                 {isStaffOrder && <p><strong>Paiement prévu:</strong> {formData.payment_method}</p>}
-                {formData.order_type === "livraison" && <p><strong>Adresse:</strong> {formData.delivery_address}</p>}
+                {formData.order_type === "livraison" && <>
+                  <p><strong>Adresse:</strong> {formData.delivery_address}</p>
+                  <p className="mt-2 rounded-lg bg-blue-50 p-3 text-sm text-blue-900">Les frais de livraison seront réglés directement au livreur partenaire et ne sont pas compris dans le montant payé à King Of Tacos.</p>
+                </>}
               </CardContent>
             </Card>
           </div>

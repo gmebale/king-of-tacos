@@ -91,18 +91,19 @@ export default function Checkout() {
   };
 
   const total = getTotal();
+  const hasPartnerDeliveryReward = formData.order_type === 'livraison'
+    && loyaltyClaims?.some(claim => claim.promoCode?.is_active && claim.promoCode?.type === 'free_delivery');
 
-  const deliveryFee = formData.order_type === "livraison" ? 2000 : 0;
   const giftCartItem = !activePromo && giftRedemption?.reward?.giftedProduct
     ? cart.find(item => item.product?.id === giftRedemption.reward.giftedProduct.id && item.quantity > 0)
     : null;
   const giftDiscount = giftCartItem ? Math.round(giftCartItem.subtotal / giftCartItem.quantity) : 0;
   const promoDiscount = activePromo?.promo?.type === 'percentage'
     ? Math.round(total * activePromo.promo.value / 100)
-    : activePromo?.promo?.type === 'free_delivery' ? deliveryFee
+    : activePromo?.promo?.type === 'free_delivery' ? 0
       : activePromo?.promo?.type === 'fixed_amount' ? Math.min(total, activePromo.promo.value) : 0;
   const appliedDiscount = activePromo ? promoDiscount : giftDiscount;
-  const finalTotal = Math.max(0, total + deliveryFee - appliedDiscount);
+  const finalTotal = Math.max(0, total - appliedDiscount);
 
   useEffect(() => {
     if (user?.role !== 'client' || loyaltyClaims === null) return;
@@ -185,7 +186,7 @@ export default function Checkout() {
         cart,
         formData,
         total: finalTotal,
-        pre_discount_total: total + deliveryFee,
+        pre_discount_total: total,
         pre_discount_subtotal: total,
         promo_code: activePromo?.code || null,
         gifted_redemption_id: !activePromo && giftCartItem ? giftRedemption.id : null,
@@ -330,7 +331,7 @@ export default function Checkout() {
                         <Truck className="w-5 h-5 text-amber-600" />
                         <div>
                           <p className="font-semibold">Livraison</p>
-                          <p className="text-sm text-gray-500">Livré chez vous (+2000 FCFA)</p>
+                          <p className="text-sm text-gray-500">Livraison à domicile · frais à régler au livreur partenaire</p>
                         </div>
                       </Label>
                     </div>}
@@ -418,6 +419,9 @@ export default function Checkout() {
                   {activePromo && <p className="text-sm text-green-700">Réduction : −{appliedDiscount.toLocaleString()} FCFA</p>}
                 </CardContent>
               </Card>}
+              {hasPartnerDeliveryReward && <p className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+                Votre récompense de livraison gratuite ne peut pas être déduite du paiement King Of Tacos. Les frais sont réglés directement au livreur partenaire.
+              </p>}
 
               <Button
                 type="submit"
@@ -457,13 +461,6 @@ export default function Checkout() {
                     <span className="font-semibold">{total.toLocaleString()} FCFA</span>
                   </div>
                   
-                  {deliveryFee > 0 && (
-                    <div className="flex justify-between text-amber-600">
-                      <span>Frais de livraison</span>
-                      <span className="font-semibold">{deliveryFee.toLocaleString()} FCFA</span>
-                    </div>
-                  )}
-
                   {appliedDiscount > 0 && <div className="flex justify-between text-green-700"><span>{giftCartItem && !activePromo ? `Produit offert (${giftRedemption.reward.giftedProduct.name})` : 'Réduction promo'}</span><span>−{appliedDiscount.toLocaleString()} FCFA</span></div>}
 
                   <div className="flex justify-between text-2xl font-bold pt-2">
@@ -473,6 +470,12 @@ export default function Checkout() {
                     </span>
                   </div>
                 </div>
+
+                {formData.order_type === 'livraison' && (
+                  <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+                    Les frais de livraison sont réglés directement au livreur partenaire. Ils ne sont pas inclus dans le paiement de votre commande King Of Tacos.
+                  </div>
+                )}
 
                 <div className="bg-white rounded-xl p-4 text-center">
                   <Clock className="w-6 h-6 text-amber-600 mx-auto mb-2" />

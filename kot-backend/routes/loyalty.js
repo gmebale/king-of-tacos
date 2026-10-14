@@ -691,6 +691,7 @@ router.post('/validate-promo', async (req, res) => {
       return res.status(400).json({ message: 'Minimum order amount not met' });
     }
     if (promo.type === 'free_delivery' && order_type && order_type !== 'livraison') return res.status(400).json({ message: 'Ce code est valable uniquement pour une livraison.' });
+    if (promo.type === 'free_delivery') return res.status(400).json({ message: 'Les frais de livraison sont réglés directement au livreur partenaire et ne peuvent pas être déduits du paiement des produits King Of Tacos.' });
 
     res.json({
       valid: true,
@@ -707,7 +708,7 @@ router.post('/validate-promo', async (req, res) => {
         ? Math.min(orderAmount, Math.round(orderAmount * promo.value / 100))
         : promo.type === 'fixed_amount'
           ? Math.min(orderAmount, promo.value)
-          : promo.type === 'free_delivery' ? (order_type === 'livraison' ? 2000 : 0) : 0
+          : 0
     });
   } catch (error) {
     console.error('Validate promo code error:', error);
