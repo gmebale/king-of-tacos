@@ -29,6 +29,7 @@ import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import api from "../services/api.service";
 import { formatCustomizationForDisplay } from "../utils/index";
+import { resolveMediaUrl } from "../utils/media";
 
 const escapeReceiptText = value => String(value ?? '').replace(/[&<>"']/g, character => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
@@ -91,7 +92,7 @@ const printCashReceipt = order => {
     <section class="items">${lineMarkup}</section>
     <div class="counts">Articles : ${itemCount} · Lignes : ${lineCount}</div><div class="balance"><span>Restant à payer</span><strong>${remainingAmount.toLocaleString('fr-GA')} FCFA</strong></div>
     <div class="total"><span>TOTAL</span><span>${total.toLocaleString('fr-GA')} FCFA</span></div>
-    <div class="payment">Paiement : ${escapeReceiptText(order.payment_method || 'Non renseigné')}<br>État : ${escapeReceiptText(order.payment_status || 'en attente')}</div>
+    <div class="payment">Paiement : ${escapeReceiptText(order.payment_method || 'Non renseigné')}<br>État : ${escapeReceiptText(order.payment_status || 'en attente')}${order.payment_method === 'cash' && order.cash_received != null ? `<br>Montant reçu : ${Number(order.cash_received).toLocaleString('fr-GA')} FCFA<br>Monnaie rendue : ${Number(order.change_given || 0).toLocaleString('fr-GA')} FCFA` : ''}</div>
     <footer><div class="provisional">Document provisoire de vente</div>Merci pour votre commande !<br>À très bientôt.</footer>
     <script>window.onload = async () => { const logo = document.querySelector(".receipt-logo"); if (logo) { try { await logo.decode(); } catch {} } window.focus(); window.print(); };</script>
   </body></html>`);
@@ -288,12 +289,14 @@ export default function CashierMode() {
     }
   };
 
-  const markAsPaid = async (orderId, payment_method) => {
+  const markAsPaid = async (orderId, payment_method, cash_received) => {
     try {
-      await api.put(`/cashier/orders/${orderId}/pay`, { payment_method });
+      await api.put(`/cashier/orders/${orderId}/pay`, { payment_method, cash_received });
       await Promise.all([loadOrders(), loadCashRegisterSession()]);
+      return true;
     } catch (error) {
       alert(error.response?.data?.message || 'Impossible de confirmer le paiement.');
+      return false;
     }
   };
 
@@ -863,6 +866,10 @@ function OrderCard({ order, onGenerateInvoice, onPrintReceipt, onMarkDelivered, 
   const total = order.total_amount; 
   const displayCode = order.order_code || `KOT-${order.id?.slice(-6) || ''}`;
   const [paymentMethod, setPaymentMethod] = useState(order.payment_method || 'cash');
+  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
+  const [cashReceived, setCashReceived] = useState(String(total || ''));
+  const [isPaying, setIsPaying] = useState(false);
+  const changeGiven = Math.max(0, Number(cashReceived || 0) - Number(total || 0));
   const canClose = order.status === 'annulee'
     ? order.payment_status !== 'paid'
     : ['servie', 'recuperee', 'livree'].includes(order.status);
@@ -896,6 +903,9 @@ function OrderCard({ order, onGenerateInvoice, onPrintReceipt, onMarkDelivered, 
           {order.service_location && <p className="text-sm text-gray-600">Lieu : {order.service_location_name || order.service_location}</p>}
           <p className="text-sm text-gray-600">{order.customer_phone}</p>
           <p className="text-sm text-gray-600">Paiement : {order.payment_method || 'Non renseigné'} ({order.payment_status})</p>
+          {order.payment_method === 'cash' && order.payment_status === 'paid' && order.cash_received != null && (
+            <p className="mt-1 text-sm font-medium text-emerald-700">Reçu : {Number(order.cash_received).toLocaleString('fr-GA')} F · Monnaie : {Number(order.change_given || 0).toLocaleString('fr-GA')} F</p>
+          )}
           <p className="text-sm text-gray-600">Validé par : {order.validatedBy?.full_name || 'Client en ligne'}</p>
           {order.closedBy && <p className="text-sm text-gray-600">Clôturé par : {order.closedBy.full_name}</p>}
           {order.customer_address && (
@@ -909,13 +919,17 @@ function OrderCard({ order, onGenerateInvoice, onPrintReceipt, onMarkDelivered, 
                 item.customizationDetails
               );
               return (
-                <div key={index} className="text-sm text-gray-600">
-                  <p>{item.quantity}x {item.product_name}</p>
-                  {customizationText && (
-                    <p className="text-xs text-orange-600 ml-4 italic">
-                      {customizationText}
-                    </p>
+                <div key={index} className="flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50/70 p-2.5 text-sm text-gray-600">
+                  {item.product_image ? (
+                    <img src={resolveMediaUrl(item.product_image)} alt={item.product_name} className="h-14 w-14 shrink-0 rounded-lg object-cover" loading="lazy" />
+                  ) : (
+                    <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-xs font-semibold text-amber-700">KOT</div>
                   )}
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium text-gray-900">{item.quantity} × {item.product_name}</p>
+                    {customizationText && <p className="mt-0.5 text-xs text-orange-600 italic">{customizationText}</p>}
+                  </div>
+                  <span className="shrink-0 font-semibold text-gray-900">{(Number(item.price || 0) * Number(item.quantity || 0)).toLocaleString('fr-GA')} F</span>
                 </div>
               );
             })}
@@ -960,7 +974,7 @@ function OrderCard({ order, onGenerateInvoice, onPrintReceipt, onMarkDelivered, 
               <option value="card">Carte</option>
               <option value="mobile_money">Mobile money</option>
             </select>
-            <Button size="sm" onClick={() => onMarkPaid(order.id, paymentMethod)}>Confirmer paiement</Button>
+            <Button size="sm" onClick={() => setPaymentDialogOpen(true)}>Encaisser</Button>
           </>
         )}
         {order.status === 'annulee' && order.payment_status === 'paid' && (
@@ -970,6 +984,55 @@ function OrderCard({ order, onGenerateInvoice, onPrintReceipt, onMarkDelivered, 
           <Button size="sm" variant="outline" onClick={() => onClose(order.id)}>Clôturer</Button>
         )}
       </div>
+      <Dialog open={paymentDialogOpen} onOpenChange={setPaymentDialogOpen}>
+        <DialogContent className="max-w-xl rounded-2xl border-0 p-0 shadow-2xl">
+          <div className="rounded-t-2xl bg-slate-950 px-6 py-5 text-white">
+            <DialogHeader>
+              <DialogTitle className="text-white">Encaisser la commande</DialogTitle>
+              <p className="text-sm text-slate-300">{displayCode} · {order.customer_name || 'Client'}</p>
+            </DialogHeader>
+          </div>
+          <div className="space-y-5 p-6">
+            <div className="flex items-end justify-between rounded-xl bg-amber-50 p-4">
+              <span className="text-sm font-medium text-slate-600">Total à payer</span>
+              <strong className="text-2xl font-bold text-slate-950">{Number(total || 0).toLocaleString('fr-GA')} FCFA</strong>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor={`cash-method-${order.id}`}>Moyen de paiement</Label>
+              <select id={`cash-method-${order.id}`} className="h-11 rounded-lg border border-slate-200 bg-white px-3" value={paymentMethod} onChange={event => setPaymentMethod(event.target.value)}>
+                <option value="cash">Espèces</option><option value="card">Carte</option><option value="mobile_money">Mobile money</option>
+              </select>
+            </div>
+            {paymentMethod === 'cash' && <>
+              <div className="grid gap-2">
+                <Label htmlFor={`cash-received-${order.id}`}>Montant reçu (FCFA)</Label>
+                <Input id={`cash-received-${order.id}`} type="number" min={total} step="1" inputMode="numeric" autoFocus value={cashReceived} onChange={event => setCashReceived(event.target.value)} className="h-12 text-lg font-semibold" />
+                <div className="flex flex-wrap gap-2">
+                  {[total, 5000, 10000, 20000].filter((amount, index, values) => amount >= total && values.indexOf(amount) === index).map(amount => (
+                    <Button key={amount} type="button" size="sm" variant="outline" onClick={() => setCashReceived(String(amount))}>{Number(amount).toLocaleString('fr-GA')} F</Button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex items-center justify-between rounded-xl border border-emerald-100 bg-emerald-50 p-4">
+                <span className="font-medium text-emerald-900">Monnaie à rendre</span>
+                <strong className="text-xl text-emerald-800">{changeGiven.toLocaleString('fr-GA')} FCFA</strong>
+              </div>
+              {Number(cashReceived) < Number(total) && <p className="text-sm font-medium text-red-600">Le montant reçu est insuffisant.</p>}
+            </>}
+            {paymentMethod !== 'cash' && <p className="rounded-xl bg-blue-50 p-4 text-sm text-blue-900">Confirmez uniquement après avoir vérifié la réception du paiement.</p>}
+            <div className="flex justify-end gap-2 border-t pt-4">
+              <Button type="button" variant="outline" onClick={() => setPaymentDialogOpen(false)}>Annuler</Button>
+              <Button type="button" disabled={isPaying || (paymentMethod === 'cash' && (!Number.isSafeInteger(Number(cashReceived)) || Number(cashReceived) < Number(total)))} onClick={async () => {
+                setIsPaying(true);
+                try {
+                  const paid = await onMarkPaid(order.id, paymentMethod, paymentMethod === 'cash' ? Number(cashReceived) : undefined);
+                  if (paid) setPaymentDialogOpen(false);
+                } finally { setIsPaying(false); }
+              }} className="bg-emerald-600 hover:bg-emerald-700">{isPaying ? 'Enregistrement…' : 'Confirmer l’encaissement'}</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </motion.div>
   );
 }

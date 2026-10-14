@@ -207,6 +207,8 @@ model Order {
   status              OrderStatus    @default(en_attente)
   payment_method      PaymentMethod?
   payment_status      PaymentStatus  @default(pending)
+  cash_received       Int?
+  change_given        Int?
   payment_provider_id String?
   payment_receipt_url String?
   created_date        DateTime       @default(now())

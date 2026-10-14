@@ -773,7 +773,7 @@ router.get('/orders', authenticateToken, requirePagePermission('cashier'), async
         },
         validatedBy: { select: { id: true, full_name: true, role: true } },
         closedBy: { select: { id: true, full_name: true, role: true } },
-        items: true
+        items: { include: { product: { select: { id: true, image: true, customization: true } } } }
       },
       orderBy: { created_date: 'desc' }
     });
@@ -783,16 +783,14 @@ router.get('/orders', authenticateToken, requirePagePermission('cashier'), async
     const processedOrders = await Promise.all(orders.map(async (order) => {
       const processedItems = await Promise.all(order.items.map(async (item) => {
         // Get product customization configuration
-        const product = await prisma.product.findFirst({
-          where: { name: item.product_name },
-          select: { customization: true }
-        });
+        const product = item.product;
 
         // Format customization details
         const customizationInfo = formatCustomization(item.customization, product?.customization);
 
         return {
           ...item,
+          product_image: product?.image || null,
           customizationFormatted: customizationInfo.formattedText,
           customizationDetails: customizationInfo.details
         };
@@ -1290,6 +1288,12 @@ router.put('/orders/:id/pay', authenticateToken, requirePagePermission('cashier'
       return res.status(400).json({ message: 'Cette commande ne peut pas être encaissée dans son état actuel.' });
     }
 
+    const cashReceived = payment_method === 'cash' ? Number(req.body.cash_received) : null;
+    if (payment_method === 'cash' && (!Number.isSafeInteger(cashReceived) || cashReceived < order.total_amount)) {
+      return res.status(400).json({ message: 'Le montant reçu doit être un nombre entier supérieur ou égal au total de la commande.' });
+    }
+    const changeGiven = payment_method === 'cash' ? cashReceived - order.total_amount : null;
+
     const paymentResult = await prisma.$transaction(async tx => {
       const session = await tx.cashRegisterSession.findFirst({ where: { closed_at: null }, orderBy: { opened_at: 'desc' } });
       if (!session) return { error: 'Aucune session de caisse ouverte. Ouvrez la caisse avant d’encaisser.' };
@@ -1301,7 +1305,7 @@ router.put('/orders/:id/pay', authenticateToken, requirePagePermission('cashier'
           closed_at: null,
           payment_status: order.payment_status
         },
-        data: { payment_method, payment_status: 'paid' }
+        data: { payment_method, payment_status: 'paid', cash_received: cashReceived, change_given: changeGiven }
       });
       if (!payment.count) return { error: 'La commande a changé d’état. Actualisez-la avant de réessayer.' };
 
