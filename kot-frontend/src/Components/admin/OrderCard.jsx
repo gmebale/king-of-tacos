@@ -67,6 +67,8 @@ export default function OrderCard({ order, onUpdateStatus, onCancel }) {
     return labels[currentStatus];
   };
 
+  const paymentBlocksPreparation = order.payment_method === 'mobile_money' && order.payment_status !== 'paid';
+
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.95 }}
@@ -191,7 +193,10 @@ export default function OrderCard({ order, onUpdateStatus, onCancel }) {
 
           {!["livree", "servie", "recuperee", "annulee"].includes(order.status) && !order.closed_at && (
             <div className="space-y-2">
-              {getNextStatus(order.status) && (
+              {paymentBlocksPreparation && (
+                <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-800" role="status">La préparation est bloquée jusqu’à la confirmation du paiement Mobile Money.</p>
+              )}
+              {!paymentBlocksPreparation && getNextStatus(order.status) && (
                 <Button
                   onClick={() => onUpdateStatus(order.id, getNextStatus(order.status))}
                   className="w-full bg-gradient-to-r from-yellow-400 to-amber-600 hover:from-yellow-500 hover:to-amber-700 text-slate-900 rounded-xl"

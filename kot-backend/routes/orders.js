@@ -764,6 +764,10 @@ router.put('/:id', authenticateToken, async (req, res) => {
       return res.status(400).json({ message: 'Utilisez la procédure d’annulation avec motif.' });
     }
 
+    if (status && status !== order.status && order.payment_method === 'mobile_money' && order.payment_status !== 'paid') {
+      return res.status(409).json({ message: 'La préparation est bloquée tant que le paiement Mobile Money n’est pas confirmé.' });
+    }
+
     if (status && status !== order.status) {
       const allowedTransitions = {
         en_attente: ['en_preparation'],
@@ -884,6 +888,9 @@ router.post('/:id/validate', authenticateToken, requirePermission('orders.send_t
 
     if (order.closed_at) {
       return res.status(400).json({ message: 'Order already closed' });
+    }
+    if (order.payment_method === 'mobile_money' && order.payment_status !== 'paid') {
+      return res.status(409).json({ message: 'La préparation est bloquée tant que le paiement Mobile Money n’est pas confirmé.' });
     }
 
     const updated = await prisma.order.update({

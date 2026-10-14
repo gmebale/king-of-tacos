@@ -130,7 +130,7 @@ router.get('/orders', authenticateToken, async (req, res) => {
       if (order.service_location) order.service_location_name = locationNames.get(order.service_location) || order.service_location;
     }
 
-    res.json(orders.filter(order => order.items.length > 0));
+    res.json(orders.filter(order => order.items.length > 0 && !(order.payment_method === 'mobile_money' && order.payment_status !== 'paid')));
   } catch (error) {
     console.error('Get kitchen orders error:', error);
     res.status(500).json({ message: 'Internal server error' });
@@ -150,6 +150,9 @@ router.put('/orders/:id/items/:itemId/status', authenticateToken, async (req, re
 
     if (!order) {
       return res.status(404).json({ message: 'Order not found' });
+    }
+    if (order.payment_method === 'mobile_money' && order.payment_status !== 'paid') {
+      return res.status(409).json({ message: 'La préparation est bloquée tant que le paiement Mobile Money n’est pas confirmé.' });
     }
     if (order.closed_at || !['en_attente', 'en_preparation', 'prete'].includes(order.status)) {
       return res.status(400).json({ message: 'Cette commande ne peut plus être préparée' });
