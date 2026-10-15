@@ -2,119 +2,113 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, FileText, ShieldCheck, Truck, Scale } from 'lucide-react';
 
+const legalDate = '15 octobre 2026';
+
 const sections = {
   legal: {
     title: 'Mentions légales',
     icon: Scale,
-    intro: 'Informations relatives à l’éditeur du site et à son hébergement.',
+    intro: 'Informations sur l’exploitant du site, son activité et son hébergement.',
     content: (
       <>
-        <Notice />
-        <h2>Éditeur du site</h2>
+        <h2>Éditeur et exploitant</h2>
         <dl className="legal-facts">
           <Fact label="Nom commercial" value="King Of Tacos" />
-          <Fact label="Exploitant / raison sociale" value="À compléter par l’exploitant" />
-          <Fact label="Forme juridique et capital social" value="À compléter, le cas échéant" />
-          <Fact label="Adresse du siège ou de l’établissement" value="À compléter par l’exploitant" />
-          <Fact label="RCCM et NIF" value="À compléter par l’exploitant" />
-          <Fact label="Téléphone et adresse e-mail de contact" value="À confirmer dans les paramètres du restaurant" />
-          <Fact label="Directeur de publication" value="À compléter par l’exploitant" />
+          <Fact label="Exploitant" value="King Of Tacos — restauration, entreprise individuelle" />
+          <Fact label="Adresse de l’établissement" value="Camp de Gaulle, section VH1, Impasse des Palétuviers N64, Libreville, Gabon" />
+          <Fact label="RCCM" value="RG LBV2018A46347" />
+          <Fact label="NIF" value="395310 T" />
+          <Fact label="Téléphone" value="062 93 72 92" />
+          <Fact label="E-mail" value="kingoftacoslbv@gmail.com" />
+          <Fact label="Directeur de publication" value="Karl BIRINDA, propriétaire et exploitant individuel de King Of Tacos" />
         </dl>
         <h2>Hébergement</h2>
-        <p>Le site est hébergé sur un serveur VPS fourni par Hostinger. Les coordonnées contractuelles complètes de l’hébergeur seront ajoutées après vérification du contrat d’hébergement.</p>
+        <p>Le site et les données associées sont hébergés sur un serveur VPS Hostinger situé à Vilnius, en Lituanie. Hébergeur légal : HOSTINGER INTERNATIONAL LIMITED, société chypriote, 61 Lordou Vironos str., 6023 Larnaca, Chypre. Courriel : compliance@hostinger.com. Téléphone : +33 50 27 49 31.</p>
         <h2>Propriété intellectuelle</h2>
         <p>Les textes, visuels, logos, photographies et éléments de l’interface sont protégés. Toute réutilisation doit être autorisée par leur titulaire, sauf exception prévue par la loi.</p>
         <h2>Contact</h2>
-        <p>Pour toute question relative au site ou à son contenu, contactez le restaurant aux coordonnées affichées dans la rubrique Contact, une fois celles-ci confirmées par l’exploitant.</p>
+        <p>Pour toute question relative au site ou à son contenu, contactez King Of Tacos au 062 93 72 92 ou à kingoftacoslbv@gmail.com.</p>
       </>
     )
   },
   terms: {
     title: 'Conditions générales de commande',
     icon: FileText,
-    intro: 'Règles proposées pour les commandes passées depuis King Of Tacos.',
+    intro: 'Conditions applicables aux commandes en ligne de King Of Tacos.',
     content: (
       <>
-        <Notice />
-        <p><strong>Version de travail — 8 octobre 2026.</strong> Les présentes conditions s’appliquent aux commandes en ligne de repas et boissons proposées sur King Of Tacos. Les commandes sur place sont enregistrées par le personnel du restaurant.</p>
-        <h2>1. Produits, choix et prix</h2>
-        <p>Le menu présente les produits, leurs prix et, lorsque le produit est configurable, les choix et suppléments disponibles. Les choix effectués par le client sont récapitulés avant l’envoi de la commande. La disponibilité peut évoluer selon le stock et l’activité du restaurant. Le prix confirmé au récapitulatif est celui appliqué à la commande.</p>
-        <h2>2. Commande et horaires</h2>
-        <p>Le client renseigne les informations nécessaires, choisit le retrait ou la livraison, puis confirme sa commande. Le service de commande en ligne suit les horaires et disponibilités publiés par le restaurant. Lorsque la planification au prochain créneau est proposée, l’heure de préparation peut être décalée au prochain horaire d’ouverture.</p>
-        <h2>3. Retrait et livraison</h2>
-        <p>Le retrait s’effectue auprès du restaurant à l’heure communiquée. Pour une livraison, le client fournit une adresse exploitable et un numéro de téléphone joignable. Les frais applicables et le montant total doivent être affichés avant la confirmation. Le restaurant contacte le client si une information empêche l’exécution de la commande.</p>
+        <p><strong>Mise à jour : {legalDate}.</strong> Les présentes conditions s’appliquent aux commandes de repas et boissons passées sur le site King Of Tacos. Avant de confirmer, le client peut vérifier le récapitulatif de sa commande et corriger les informations saisies.</p>
+        <h2>1. Produits, disponibilité et prix</h2>
+        <p>Le menu présente les produits, leurs prix et, le cas échéant, les choix et suppléments disponibles. Les prix des produits affichés par King Of Tacos sont en FCFA et taxes incluses. Les choix effectués et le montant dû à King Of Tacos sont récapitulés avant confirmation. La disponibilité peut évoluer selon le stock ; si un produit commandé ne peut être fourni, le restaurant contacte le client pour convenir d’une solution ou procéder au remboursement correspondant lorsqu’un paiement a déjà été encaissé.</p>
+        <h2>2. Commande et confirmation</h2>
+        <p>Le client renseigne les informations nécessaires, choisit le retrait ou la livraison, puis confirme sa commande. La commande est prise en compte après l’accusé de réception du site. Lorsqu’un paiement en ligne est choisi, la commande ne passe en préparation qu’après confirmation effective du paiement par le prestataire. Une demande en attente ou un échec de paiement ne constitue pas un paiement confirmé et ne permet pas au restaurant de commencer la préparation. Le service en ligne dépend des horaires et disponibilités indiqués par le restaurant.</p>
+        <h2>3. Retrait et livraison par partenaire</h2>
+        <p>Le retrait s’effectue auprès du restaurant selon les indications communiquées. Pour une livraison, le client fournit une adresse complète et un numéro de téléphone joignable. Les livreurs partenaires assurent la remise physique de la commande. Les frais de livraison sont fixés et réglés directement au livreur partenaire ; ils ne sont ni inclus dans le chiffre d’affaires de King Of Tacos ni facturés dans le paiement des produits à King Of Tacos. Le restaurant reste l’interlocuteur du client pour la commande alimentaire et suit son exécution jusqu’à la remise.</p>
         <h2>4. Paiement</h2>
-        <p>Les modes de paiement effectivement disponibles sont indiqués lors de la commande. Le paiement Mobile Money en ligne, lorsqu’il est activé, est confirmé après validation par le prestataire de paiement. Une demande de paiement en attente ne vaut pas confirmation de paiement. Lorsque le paiement en ligne n’est pas proposé, les modalités de règlement au retrait ou à la livraison sont indiquées au client.</p>
-        <h2>5. Annulation et réclamation</h2>
-        <p>Un client connecté peut demander l’annulation depuis son espace de commandes tant que sa commande est encore en attente et non payée. Le motif d’annulation est demandé et conservé pour le suivi du service. Pour une commande passée sans compte, déjà payée ou déjà prise en charge, contactez directement le restaurant. Cette règle décrit le fonctionnement du bouton d’annulation et ne prétend pas écarter les droits qui seraient applicables dans une situation particulière. En cas d’erreur, d’article manquant, de problème de qualité ou de retard important, contactez rapidement le restaurant avec le numéro de commande.</p>
-        <p>Tout remboursement d’un paiement confirmé doit être examiné par le restaurant selon la situation et les règles applicables. Aucune promesse automatique de remboursement n’est faite par la présente page.</p>
-        <h2>6. Rétractation et denrées alimentaires</h2>
-        <p>Le régime de rétractation applicable aux contrats à distance est celui prévu par les textes gabonais. La loi gabonaise sur les transactions électroniques prévoit un délai général et des exceptions, dont certaines concernent les biens susceptibles de se détériorer ou de se périmer et les prestations de restauration prévues pour une période déterminée. La situation dépend du produit et du service concernés ; cette page ne limite pas les droits impératifs du client.</p>
+        <p>Les moyens de paiement effectivement disponibles sont affichés lors de la commande. Pour un paiement Mobile Money en ligne, le client valide la demande sur son téléphone. Le site n’a pas besoin de son code secret Mobile Money. Le statut de paiement affiché par le prestataire détermine si le paiement est confirmé. Les frais du livreur partenaire sont réglés séparément au livreur.</p>
+        <h2>5. Annulation, réclamation et remboursement</h2>
+        <p>Un client connecté peut demander l’annulation depuis son espace de commandes tant que la commande est encore en attente et non payée. Pour une commande passée sans compte, déjà payée ou déjà en préparation, contactez rapidement le restaurant au 062 93 72 92 ou à kingoftacoslbv@gmail.com, en indiquant le numéro de commande. En cas d’erreur, d’article manquant, de problème de qualité ou de retard, le restaurant examine la réclamation et propose une solution adaptée aux circonstances et aux règles applicables. Tout remboursement d’un paiement encaissé est effectué par le moyen approprié selon le statut de la commande et les règles applicables.</p>
+        <h2>6. Rétractation</h2>
+        <p>Les droits de rétractation sont déterminés par la législation gabonaise applicable aux contrats à distance. La loi prévoit notamment des exceptions pour certains biens susceptibles de se détériorer ou de se périmer rapidement et pour des prestations de restauration prévues à une date ou une période déterminée. L’application d’une exception dépend du produit et du service concernés et n’écarte pas les autres droits impératifs du client.</p>
         <h2>7. Compte et fidélité</h2>
-        <p>La création d’un compte permet notamment de retrouver ses commandes et, si le programme est activé, de consulter ses points et récompenses. Les points, seuils et récompenses suivent les règles visibles dans l’application et peuvent être corrigés en cas d’annulation ou d’opération erronée.</p>
-        <h2>8. Droit applicable et contact</h2>
-        <p>Les présentes conditions sont destinées à être appliquées au Gabon. Les coordonnées de l’exploitant et du service client doivent être complétées et vérifiées avant publication définitive. Les parties rechercheront d’abord une solution amiable à toute difficulté.</p>
+        <p>Un compte permet notamment de retrouver les commandes et, lorsque le programme est activé, de consulter les points et récompenses. Les conditions visibles dans l’application s’appliquent aux points et récompenses. Une opération liée à une commande annulée ou corrigée peut être ajustée.</p>
+        <h2>8. Contact et droit applicable</h2>
+        <p>Les présentes conditions sont destinées aux commandes exécutées au Gabon et sont interprétées selon le droit gabonais applicable. Toute difficulté peut d’abord être signalée au restaurant afin de rechercher une solution amiable, sans priver le client des recours prévus par la loi.</p>
+        <p>King Of Tacos — Camp de Gaulle, section VH1, Impasse des Palétuviers N64, Libreville, Gabon — 062 93 72 92 — kingoftacoslbv@gmail.com.</p>
       </>
     )
   },
   privacy: {
     title: 'Politique de confidentialité',
     icon: ShieldCheck,
-    intro: 'Comment les informations nécessaires au compte, aux commandes et à la fidélité sont utilisées.',
+    intro: 'Informations sur les données utilisées pour les comptes, commandes, paiements et livraisons.',
     content: (
       <>
-        <Notice />
-        <p><strong>Version de travail — 8 octobre 2026.</strong> Cette politique décrit les traitements visibles dans l’application King Of Tacos. Les coordonnées du responsable du traitement et les durées de conservation restent à confirmer par l’exploitant.</p>
-        <h2>Informations traitées</h2>
+        <p><strong>Mise à jour : {legalDate}.</strong> King Of Tacos, exploité sous forme d’entreprise individuelle, utilise les données décrites ci-dessous pour fournir le service de commande et assurer le suivi des clients.</p>
+        <h2>Responsable et contact</h2>
+        <p>Responsable du traitement : l’exploitant de King Of Tacos, Camp de Gaulle, section VH1, Impasse des Palétuviers N64, Libreville, Gabon. Contact pour les demandes relatives aux données : kingoftacoslbv@gmail.com ou 062 93 72 92.</p>
+        <h2>Données traitées et finalités</h2>
         <ul>
-          <li>Informations de compte : nom, adresse e-mail, téléphone et données de connexion. La connexion Google peut transmettre le nom et l’adresse e-mail associés au compte Google.</li>
-          <li>Informations de commande : produits, personnalisations, montant, mode de remise, adresse de livraison, heure souhaitée et instructions fournies.</li>
-          <li>Informations liées au service : demandes d’annulation et leur motif, avis publiés, historique de points et de récompenses fidélité.</li>
-          <li>Informations techniques nécessaires au fonctionnement, à la sécurité et au maintien de la session.</li>
+          <li>Compte : nom, e-mail, téléphone et données de connexion, pour créer le compte et gérer l’authentification. Si le client choisit Google pour se connecter, le nom et l’adresse e-mail transmis par Google sont utilisés pour cette connexion.</li>
+          <li>Commande : produits, quantités, personnalisations, montant, mode de remise, adresse, heure souhaitée et instructions, pour enregistrer, préparer et suivre la commande.</li>
+          <li>Livraison : pour remettre une commande au livreur partenaire, King Of Tacos lui transmet le nom, le numéro de téléphone, l’adresse de livraison et les détails nécessaires de la commande.</li>
+          <li>Suivi du service : demandes d’annulation et motifs, avis, historique de fidélité et échanges avec le restaurant, pour traiter les réclamations, administrer le programme et assurer le service.</li>
+          <li>Données techniques et de session, pour faire fonctionner le site, conserver le panier et protéger les comptes et commandes.</li>
         </ul>
-        <h2>Utilisation</h2>
-        <p>Ces informations servent à créer et gérer le compte, préparer et remettre les commandes, contacter le client au sujet d’une commande, traiter les demandes et réclamations, administrer la fidélité et protéger le service contre les erreurs ou les usages abusifs. Les motifs d’annulation peuvent aussi être agrégés pour améliorer le service.</p>
-        <h2>Destinataires et prestataires</h2>
-        <p>Les informations utiles sont accessibles au personnel autorisé du restaurant. Elles peuvent être traitées par les prestataires techniques indispensables à l’hébergement, à l’authentification ou au paiement lorsqu’un tel service est utilisé. Les informations de paiement sont traitées par le prestataire correspondant ; le site ne doit pas demander au client son code secret Mobile Money.</p>
-        <h2>Conservation et demandes</h2>
-        <p>Les données sont conservées pendant la durée nécessaire à la gestion des comptes, commandes, obligations de l’exploitant et réclamations. Les durées précises et les coordonnées permettant d’exercer une demande d’accès, de rectification ou d’effacement doivent être confirmées par l’exploitant avant publication.</p>
+        <h2>Paiement et autres destinataires</h2>
+        <p>Les données nécessaires au paiement sont transmises au prestataire de paiement choisi et affiché au moment du règlement, notamment MyPVIT lorsqu’il est utilisé. King Of Tacos ne demande pas et ne doit pas recevoir le code secret Mobile Money du client. Les données sont également accessibles aux personnes habilitées du restaurant et aux prestataires techniques nécessaires à l’hébergement et à l’authentification. Elles ne sont pas vendues.</p>
+        <h2>Hébergement et transferts</h2>
+        <p>Le serveur VPS du site est situé à Vilnius, en Lituanie. Une copie de toutes les données du site et des transactions est hébergée à Libreville, au Gabon. Google, les prestataires de paiement et les prestataires techniques peuvent également traiter les données selon leurs services et leurs propres conditions. Le transfert des données et les garanties applicables doivent respecter les règles gabonaises de protection des données.</p>
+        <h2>Durée de conservation</h2>
+        <p>Les données de compte sont conservées tant que le compte est actif, puis supprimées ou anonymisées sur demande lorsque leur conservation n’est pas nécessaire. Les données liées aux commandes et pièces justificatives sont conservées pendant les durées nécessaires au suivi des commandes, aux obligations légales et à la preuve des transactions. La législation gabonaise sur les transactions électroniques prévoit une conservation des documents électroniques pendant dix ans ; les données soumises à cette obligation ne peuvent pas être effacées avant l’échéance applicable. Les données techniques de session sont conservées pour la durée nécessaire au fonctionnement et à la sécurité du service.</p>
+        <h2>Vos droits</h2>
+        <p>Le client peut demander l’accès à ses données, leur rectification, leur mise à jour ou leur effacement lorsque les règles de conservation le permettent. Il peut également demander des informations sur les traitements et destinataires. Pour exercer ces droits, écrire à kingoftacoslbv@gmail.com en précisant la demande et un moyen de retrouver le compte ou la commande concernée.</p>
         <h2>Stockage local et cookies</h2>
-        <p>L’application utilise le stockage du navigateur pour des fonctions essentielles, notamment conserver temporairement le panier et maintenir la session. Cette page devra être mise à jour avant l’ajout éventuel d’outils d’analyse d’audience, de publicité ou de cookies non indispensables.</p>
-        <h2>Responsable du traitement</h2>
-        <p>Responsable : exploitant légal de King Of Tacos — identité, adresse et contact à compléter avant publication définitive.</p>
+        <p>Le navigateur utilise des stockages techniques nécessaires au fonctionnement du site, notamment pour le panier et la session. Cette politique devra être actualisée si des outils d’audience, de publicité ou des cookies non essentiels sont ajoutés.</p>
       </>
     )
   },
   delivery: {
     title: 'Retrait, livraison et annulation',
     icon: Truck,
-    intro: 'Informations pratiques correspondant aux options de remise proposées dans le parcours de commande.',
+    intro: 'Modalités pratiques de remise des commandes King Of Tacos.',
     content: (
       <>
-        <Notice />
         <h2>Retrait</h2>
         <p>Choisissez « À emporter » et indiquez, si nécessaire, l’heure souhaitée. Attendez la confirmation ou le suivi de la commande avant de vous déplacer. Le restaurant peut vous contacter au numéro indiqué pour préciser le retrait.</p>
-        <h2>Livraison</h2>
-        <p>Choisissez « Livraison », renseignez l’adresse complète et restez joignable. Les zones desservies, le délai estimatif et les frais doivent être vérifiés dans le récapitulatif avant confirmation. Une adresse incomplète ou inaccessible peut retarder la remise ; le restaurant vous contactera pour convenir de la suite.</p>
-        <h2>Horaires</h2>
-        <p>Les commandes en ligne sont soumises aux horaires d’acceptation configurés par le restaurant. Si la planification est proposée hors créneau, la commande peut être programmée au prochain créneau d’ouverture indiqué au client.</p>
+        <h2>Livraison par un partenaire</h2>
+        <p>Choisissez « Livraison », indiquez une adresse complète et restez joignable au téléphone. Les livreurs partenaires assurent la remise physique de la commande. Les frais de livraison sont convenus et réglés directement au livreur ; ils ne sont pas inclus dans le montant à payer à King Of Tacos. Les produits commandés et leur paiement sont gérés par King Of Tacos, qui reste le contact pour toute réclamation concernant les produits ou la commande.</p>
+        <p>Pour organiser la remise, le restaurant communique au livreur partenaire le nom, le téléphone, l’adresse de livraison et les détails nécessaires de la commande. Le client doit vérifier l’adresse et rester disponible pour faciliter la livraison.</p>
+        <h2>Horaires et disponibilité</h2>
+        <p>Les commandes en ligne sont soumises aux horaires d’acceptation et à la disponibilité configurés par le restaurant. Si une commande ne peut être honorée, le restaurant contacte le client pour convenir de la suite.</p>
         <h2>Annulation et problème de commande</h2>
-        <p>Une commande non payée peut être annulée depuis l’espace de suivi lorsqu’elle est encore « En attente ». Un motif est demandé. Pour une commande payée ou déjà en préparation, appelez ou écrivez au restaurant en indiquant le numéro de commande ; l’équipe examinera la demande et toute éventuelle correction ou demande de remboursement.</p>
-        <p>En cas d’article manquant, de commande incorrecte ou de problème de qualité, contactez le restaurant dès que possible après réception afin qu’il puisse vérifier les faits et proposer une solution adaptée.</p>
+        <p>Une commande non payée peut être annulée depuis l’espace de suivi lorsqu’elle est encore « En attente ». Pour une commande payée ou déjà en préparation, contactez le restaurant au 062 93 72 92 ou à kingoftacoslbv@gmail.com avec le numéro de commande. En cas d’article manquant, de commande incorrecte ou de problème de qualité, signalez-le dès que possible afin que l’équipe puisse vérifier la situation et proposer une solution adaptée.</p>
         <h2>Contact</h2>
-        <p>Les coordonnées et horaires de contact doivent être confirmés par l’exploitant avant publication de cette page.</p>
+        <p>King Of Tacos — 062 93 72 92 — kingoftacoslbv@gmail.com.</p>
       </>
     )
   }
 };
-
-function Notice() {
-  return (
-    <div className="mb-6 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
-      <strong>À valider avant publication :</strong> certaines informations d’entreprise et modalités opérationnelles ne sont pas encore connues. Les passages concernés sont explicitement marqués ci-dessous.
-    </div>
-  );
-}
 
 function Fact({ label, value }) {
   return <div><dt>{label}</dt><dd>{value}</dd></div>;
