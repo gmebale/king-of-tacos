@@ -1,4 +1,8 @@
 const ACCESS_PERMISSIONS = [
+  ['dashboard.access', 'Accéder au tableau de bord', 'Tableau de bord'],
+  ['loyalty.access', 'Gérer la fidélité et les clients', 'Fidélité'],
+  ['reviews.access', 'Gérer les avis', 'Avis'],
+  ['customers.access', 'Consulter les fiches clients', 'Clients'],
   ['orders.view', 'Consulter les commandes', 'Commandes'],
   ['orders.create', 'Créer une commande', 'Commandes'],
   ['orders.add_product', 'Ajouter un produit à une commande', 'Commandes'],
@@ -27,6 +31,7 @@ const ACCESS_PERMISSIONS = [
   ['cash.opening_amount', 'Saisir le fond de caisse', 'Caisse'],
   ['cash.count', 'Compter la caisse', 'Caisse'],
   ['cash.close_session', 'Clôturer la caisse', 'Caisse'],
+  ['cash.expense.record', 'Saisir une dépense sur la caisse', 'Caisse'],
   ['cash.view_expected', 'Voir le montant théorique avant comptage', 'Caisse'],
   ['cash.view_variance', 'Consulter les écarts de caisse', 'Caisse'],
   ['cash.correct_variance', 'Corriger un écart de caisse', 'Caisse'],
@@ -34,6 +39,12 @@ const ACCESS_PERMISSIONS = [
   ['kitchen.start', 'Passer une commande en préparation', 'Cuisine et production'],
   ['kitchen.ready', 'Marquer une commande prête', 'Cuisine et production'],
   ['kitchen.view_timing', 'Voir les temps de préparation', 'Cuisine et production'],
+  ['kitchen.cuisine.view', 'Voir les postes cuisine', 'Cuisine et production'],
+  ['kitchen.cuisine.start', 'Démarrer les préparations cuisine', 'Cuisine et production'],
+  ['kitchen.cuisine.ready', 'Terminer les préparations cuisine', 'Cuisine et production'],
+  ['kitchen.bar.view', 'Voir les commandes du bar', 'Cuisine et production'],
+  ['kitchen.bar.start', 'Démarrer les commandes du bar', 'Cuisine et production'],
+  ['kitchen.bar.ready', 'Terminer les commandes du bar', 'Cuisine et production'],
   ['stock.view', 'Consulter les stocks', 'Stocks'],
   ['stock.receive', 'Saisir une entrée de marchandises', 'Stocks'],
   ['stock.loss', 'Déclarer une perte ou une casse', 'Stocks'],
@@ -46,6 +57,7 @@ const ACCESS_PERMISSIONS = [
   ['reports.discounts', 'Voir les remises et produits offerts', 'Rapports et contrôle'],
   ['reports.margins', 'Voir les marges et coûts matières', 'Rapports et contrôle'],
   ['reports.export', 'Exporter des rapports', 'Rapports et contrôle'],
+  ['finance.expenses.manage', 'Gérer le catalogue des dépenses', 'Finances'],
   ['admin.products', 'Créer ou modifier des produits', 'Administration'],
   ['admin.prices', 'Modifier les prix de vente', 'Administration'],
   ['admin.menus', 'Créer ou modifier des menus et formules', 'Administration'],
@@ -57,16 +69,18 @@ const ACCESS_PERMISSIONS = [
 ].map(([code, label, module]) => ({ code, label, module, description: null }));
 
 const PROFILE_GRANTS = {
-  cuisine: ['orders.view', 'kitchen.view', 'kitchen.start', 'kitchen.ready', 'kitchen.view_timing', 'stock.view', 'stock.loss', 'stock.inventory'],
+  cuisine: ['orders.view', 'kitchen.view', 'kitchen.start', 'kitchen.ready', 'kitchen.view_timing', 'kitchen.cuisine.view', 'kitchen.cuisine.start', 'kitchen.cuisine.ready', 'stock.view', 'stock.loss', 'stock.inventory'],
+  bar: ['orders.view', 'kitchen.bar.view', 'kitchen.bar.start', 'kitchen.bar.ready'],
   serveur: ['orders.view', 'orders.create', 'orders.add_product', 'orders.edit_before_send', 'orders.delete_before_send', 'orders.send_to_kitchen', 'orders.transfer', 'reports.personal_sales'],
-  caissier: ['orders.view', 'orders.create', 'orders.add_product', 'orders.edit_before_send', 'orders.delete_before_send', 'orders.send_to_kitchen', 'orders.transfer', 'payments.cash', 'payments.card', 'payments.mobile_money', 'payments.split', 'payments.receipt_reprint', 'cash.open_session', 'cash.opening_amount', 'cash.count', 'cash.close_session', 'reports.personal_sales'],
-  responsable: ['orders.view', 'orders.create', 'orders.add_product', 'orders.edit_before_send', 'orders.delete_before_send', 'orders.send_to_kitchen', 'orders.edit_after_send', 'orders.cancel_after_send', 'orders.transfer', 'orders.merge', 'payments.cash', 'payments.card', 'payments.mobile_money', 'payments.split', 'payments.receipt_reprint', 'payments.method_change', 'cash.drawer_open', 'discounts.preset', 'discounts.custom', 'discounts.gift_product', 'cash.open_session', 'cash.opening_amount', 'cash.count', 'cash.close_session', 'cash.view_variance', 'kitchen.view', 'kitchen.start', 'kitchen.ready', 'kitchen.view_timing', 'stock.view', 'stock.receive', 'stock.loss', 'stock.inventory', 'reports.personal_sales', 'reports.cancellations', 'reports.discounts', 'admin.audit.view'],
+  caissier: ['orders.view', 'orders.create', 'orders.add_product', 'orders.edit_before_send', 'orders.delete_before_send', 'orders.send_to_kitchen', 'orders.transfer', 'payments.cash', 'payments.card', 'payments.mobile_money', 'payments.split', 'payments.receipt_reprint', 'cash.open_session', 'cash.opening_amount', 'cash.count', 'cash.close_session', 'cash.expense.record', 'reports.personal_sales'],
+  responsable: ['orders.view', 'orders.create', 'orders.add_product', 'orders.edit_before_send', 'orders.delete_before_send', 'orders.send_to_kitchen', 'orders.edit_after_send', 'orders.cancel_after_send', 'orders.transfer', 'orders.merge', 'payments.cash', 'payments.card', 'payments.mobile_money', 'payments.split', 'payments.receipt_reprint', 'payments.method_change', 'cash.drawer_open', 'discounts.preset', 'discounts.custom', 'discounts.gift_product', 'cash.open_session', 'cash.opening_amount', 'cash.count', 'cash.close_session', 'cash.expense.record', 'cash.view_variance', 'kitchen.view', 'kitchen.start', 'kitchen.ready', 'kitchen.view_timing', 'stock.view', 'stock.receive', 'stock.loss', 'stock.inventory', 'reports.personal_sales', 'reports.cancellations', 'reports.discounts', 'admin.audit.view'],
   manager: ACCESS_PERMISSIONS.filter(({ code }) => !['payments.refund', 'discounts.gift_order', 'products.price_override', 'cash.view_expected', 'cash.correct_variance', 'reports.margins', 'reports.export', 'admin.prices', 'admin.access.manage', 'admin.settings'].includes(code)).map(({ code }) => code),
   direction: ACCESS_PERMISSIONS.map(({ code }) => code)
 };
 
 const ROLE_PROFILES = [
-  { slug: 'cuisinier', name: 'Cuisine / Bar', description: 'Consultation et traitement des commandes en production.', profile: 'cuisine' },
+  { slug: 'cuisinier', name: 'Cuisinier', description: 'Consultation et traitement des commandes cuisine.', profile: 'cuisine' },
+  { slug: 'bar', name: 'Bar', description: 'Consultation et traitement des commandes du bar.', profile: 'bar' },
   { slug: 'serveur', name: 'Serveur', description: 'Prise et suivi des commandes.', profile: 'serveur' },
   { slug: 'caissier', name: 'Caissier', description: 'Commandes, encaissements et opérations de caisse.', profile: 'caissier' },
   { slug: 'responsable_service', name: 'Responsable de service', description: 'Supervision opérationnelle du service.', profile: 'responsable' },

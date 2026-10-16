@@ -679,6 +679,10 @@ router.post('/:id/cancel', authenticateToken, async (req, res) => {
     const isAdminOrStaff = hasPermission(req.user, 'orders.cancel_after_send');
     const isOwner = order.user_id === req.user.id;
     if (!isAdminOrStaff && !isOwner) return res.status(403).json({ message: 'Accès refusé.' });
+    if (isAdminOrStaff) {
+      if (!req.user.server_pin_hash) return res.status(428).json({ message: 'Aucun code personnel n’est configuré pour ce compte. Demandez à la Direction de le définir.' });
+      if (!(await bcrypt.compare(String(req.body.staff_action_code || '').toUpperCase(), req.user.server_pin_hash))) return res.status(403).json({ message: 'Code personnel de confirmation incorrect.' });
+    }
     if (order.closed_at || !['en_attente', 'en_preparation', 'prete', 'en_livraison'].includes(order.status)) {
       return res.status(409).json({ message: 'Cette commande ne peut plus être annulée.' });
     }
@@ -783,10 +787,17 @@ router.put('/:id', authenticateToken, async (req, res) => {
 
     // Check permissions
     const isOwner = order.user_id === req.user.id;
-    const isAdminOrStaff = ['admin', 'staff'].includes(req.user.role) || req.user.pagePermissions?.orders === true;
+    const isAdminOrStaff = ['orders.edit_before_send', 'orders.edit_after_send', 'orders.send_to_kitchen'].some(code => hasPermission(req.user, code));
 
     if (!isOwner && !isAdminOrStaff) {
       return res.status(403).json({ message: 'Access denied' });
+    }
+    if (isAdminOrStaff && status && status !== order.status) {
+      const requiredPermission = status === 'en_preparation' ? 'orders.send_to_kitchen' : 'orders.edit_after_send';
+      if (!hasPermission(req.user, requiredPermission)) return res.status(403).json({ message: 'Vous n’êtes pas autorisé à modifier cet état de commande.' });
+    }
+    if (isAdminOrStaff && payment_method !== undefined && !hasPermission(req.user, 'payments.method_change')) {
+      return res.status(403).json({ message: 'Vous n’êtes pas autorisé à modifier le mode de paiement.' });
     }
 
     // If user is updating their own order, check if it's still en_attente
@@ -924,7 +935,7 @@ router.post('/:id/validate', authenticateToken, requirePermission('orders.send_t
 });
 
 // Close order (caissier closes in cash register)
-router.post('/:id/close', authenticateToken, requireRole(['caissier','admin']), async (req, res) => {
+router.post('/:id/close', authenticateToken, requirePermission('cash.close_session'), async (req, res) => {
   try {
     const { id } = req.params;
     const order = await prisma.order.findUnique({ where: { id } });

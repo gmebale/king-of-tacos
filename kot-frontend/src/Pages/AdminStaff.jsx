@@ -397,35 +397,13 @@ export default function AdminStaff() {
                   </Select>
                 </div>
 
-                {newUser.role === "serveur" && (
+                {newUser.role !== "client" && (
                   <div>
-                    <Label htmlFor="server-code">Code serveur (6 lettres ou chiffres) *</Label>
+                    <Label htmlFor="server-code">Code personnel confidentiel (6 lettres ou chiffres) *</Label>
                     <Input id="server-code" required minLength={6} maxLength={6} autoComplete="off" value={newUser.server_code} onChange={(e) => setNewUser({ ...newUser, server_code: e.target.value.toUpperCase() })} className="mt-1 uppercase" />
                   </div>
                 )}
 
-                {currentUser?.role === 'admin' && <div className="pt-2">
-                  <Label>Permissions d’accès</Label>
-                  <div className="mt-2 grid gap-2 sm:grid-cols-2 sm:gap-3">
-                    {PAGE_PERMISSIONS.map((permission) => (
-                      <div key={permission.key} className="flex items-center justify-between rounded-lg border p-2">
-                        <span className="text-sm text-gray-700">{permission.label}</span>
-                        <Switch
-                          checked={!!newUser.pagePermissions?.[permission.key]}
-                          onCheckedChange={(checked) =>
-                            setNewUser((prev) => ({
-                              ...prev,
-                              pagePermissions: {
-                                ...(prev.pagePermissions || createDefaultPermissions()),
-                                [permission.key]: checked
-                              }
-                            }))
-                          }
-                        />
-                      </div>
-                    ))}
-                  </div>
-                </div>}
               </div>
               <DialogFooter>
                 <Button
@@ -530,7 +508,8 @@ export default function AdminStaff() {
                           </Badge>
                         )}
                       </div>
-                      <p className="text-sm text-gray-600 mb-2 truncate">{user.email}</p>
+                      <p className="text-sm text-gray-600 mb-1 truncate">{user.email}</p>
+                      {user.staff_code && <p className="mb-2 text-xs font-semibold tracking-wide text-slate-500">ID personnel : {user.staff_code}</p>}
                       <div className="flex flex-wrap gap-2">
                         <Badge className={`border ${getRoleColor(user.role)}`}>
                           {user.role === "admin" && <Shield className="w-3 h-3 mr-1" />}
@@ -663,35 +642,13 @@ export default function AdminStaff() {
                 </Select>
               </div>
 
-              {currentUser?.role === 'admin' && editingUser.role === "serveur" && (
+              {currentUser?.role === 'admin' && editingUser.role !== "client" && (
                 <div>
-                  <Label htmlFor="edit-server-code">Nouveau code serveur (6 lettres ou chiffres)</Label>
-                  <Input id="edit-server-code" minLength={6} maxLength={6} autoComplete="off" placeholder="Laisser vide pour conserver le code actuel" value={editingUser.server_code || ""} onChange={(e) => setEditingUser({ ...editingUser, server_code: e.target.value.toUpperCase() })} className="mt-1 uppercase" />
+                  <Label htmlFor="edit-server-code">Code personnel confidentiel (6 lettres ou chiffres){!editingUser.has_staff_code ? ' *' : ''}</Label>
+                  <Input id="edit-server-code" minLength={6} maxLength={6} required={!editingUser.has_staff_code} autoComplete="new-password" placeholder={editingUser.has_staff_code ? 'Laisser vide pour conserver le code actuel' : 'Saisir un code unique'} value={editingUser.server_code || ""} onChange={(e) => setEditingUser({ ...editingUser, server_code: e.target.value.toUpperCase() })} className="mt-1 uppercase" />
                 </div>
               )}
 
-              {currentUser?.role === 'admin' && <div className="pt-2">
-                <Label>Permissions d’accès</Label>
-                <div className="mt-2 grid gap-2 sm:grid-cols-2 sm:gap-3">
-                  {PAGE_PERMISSIONS.map((permission) => (
-                    <div key={permission.key} className="flex items-center justify-between rounded-lg border p-2">
-                      <span className="text-sm text-gray-700">{permission.label}</span>
-                      <Switch
-                        checked={!!editingUser.pagePermissions?.[permission.key]}
-                        onCheckedChange={(checked) =>
-                          setEditingUser((prev) => ({
-                            ...prev,
-                            pagePermissions: {
-                              ...(prev.pagePermissions || createDefaultPermissions()),
-                              [permission.key]: checked
-                            }
-                          }))
-                        }
-                      />
-                    </div>
-                  ))}
-                </div>
-              </div>}
 
               {currentUser?.role === 'admin' && <div>
                 <Label htmlFor="edit-password">Nouveau mot de passe (laisser vide pour ne pas changer)</Label>

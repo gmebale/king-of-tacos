@@ -1,6 +1,7 @@
 const express = require('express');
 const { PrismaClient } = require('@prisma/client');
-const { authenticateToken, requirePagePermission, requirePermission, hasPermission } = require('../middleware/auth');
+const bcrypt = require('bcryptjs');
+const { authenticateToken, requirePagePermission, requirePermission, requireRole, requireStaffActionCode, hasPermission } = require('../middleware/auth');
 const PDFDocument = require('pdfkit');
 const ExcelJS = require('exceljs');
 const { format } = require('date-fns');
@@ -498,6 +499,20 @@ router.get('/session', authenticateToken, requirePagePermission('cashier'), asyn
   }
 });
 
+router.put('/session/emergency-code', authenticateToken, requireRole(['admin']), async (req, res) => {
+  try {
+    const code = String(req.body?.code || '');
+    if (code.length < 6 || code.length > 32) return res.status(400).json({ message: 'Le code doit contenir entre 6 et 32 caractères.' });
+    const hash = await bcrypt.hash(code, 12);
+    await prisma.settings.upsert({ where: { key: 'cash_emergency_reopen_code_hash' }, update: { value: hash }, create: { key: 'cash_emergency_reopen_code_hash', value: hash } });
+    await prisma.log.create({ data: { user_id: req.user.id, role: req.user.role, action: 'cash_emergency_code_updated', details: 'Code de réouverture d’urgence modifié.' } });
+    res.json({ message: 'Code de réouverture mis à jour.' });
+  } catch (error) {
+    console.error('Set cash emergency code error:', error);
+    res.status(500).json({ message: 'Impossible d’enregistrer le code.' });
+  }
+});
+
 // Open cash register
 router.post('/session/open', authenticateToken, requirePagePermission('cashier'), requirePermission('cash.open_session'), requirePermission('cash.opening_amount'), async (req, res) => {
   try {
@@ -529,9 +544,12 @@ router.post('/session/open', authenticateToken, requirePagePermission('cashier')
       const currentDay = today.toDateString();
 
       if (lastClosedDay === currentDay) {
-        return res.status(400).json({
-          message: 'La caisse a été fermée aujourd\'hui. Elle ne peut être ouverte que demain.'
-        });
+        const stored = await prisma.settings.findUnique({ where: { key: 'cash_emergency_reopen_code_hash' }, select: { value: true } });
+        const emergencyCode = String(req.body?.emergency_code || '');
+        if (!stored?.value || !emergencyCode || !(await bcrypt.compare(emergencyCode, stored.value))) {
+          return res.status(403).json({ message: 'La caisse a été fermée aujourd’hui. Un code de réouverture d’urgence valide est requis.' });
+        }
+        await prisma.log.create({ data: { user_id: req.user.id, role: req.user.role, action: 'cash_emergency_reopened', details: `Réouverture d’urgence après clôture du ${lastClosedSession.closed_at.toISOString()}.` } });
       }
     }
 
@@ -671,7 +689,7 @@ router.get('/session/expenses', authenticateToken, requirePagePermission('cashie
   }
 });
 
-router.post('/session/expenses', authenticateToken, requirePagePermission('cashier'), async (req, res) => {
+router.post('/session/expenses', authenticateToken, requirePagePermission('cashier'), requirePermission('cash.expense.record'), async (req, res) => {
   try {
     const { catalog_item_id, amount, payment_method = 'cash', supplier, items = [] } = req.body;
     if (!['cash', 'card', 'mobile_money', 'bank_transfer', 'other'].includes(payment_method)) {
@@ -1341,7 +1359,7 @@ router.put('/orders/:id/pay', authenticateToken, requirePagePermission('cashier'
   }
 });
 
-router.put('/orders/:id/refund', authenticateToken, requirePagePermission('cashier'), requirePermission('payments.refund'), async (req, res) => {
+router.put('/orders/:id/refund', authenticateToken, requirePagePermission('cashier'), requirePermission('payments.refund'), requireStaffActionCode, async (req, res) => {
   try {
     const { id } = req.params;
     const order = await prisma.order.findUnique({ where: { id } });

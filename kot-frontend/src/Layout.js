@@ -78,8 +78,7 @@ export default function Layout({ children, currentPageName }) {
     { name: "Dépenses", path: "AdminExpenses", permission: "finance", icon: Receipt },
     { name: "Mobile Money", path: "AdminMobileMoney", permission: "cashier", icon: Smartphone },
     { name: "Stock", path: "AdminStock", permission: "stock", icon: Package },
-    { name: "Personnel", path: "AdminStaff", permission: "staff", icon: Users },
-    { name: "Droits d’accès", path: "AdminAccess", permission: "staff", icon: ShieldCheck },
+    { name: user?.role === 'admin' ? "Personnel et droits" : "Personnel", path: user?.role === 'admin' ? "AdminAccess" : "AdminStaff", permission: "staff", icon: ShieldCheck },
     { name: "Fidélité", path: "AdminLoyalty", permission: "loyalty", icon: Star },
     { name: "Avis", path: "AdminReviews", permission: "reviews", icon: MessageSquare },
     { name: "Paramètres", path: "AdminSettings", permission: "settings", icon: Settings }
@@ -87,9 +86,9 @@ export default function Layout({ children, currentPageName }) {
 
   const canAccessAdminNavItem = (item) => {
     if (!item.station) return hasPagePermission(item.permission);
-    if (item.station === "bar") return hasPagePermission("kitchen") || hasPagePermission("bar");
+    if (item.station === "bar") return hasPagePermission("kitchen.bar.view") || hasPagePermission("bar");
     const permission = item.station === "cuisine_chaude" ? "kitchen_hot" : "kitchen_cold";
-    return hasPagePermission(permission) || hasPagePermission("kitchen");
+    return hasPagePermission("kitchen.cuisine.view") || (user?.role !== 'bar' && (hasPagePermission(permission) || hasPagePermission("kitchen")));
   };
 
   if (isAdminPage) {
@@ -261,17 +260,17 @@ export default function Layout({ children, currentPageName }) {
         {children}
       </main>
 
-      <footer className="border-t border-amber-100 bg-white px-6 pt-8 pb-[calc(6rem+env(safe-area-inset-bottom))] text-sm text-gray-600 md:pb-8">
+      <footer className="border-t border-gray-800 bg-black px-6 pt-8 pb-[calc(6rem+env(safe-area-inset-bottom))] text-sm text-gray-300 md:pb-8">
         <div className="flex w-full flex-col gap-5 md:flex-row md:items-center md:justify-between">
           <div>
-            <p className="font-semibold text-gray-900">King Of Tacos</p>
+            <p className="font-semibold text-white">King Of Tacos</p>
             <p className="mt-1">Restaurant · Gabon</p>
           </div>
           <nav aria-label="Informations légales" className="flex flex-wrap gap-x-5 gap-y-2">
-            <Link to="/mentions-legales" className="hover:text-amber-700">Mentions légales</Link>
-            <Link to="/conditions-generales" className="hover:text-amber-700">Conditions générales</Link>
-            <Link to="/confidentialite" className="hover:text-amber-700">Confidentialité</Link>
-            <Link to="/livraison-annulation" className="hover:text-amber-700">Retrait, livraison et annulation</Link>
+            <Link to="/mentions-legales" className="hover:text-amber-400">Mentions légales</Link>
+            <Link to="/conditions-generales" className="hover:text-amber-400">Conditions générales</Link>
+            <Link to="/confidentialite" className="hover:text-amber-400">Confidentialité</Link>
+            <Link to="/livraison-annulation" className="hover:text-amber-400">Retrait, livraison et annulation</Link>
           </nav>
         </div>
       </footer>

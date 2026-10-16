@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
 const { PrismaClient } = require('@prisma/client');
 
 const prisma = new PrismaClient();
@@ -11,36 +12,16 @@ const normalizeRole = (user) => {
   return 'client';
 };
 
-const PAGE_PERMISSION_KEYS = [
-  'dashboard', 'orders', 'kitchen', 'cashier', 'stock',
-  'kitchen_hot', 'kitchen_cold', 'bar', 'finance', 'settings',
-  'staff', 'reviews', 'customers', 'loyalty'
-];
-
 const PAGE_CODE_PREFIXES = {
-  dashboard: ['reports.sales_total'], orders: ['orders.'], kitchen: ['kitchen.'], cashier: ['payments.', 'cash.', 'discounts.'],
+  dashboard: ['dashboard.', 'reports.sales_total'], orders: ['orders.'], kitchen: ['kitchen.'], cashier: ['payments.', 'cash.', 'discounts.'],
   stock: ['stock.', 'admin.products', 'admin.prices', 'admin.menus'], finance: ['reports.sales_total', 'reports.sales_detail', 'reports.margins', 'reports.export'],
-  settings: ['admin.settings'], staff: ['admin.users.', 'admin.access.manage']
+  settings: ['admin.settings'], staff: ['admin.users.', 'admin.access.'], loyalty: ['loyalty.'], reviews: ['reviews.'], customers: ['customers.']
 };
 
 const addPermission = (map, permission, granted) => {
   if (!permission?.code) return;
 
-  const code = permission.code.toLowerCase();
-  const module = permission.module?.toLowerCase();
   map[permission.code] = granted;
-
-  for (const pageKey of PAGE_PERMISSION_KEYS) {
-    const tokens = code.split(/[._:-]/);
-    if (module === pageKey || tokens.includes(pageKey)) {
-      map[pageKey] = map[pageKey] === true || granted;
-    }
-  }
-  for (const [pageKey, prefixes] of Object.entries(PAGE_CODE_PREFIXES)) {
-    if (prefixes.some((prefix) => prefix.endsWith('.') ? code.startsWith(prefix) : code === prefix)) {
-      map[pageKey] = map[pageKey] === true || granted;
-    }
-  }
 };
 
 const hasPermission = (user, code) => {
@@ -56,6 +37,18 @@ const requirePermission = (code) => (req, res, next) => {
   if (!req.user) return res.status(401).json({ message: 'Authentication required' });
   if (!hasPermission(req.user, code)) return res.status(403).json({ message: 'Accès refusé à cette opération' });
   next();
+};
+
+const requireStaffActionCode = async (req, res, next) => {
+  try {
+    const code = String(req.body?.staff_action_code || '');
+    if (!req.user?.server_pin_hash) return res.status(428).json({ message: 'Aucun code personnel n’est configuré pour ce compte. Demandez à la Direction de le définir.' });
+    if (!code || !(await bcrypt.compare(code.toUpperCase(), req.user.server_pin_hash))) return res.status(403).json({ message: 'Code personnel de confirmation incorrect.' });
+    next();
+  } catch (error) {
+    console.error('Verify staff action code error:', error);
+    res.status(500).json({ message: 'Impossible de vérifier le code personnel.' });
+  }
 };
 
 const authenticateToken = async (req, res, next) => {
@@ -88,20 +81,31 @@ const authenticateToken = async (req, res, next) => {
     }
 
     const roleValue = normalizeRole(user);
-    const permissionMap = {};
+    const rolePermissionMap = {};
+    const userPermissionMap = {};
     if (Array.isArray(user.roleRef?.rolePermissions)) {
       user.roleRef.rolePermissions.forEach((entry) => {
-        addPermission(permissionMap, entry.permission, entry.granted);
+        addPermission(rolePermissionMap, entry.permission, entry.granted);
       });
     }
     if (Array.isArray(user.userPermissions)) {
       user.userPermissions.forEach((entry) => {
-        addPermission(permissionMap, entry.permission, entry.granted);
+        addPermission(userPermissionMap, entry.permission, entry.granted);
       });
     }
 
+    const permissionMap = { ...rolePermissionMap, ...userPermissionMap };
+    const derivedPages = {};
+    for (const [pageKey, prefixes] of Object.entries(PAGE_CODE_PREFIXES)) {
+      const relevantCodes = Object.keys(permissionMap).filter(code => prefixes.some(prefix => prefix.endsWith('.') ? code.startsWith(prefix) : code === prefix));
+      if (relevantCodes.length) derivedPages[pageKey] = relevantCodes.some(code => permissionMap[code] === true);
+    }
+    const allKitchenCodes = Object.keys(permissionMap).filter(code => code.startsWith('kitchen.'));
+    if (allKitchenCodes.length) derivedPages.kitchen = allKitchenCodes.some(code => permissionMap[code] === true);
+
     const pagePermissions = {
       ...(user.pagePermissions && typeof user.pagePermissions === 'object' ? user.pagePermissions : {}),
+      ...derivedPages,
       ...permissionMap
     };
 
@@ -160,6 +164,7 @@ module.exports = {
   requireRole,
   requirePagePermission,
   requirePermission,
+  requireStaffActionCode,
   hasPermission,
   normalizeRole
 };

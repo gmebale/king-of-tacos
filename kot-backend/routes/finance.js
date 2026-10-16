@@ -370,7 +370,7 @@ router.get('/expense-catalog', authenticateToken, async (req, res) => {
   }
 });
 
-router.post('/expense-catalog', authenticateToken, requirePagePermission('finance', 'dashboard'), async (req, res) => {
+router.post('/expense-catalog', authenticateToken, requirePagePermission('finance', 'dashboard'), requirePermission('finance.expenses.manage'), async (req, res) => {
   try {
     const { category, description, expense_type = 'operating' } = req.body;
     if (!['operating', 'stock_purchase'].includes(expense_type) || !String(category || '').trim() || !String(description || '').trim()) {
@@ -386,7 +386,7 @@ router.post('/expense-catalog', authenticateToken, requirePagePermission('financ
   }
 });
 
-router.patch('/expense-catalog/:id', authenticateToken, requirePagePermission('finance', 'dashboard'), async (req, res) => {
+router.patch('/expense-catalog/:id', authenticateToken, requirePagePermission('finance', 'dashboard'), requirePermission('finance.expenses.manage'), async (req, res) => {
   try {
     const item = await prisma.expenseCatalogItem.update({
       where: { id: Number(req.params.id) },

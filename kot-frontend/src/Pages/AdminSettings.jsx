@@ -43,6 +43,8 @@ const AdminSettings = () => {
   const [locations, setLocations] = useState([]);
   const [newLocationName, setNewLocationName] = useState('');
   const [savingLocation, setSavingLocation] = useState(false);
+  const [emergencyCode, setEmergencyCode] = useState('');
+  const [savingEmergencyCode, setSavingEmergencyCode] = useState(false);
   const [taxRates, setTaxRates] = useState([]);
   const [newTaxName, setNewTaxName] = useState('');
   const [newTaxPercentage, setNewTaxPercentage] = useState('');
@@ -104,6 +106,12 @@ const AdminSettings = () => {
     }
   };
 
+  const deleteTaxRate = async rate => {
+    if (!window.confirm(`Supprimer le taux « ${rate.name} » ? Les calculs déjà enregistrés sur les commandes seront conservés.`)) return;
+    try { await api.delete(`/settings/tax-rates/${rate.id}`); setTaxRates(current => current.filter(item => item.id !== rate.id)); toast.success('Taux supprimé'); }
+    catch (error) { toast.error(error.response?.data?.message || 'Impossible de supprimer ce taux'); }
+  };
+
   const editTaxRate = async (event, rate) => {
     event.preventDefault();
     try {
@@ -153,6 +161,24 @@ const AdminSettings = () => {
     } catch (error) {
       toast.error('Impossible de modifier ce lieu');
     }
+  };
+
+  const saveEmergencyCode = async event => {
+    event.preventDefault();
+    try {
+      setSavingEmergencyCode(true);
+      await api.put('/cashier/session/emergency-code', { code: emergencyCode });
+      setEmergencyCode('');
+      toast.success('Code d’urgence enregistré.');
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Impossible d’enregistrer le code.');
+    } finally { setSavingEmergencyCode(false); }
+  };
+
+  const deleteLocation = async location => {
+    if (!window.confirm(`Supprimer le lieu « ${location.name} » ?`)) return;
+    try { await api.delete(`/settings/locations/${location.id}`); setLocations(current => current.filter(item => item.id !== location.id)); toast.success('Lieu supprimé'); }
+    catch (error) { toast.error(error.response?.data?.message || 'Impossible de supprimer ce lieu'); }
   };
 
   const loadSettings = async () => {
@@ -608,6 +634,11 @@ const AdminSettings = () => {
       </Card>
 
       {user?.role === 'admin' && <Card className="max-w-2xl mt-8">
+        <CardHeader><CardTitle>Réouverture d’urgence de la caisse</CardTitle><p className="text-sm text-gray-500">Un code administrateur autorise une nouvelle ouverture le même jour après clôture. Le code est stocké sous forme chiffrée et chaque utilisation est journalisée.</p></CardHeader>
+        <CardContent><form onSubmit={saveEmergencyCode} className="flex flex-col gap-3 sm:flex-row"><div className="flex-1"><Label htmlFor="cash-emergency-code">Nouveau code (6 à 32 caractères)</Label><Input id="cash-emergency-code" type="password" autoComplete="new-password" minLength={6} maxLength={32} value={emergencyCode} onChange={event => setEmergencyCode(event.target.value)} required /></div><Button type="submit" disabled={savingEmergencyCode || emergencyCode.length < 6} className="self-end">{savingEmergencyCode ? 'Enregistrement…' : 'Enregistrer le code'}</Button></form></CardContent>
+      </Card>}
+
+      {user?.role === 'admin' && <Card className="max-w-2xl mt-8">
         <CardHeader>
           <CardTitle>Lieux de service</CardTitle>
           <p className="text-sm text-gray-500">Les lieux actifs sont proposés aux serveurs pour les commandes sur place.</p>
@@ -629,9 +660,7 @@ const AdminSettings = () => {
                   <p className="font-medium">{location.name}</p>
                   <p className="text-xs text-gray-500">{location.active ? 'Actif' : 'Inactif'}</p>
                 </div>
-                <Button type="button" size="sm" variant="outline" onClick={() => toggleLocation(location)}>
-                  {location.active ? 'Désactiver' : 'Réactiver'}
-                </Button>
+                <div className="flex gap-2"><Button type="button" size="sm" variant="outline" onClick={() => toggleLocation(location)}>{location.active ? 'Désactiver' : 'Réactiver'}</Button><Button type="button" size="sm" variant="destructive" onClick={() => deleteLocation(location)}>Supprimer</Button></div>
               </div>
             ))}
             {!locations.length && <p className="p-4 text-sm text-gray-500">Aucun lieu configuré.</p>}
@@ -673,6 +702,7 @@ const AdminSettings = () => {
                 {editingTaxId !== rate.id && <div className="flex gap-2">
                   <Button type="button" size="sm" variant="outline" onClick={() => { setEditingTaxId(rate.id); setEditingTaxName(rate.name); setEditingTaxPercentage(String(rate.percentage)); }}>Modifier</Button>
                   <Button type="button" size="sm" variant="outline" onClick={() => toggleTaxRate(rate)}>{rate.active ? 'Désactiver' : 'Réactiver'}</Button>
+                  <Button type="button" size="sm" variant="destructive" onClick={() => deleteTaxRate(rate)}>Supprimer</Button>
                 </div>}
               </div>
             ))}

@@ -17,6 +17,18 @@ api.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    const url = String(config.url || '');
+    const method = String(config.method || 'get').toLowerCase();
+    const actionNeedsCode = method === 'put' && /^\/?cashier\/orders\/[^/]+\/refund(?:\?|$)/.test(url);
+    if (actionNeedsCode && typeof window !== 'undefined') {
+      let data = config.data;
+      if (typeof data === 'string') { try { data = JSON.parse(data); } catch { data = {}; } }
+      if (!data?.staff_action_code) {
+        const code = window.prompt('Saisissez votre code personnel pour confirmer cette action sensible.');
+        if (!code) return Promise.reject(new axios.Cancel('Confirmation annulée.'));
+        config.data = { ...(data || {}), staff_action_code: code };
+      }
+    }
     return config;
   },
   (error) => Promise.reject(error)

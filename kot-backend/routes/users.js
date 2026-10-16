@@ -47,15 +47,6 @@ const ensureAccessCatalog = () => {
           skipDuplicates: true
         });
       }
-      const kitchenPermissions = await prisma.permission.findMany({ select: { id: true, code: true } });
-      const barRole = await prisma.role.findUnique({ where: { slug: 'bar' } });
-      if (barRole) {
-        const grants = new Set(PROFILE_GRANTS.cuisine);
-        await prisma.rolePermission.createMany({
-          data: kitchenPermissions.map(permission => ({ role_id: barRole.id, permission_id: permission.id, granted: grants.has(permission.code) })),
-          skipDuplicates: true
-        });
-      }
       return true;
     })().catch(error => {
       accessCatalogPromise = null;
@@ -90,6 +81,7 @@ router.get('/', prepareAccessCatalog, authenticateToken, requirePermission('admi
         phone: true,
         role: true,
         pagePermissions: true,
+        server_pin_hash: true,
         loyalty_points: true,
         is_active: true,
         created_at: true,
@@ -97,12 +89,19 @@ router.get('/', prepareAccessCatalog, authenticateToken, requirePermission('admi
       },
       orderBy: { created_at: 'desc' }
     });
-    res.json(users);
+    res.json(users.map(({ server_pin_hash, ...user }) => ({ ...user, has_staff_code: Boolean(server_pin_hash), staff_code: user.role === 'client' ? null : `KOT-${String(user.id).padStart(6, '0')}` })));
   } catch (error) {
     console.error('Get users error:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 });
+
+const isStaffRole = role => role && role !== 'client';
+const ensureStaffCodeAvailable = async (code, excludeId = null) => {
+  const hashes = await prisma.user.findMany({ where: { server_pin_hash: { not: null }, ...(excludeId ? { id: { not: excludeId } } : {}) }, select: { server_pin_hash: true } });
+  for (const row of hashes) if (await bcrypt.compare(code.toUpperCase(), row.server_pin_hash)) return false;
+  return true;
+};
 
 // Create user (admin only)
 router.post('/', prepareAccessCatalog, authenticateToken, requirePermission('admin.users.create'), async (req, res) => {
@@ -124,6 +123,8 @@ router.post('/', prepareAccessCatalog, authenticateToken, requirePermission('adm
     if (role === 'serveur' && !/^[a-z0-9]{6}$/i.test(server_code || '')) {
       return res.status(400).json({ message: 'Le code serveur doit contenir exactement 6 lettres ou chiffres' });
     }
+    if (isStaffRole(role || 'client') && !/^[a-z0-9]{6}$/i.test(server_code || '')) return res.status(400).json({ message: 'Un code personnel de 6 lettres ou chiffres est requis pour chaque compte du personnel.' });
+    if (server_code && !(await ensureStaffCodeAvailable(server_code))) return res.status(409).json({ message: 'Ce code personnel est déjà attribué.' });
 
     // Vérifier si l'email existe déjà
     const existingUser = await prisma.user.findUnique({
@@ -150,7 +151,7 @@ router.post('/', prepareAccessCatalog, authenticateToken, requirePermission('adm
         phone: phone || null,
         role: role || 'client',
         role_id: roleRecord?.id,
-        server_pin_hash: role === 'serveur' ? await bcrypt.hash(server_code.toUpperCase(), 10) : null,
+        server_pin_hash: isStaffRole(role || 'client') ? await bcrypt.hash(server_code.toUpperCase(), 10) : null,
         is_active: true,
         pagePermissions: req.user.role === 'admin' && pagePermissions ? pagePermissions : undefined
       },
@@ -245,6 +246,57 @@ router.put('/access/roles/:slug', authenticateToken, requireRole(['admin']), asy
   }
 });
 
+// Account-level overrides let the administrator grant or revoke individual actions.
+router.get('/access/users', prepareAccessCatalog, authenticateToken, requireRole(['admin']), async (_req, res) => {
+  try {
+    const users = await prisma.user.findMany({
+      where: { role: { not: 'client' } },
+      select: { id: true, full_name: true, email: true, role: true, is_active: true,
+        roleRef: { select: { rolePermissions: { include: { permission: { select: { code: true } } } } } },
+        userPermissions: { include: { permission: { select: { code: true } } } } },
+      orderBy: [{ full_name: 'asc' }, { id: 'asc' }]
+    });
+    res.json(users.map(user => {
+      const effective = {};
+      user.roleRef?.rolePermissions.forEach(entry => { effective[entry.permission.code] = entry.granted; });
+      user.userPermissions.forEach(entry => { effective[entry.permission.code] = entry.granted; });
+      return { id: user.id, staff_code: `KOT-${String(user.id).padStart(6, '0')}`, full_name: user.full_name, email: user.email, role: user.role, is_active: user.is_active, permissions: effective };
+    }));
+  } catch (error) {
+    console.error('Get account access list error:', error);
+    res.status(500).json({ message: 'Impossible de charger les droits par compte.' });
+  }
+});
+
+router.put('/access/users/:id', prepareAccessCatalog, authenticateToken, requireRole(['admin']), async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const permissions = req.body?.permissions;
+    if (!Number.isInteger(id) || !permissions || typeof permissions !== 'object' || Array.isArray(permissions)) {
+      return res.status(400).json({ message: 'Compte ou matrice de permissions invalide.' });
+    }
+    if (Object.keys(permissions).some(code => !ACCESS_PERMISSIONS.some(permission => permission.code === code)) || Object.values(permissions).some(value => typeof value !== 'boolean')) {
+      return res.status(400).json({ message: 'La matrice contient des droits inconnus ou des valeurs invalides.' });
+    }
+    const target = await prisma.user.findUnique({ where: { id }, select: { id: true, full_name: true, role: true } });
+    if (!target || target.role === 'client') return res.status(404).json({ message: 'Compte staff introuvable.' });
+    if (target.role === 'admin' && ACCESS_PERMISSIONS.some(({ code }) => permissions[code] !== true)) return res.status(400).json({ message: 'Le compte Direction conserve tous les droits.' });
+
+    const permissionRows = await prisma.permission.findMany({ select: { id: true, code: true } });
+    const ids = new Map(permissionRows.map(permission => [permission.code, permission.id]));
+    await prisma.$transaction(ACCESS_PERMISSIONS.map(({ code }) => prisma.userPermission.upsert({
+      where: { user_id_permission_id: { user_id: id, permission_id: ids.get(code) } },
+      update: { granted: permissions[code] === true },
+      create: { user_id: id, permission_id: ids.get(code), granted: permissions[code] === true }
+    })));
+    await recordAccessChange(req.user, 'access_user_permissions_updated', `Droits individuels modifiés pour ${target.full_name} (ID ${id}).`);
+    res.json({ message: 'Droits individuels enregistrés.' });
+  } catch (error) {
+    console.error('Update account access error:', error);
+    res.status(500).json({ message: 'Impossible d’enregistrer les droits du compte.' });
+  }
+});
+
 router.get('/access/audit', authenticateToken, requireRole(['admin']), async (req, res) => {
   try {
     const entries = await prisma.log.findMany({
@@ -323,9 +375,8 @@ router.put('/:id', prepareAccessCatalog, authenticateToken, requirePermission('a
     if (server_code && !/^[a-z0-9]{6}$/i.test(server_code)) {
       return res.status(400).json({ message: 'Le code serveur doit contenir exactement 6 lettres ou chiffres' });
     }
-    if (targetRole === 'serveur' && !existingUser.server_pin_hash && !server_code) {
-      return res.status(400).json({ message: 'Un code serveur doit être défini pour ce compte' });
-    }
+    if (isStaffRole(targetRole) && !existingUser.server_pin_hash && !server_code) return res.status(400).json({ message: 'Un code personnel doit être défini pour ce compte.' });
+    if (server_code && !(await ensureStaffCodeAvailable(server_code, existingUser.id))) return res.status(409).json({ message: 'Ce code personnel est déjà attribué.' });
 
     // Empêcher qu'un utilisateur se désactive lui-même
     if (is_active === false && existingUser.id === req.user.id) {
@@ -354,7 +405,7 @@ router.put('/:id', prepareAccessCatalog, authenticateToken, requirePermission('a
       updateData.role = role;
       const roleRecord = await prisma.role.findUnique({ where: { slug: role } });
       updateData.role_id = roleRecord?.id || null;
-      if (role !== 'serveur') updateData.server_pin_hash = null;
+      if (role === 'client') updateData.server_pin_hash = null;
     }
     if (server_code) updateData.server_pin_hash = await bcrypt.hash(server_code.toUpperCase(), 10);
     if (is_active !== undefined) updateData.is_active = is_active;

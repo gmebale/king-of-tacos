@@ -14,12 +14,17 @@ function stationForCategory(category) {
   return 'cuisine_chaude';
 }
 
-function canAccessStation(user, station) {
+function canAccessStation(user, station, action = 'view') {
   if (user.role === 'admin') return true;
   const permissions = user.pagePermissions || {};
-  if (station === 'bar') return user.role === 'bar' || permissions.bar === true;
-  const permission = station === 'cuisine_chaude' ? 'kitchen_hot' : 'kitchen_cold';
-  return permissions[permission] === true || permissions.kitchen === true;
+  const area = station === 'bar' ? 'bar' : 'cuisine';
+  const viewCode = `kitchen.${area}.view`;
+  const specific = `kitchen.${area}.${action}`;
+  if (action !== 'view' && Object.prototype.hasOwnProperty.call(permissions, viewCode) && permissions[viewCode] !== true) return false;
+  if (Object.prototype.hasOwnProperty.call(permissions, specific)) return permissions[specific] === true;
+  if (station === 'bar') return user.role === 'bar' && permissions.bar !== false || permissions.bar === true;
+  const legacyStation = station === 'cuisine_chaude' ? 'kitchen_hot' : 'kitchen_cold';
+  return user.role !== 'bar' && (permissions[legacyStation] === true || permissions.kitchen === true);
 }
 
 // Utility function to format customization details
@@ -170,7 +175,7 @@ router.put('/orders/:id/items/:itemId/status', authenticateToken, async (req, re
       });
       station = stationForCategory(product?.category);
     }
-    if (!canAccessStation(req.user, station)) {
+    if (!canAccessStation(req.user, station, status === 'prete' ? 'ready' : 'start')) {
       return res.status(403).json({ message: 'Accès refusé à ce poste de préparation' });
     }
 

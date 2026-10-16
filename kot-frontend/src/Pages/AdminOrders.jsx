@@ -81,9 +81,11 @@ export default function AdminOrders() {
 
   const confirmCancelOrder = async ({ reasonId, reasonText }) => {
     if (!cancellationOrder) return;
+    const staffActionCode = window.prompt('Saisissez votre code personnel pour confirmer cette annulation.');
+    if (!staffActionCode) return;
     setIsCancelling(true);
     try {
-      await api.post(`/orders/${cancellationOrder.id}/cancel`, { reasonId, reasonText });
+      await api.post(`/orders/${cancellationOrder.id}/cancel`, { reasonId, reasonText, staff_action_code: staffActionCode });
       setCancellationOrder(null);
       await loadOrders();
     } catch (error) {

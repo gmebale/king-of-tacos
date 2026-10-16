@@ -83,7 +83,7 @@ export default function Home() {
               className="inline-flex max-w-full items-center gap-2 rounded-full bg-gradient-to-r from-yellow-400 to-amber-500 px-3 py-2 text-xs font-medium text-slate-900 shadow-lg mb-6 sm:px-4 sm:text-sm">
 
               <Sparkles className="w-4 h-4" />
-              <span>Votre restaurant de tacos à Libreville</span>
+              <span>Votre fast-food de tacos à Libreville</span>
             </motion.div>
 
             <h1 className="mb-6 text-4xl font-bold leading-tight sm:text-5xl md:text-7xl">

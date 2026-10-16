@@ -401,7 +401,7 @@ router.delete('/:id', authenticateToken, requirePagePermission('stock'), require
 });
 
 // Category management
-router.post('/categories', authenticateToken, requirePagePermission('stock'), async (req, res) => {
+router.post('/categories', authenticateToken, requirePagePermission('stock'), requirePermission('admin.menus'), async (req, res) => {
   const { name, displayName, preparation_station, is_menu_visible, display_order } = req.body;
   const normalizedName = String(name || '').trim().toLowerCase().replace(/\s+/g, '_');
   const label = String(displayName || '').trim();
@@ -426,7 +426,7 @@ router.post('/categories', authenticateToken, requirePagePermission('stock'), as
   }
 });
 
-router.put('/categories/:id', authenticateToken, requirePagePermission('stock'), async (req, res) => {
+router.put('/categories/:id', authenticateToken, requirePagePermission('stock'), requirePermission('admin.menus'), async (req, res) => {
   const id = Number(req.params.id);
   const { name, displayName, preparation_station, is_menu_visible, display_order } = req.body;
   const data = {};

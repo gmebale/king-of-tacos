@@ -165,6 +165,18 @@ router.patch('/locations/:id', authenticateToken, requireRole(['admin']), async 
   }
 });
 
+router.delete('/locations/:id', authenticateToken, requireRole(['admin']), async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ message: 'Identifiant invalide' });
+    await prisma.restaurantLocation.delete({ where: { id } });
+    res.json({ message: 'Lieu supprimé.' });
+  } catch (error) {
+    console.error('Delete restaurant location error:', error);
+    res.status(error.code === 'P2025' ? 404 : 500).json({ message: 'Impossible de supprimer le lieu' });
+  }
+});
+
 router.get('/tax-rates', authenticateToken, requirePagePermission('stock'), async (_req, res) => {
   try {
     const rates = await prisma.taxRate.findMany({ orderBy: [{ active: 'desc' }, { name: 'asc' }] });
@@ -225,6 +237,19 @@ router.patch('/tax-rates/:id', authenticateToken, requireRole(['admin']), async 
     console.error('Update tax rate error:', error);
     const status = error.code === 'P2025' ? 404 : error.code === 'P2002' ? 409 : 500;
     res.status(status).json({ message: status === 409 ? 'Un taux porte déjà ce nom' : 'Impossible de modifier le taux' });
+  }
+});
+
+router.delete('/tax-rates/:id', authenticateToken, requireRole(['admin']), async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ message: 'Identifiant invalide' });
+    // Tax snapshots already stored on orders remain unchanged; only product associations are removed.
+    await prisma.taxRate.delete({ where: { id } });
+    res.json({ message: 'Taux de taxe supprimé.' });
+  } catch (error) {
+    console.error('Delete tax rate error:', error);
+    res.status(error.code === 'P2025' ? 404 : 500).json({ message: 'Impossible de supprimer le taux de taxe' });
   }
 });
 

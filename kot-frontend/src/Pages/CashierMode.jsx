@@ -68,7 +68,7 @@ const printCashReceipt = order => {
     * { box-sizing: border-box; }
     body { width: 74mm; margin: 0 auto; color: #111; font: 11px/1.4 Arial, sans-serif; }
     header { text-align: center; padding-bottom: 8px; border-bottom: 1px dashed #555; }
-    header img { display: block; width: 24mm; height: 18mm; object-fit: contain; margin: 0 auto 4px; }
+    header img { display: block; width: 34mm; height: 25mm; object-fit: contain; margin: 0 auto 4px; }
     h1 { margin: 0; font-size: 16px; letter-spacing: .4px; }
     .subtitle { margin-top: 2px; font-size: 10px; letter-spacing: 1px; }
     .restaurant-details { margin-top: 3px; font-size: 9px; line-height: 1.25; }
@@ -87,7 +87,7 @@ const printCashReceipt = order => {
     footer { padding-top: 14px; text-align: center; font-size: 10px; }
     @media screen { body { margin: 12px auto; padding: 8px; box-shadow: 0 0 8px #aaa; } }
   </style></head><body>
-    <header><img class="receipt-logo" src="${window.location.origin}/Images/LOGO-KING-OF-TACOS.jpg" alt="King Of Tacos"><h1>KING OF TACOS</h1><div class="restaurant-details">Le Camp de Gaulle, BP337<br>Libreville, Gabon<br>Tél. : 062 93 72 92</div><div class="business-tagline">FRENCH TACOS &amp; MEXICAN FOOD</div><div class="subtitle">TICKET DE CAISSE</div></header>
+    <header><img class="receipt-logo" src="${window.location.origin}/Images/king-of-tacos-logo.jpg" alt="King Of Tacos"><h1>KING OF TACOS</h1><div class="restaurant-details">Camp de Gaulle, section VH1<br>Impasse des Paletuviers N64 · Libreville, Gabon<br>Tél. : 062 93 72 92<br>RCCM : RG LBV2018A46347<br>NIF : 395310 T</div><div class="business-tagline">FRENCH TACOS &amp; MEXICAN FOOD</div><div class="subtitle">TICKET DE CAISSE</div></header>
     <section class="meta"><div><strong>N° ${escapeReceiptText(code)}</strong></div><div>${escapeReceiptText(createdAt)}</div>${details}</section>
     <section class="items">${lineMarkup}</section>
     <div class="counts">Articles : ${itemCount} · Lignes : ${lineCount}</div><div class="balance"><span>Restant à payer</span><strong>${remainingAmount.toLocaleString('fr-GA')} FCFA</strong></div>
@@ -113,6 +113,7 @@ export default function CashierMode() {
   const [isOpeningRegister, setIsOpeningRegister] = useState(false);
   const [isClosingRegister, setIsClosingRegister] = useState(false);
   const [openingBalance, setOpeningBalance] = useState('');
+  const [emergencyReopenCode, setEmergencyReopenCode] = useState('');
   const [closingBalance, setClosingBalance] = useState('');
   const [closingNotes, setClosingNotes] = useState('');
   const [isDownloadingReport, setIsDownloadingReport] = useState(false);
@@ -380,12 +381,13 @@ export default function CashierMode() {
 
     setIsOpeningRegister(true);
     try {
-      await api.post('/cashier/session/open', { opening_balance: Number(openingBalance) });
+      await api.post('/cashier/session/open', { opening_balance: Number(openingBalance), emergency_code: emergencyReopenCode });
       await loadCashRegisterSession();
       setOpeningBalance('');
+      setEmergencyReopenCode('');
     } catch (error) {
       console.error('Error opening cash register:', error);
-      alert('Erreur lors de l\'ouverture de la caisse');
+      alert(error.response?.data?.message || 'Erreur lors de l’ouverture de la caisse');
     } finally {
       setIsOpeningRegister(false);
     }
@@ -598,6 +600,7 @@ export default function CashierMode() {
                       placeholder="Entrez le solde d'ouverture"
                     />
                   </div>
+                  <div><Label htmlFor="emergency-reopen-code">Code d’urgence si la caisse a déjà été fermée aujourd’hui</Label><Input id="emergency-reopen-code" type="password" autoComplete="off" value={emergencyReopenCode} onChange={event => setEmergencyReopenCode(event.target.value)} placeholder="Laisser vide pour une ouverture normale" /></div>
                   <Button
                     onClick={openCashRegister}
                     disabled={isOpeningRegister}

@@ -489,6 +489,26 @@ router.get('/admin/users', authenticateToken, requirePagePermission('loyalty'), 
   }
 });
 
+router.get('/admin/users/:userId', authenticateToken, requirePagePermission('loyalty'), async (req, res) => {
+  try {
+    const userId = Number(req.params.userId);
+    if (!Number.isInteger(userId)) return res.status(400).json({ message: 'Identifiant client invalide.' });
+    const client = await prisma.user.findFirst({
+      where: { id: userId, ...clientRoleWhere },
+      select: { id: true, full_name: true, email: true, phone: true, loyalty_points: true, created_at: true,
+        orders: { orderBy: { created_date: 'desc' }, take: 100, select: { id: true, order_code: true, created_date: true, total_amount: true, status: true, payment_status: true, order_type: true, items: { select: { product_name: true, quantity: true, price: true } } } },
+        loyaltyRedemptions: { orderBy: { created_at: 'desc' }, take: 50, include: { reward: { select: { name: true } }, promoCode: { select: { code: true } } } },
+        loyaltyPointEntries: { orderBy: { created_at: 'desc' }, take: 100, select: { points: true, entry_type: true, reason: true, created_at: true } }
+      }
+    });
+    if (!client) return res.status(404).json({ message: 'Client introuvable.' });
+    res.json(client);
+  } catch (error) {
+    console.error('Get loyalty customer detail error:', error);
+    res.status(500).json({ message: 'Impossible de charger la fiche client.' });
+  }
+});
+
 // Get all redemptions (admin only)
 router.get('/admin/redemptions', authenticateToken, requirePagePermission('loyalty'), async (req, res) => {
   try {

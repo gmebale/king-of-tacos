@@ -1,6 +1,6 @@
 const express = require('express');
 const { PrismaClient, ReviewStatus } = require('@prisma/client');
-const { authenticateToken, requirePagePermission } = require('../middleware/auth');
+const { authenticateToken, requirePagePermission, requirePermission } = require('../middleware/auth');
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -153,7 +153,7 @@ router.get('/', authenticateToken, requirePagePermission('reviews'), async (req,
 });
 
 // Update status (publish/hide/pending)
-router.patch('/:id/status', authenticateToken, requirePagePermission('reviews'), async (req, res) => {
+router.patch('/:id/status', authenticateToken, requirePagePermission('reviews'), requirePermission('reviews.access'), async (req, res) => {
   try {
     const { status } = req.body;
     const allowed = Object.values(ReviewStatus);

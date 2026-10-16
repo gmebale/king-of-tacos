@@ -44,6 +44,8 @@ export default function AdminLoyalty() {
   const [promos, setPromos] = useState([]);
   const [products, setProducts] = useState([]);
   const [pointHistory, setPointHistory] = useState([]);
+  const [selectedClient, setSelectedClient] = useState(null);
+  const [clientDetail, setClientDetail] = useState(null);
   const [tiers, setTiers] = useState(DEFAULT_TIERS);
   const [manualPoints, setManualPoints] = useState({ points: '', reason: '' });
   const [loading, setLoading] = useState(true);
@@ -106,6 +108,13 @@ export default function AdminLoyalty() {
     if (tiersRes.status === 'fulfilled' && tiersRes.value.data?.length === 3) setTiers(tiersRes.value.data);
     if (results.some(result => result.status === 'rejected')) toast.error('Certaines données fidélité n’ont pas pu être chargées.');
     setLoading(false);
+  };
+
+  const openClient = async client => {
+    setSelectedClient(client);
+    setClientDetail(null);
+    try { const response = await api.get(`/loyalty/admin/users/${client.id}`); setClientDetail(response.data); }
+    catch (error) { toast.error(error.response?.data?.message || 'Impossible de charger la fiche client.'); }
   };
 
   const saveTiers = async () => {
@@ -649,8 +658,8 @@ export default function AdminLoyalty() {
                 </TableHeader>
                 <TableBody>
                   {users.map((user) => (
-                    <TableRow key={user.id}>
-                      <TableCell className="font-medium">{user.full_name}</TableCell>
+                    <TableRow key={user.id} className="cursor-pointer hover:bg-amber-50" onClick={() => openClient(user)}>
+                      <TableCell className="font-medium"><button type="button" className="text-left font-semibold text-amber-800 hover:underline" onClick={() => openClient(user)}>{user.full_name}</button></TableCell>
                       <TableCell>{user.email}</TableCell>
                       <TableCell>
                         <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-300">
@@ -665,6 +674,16 @@ export default function AdminLoyalty() {
               </Table>
             </CardContent>
           </Card>
+
+          <Dialog open={!!selectedClient} onOpenChange={open => { if (!open) { setSelectedClient(null); setClientDetail(null); } }}>
+            <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto"><DialogHeader><DialogTitle>{clientDetail?.full_name || selectedClient?.full_name} · Fiche fidélité</DialogTitle><DialogDescription>Coordonnées, solde de points et historique récent.</DialogDescription></DialogHeader>
+              {!clientDetail ? <p className="py-8 text-center text-gray-500">Chargement de la fiche client…</p> : <div className="space-y-6">
+                <div className="grid gap-3 rounded-xl bg-amber-50 p-4 sm:grid-cols-4"><div><p className="text-xs text-gray-500">Téléphone</p><p className="font-semibold">{clientDetail.phone || '—'}</p></div><div><p className="text-xs text-gray-500">E-mail</p><p className="font-semibold">{clientDetail.email || '—'}</p></div><div><p className="text-xs text-gray-500">Points disponibles</p><p className="font-semibold">{clientDetail.loyalty_points}</p></div><div><p className="text-xs text-gray-500">Client depuis</p><p className="font-semibold">{new Date(clientDetail.created_at).toLocaleDateString('fr-FR')}</p></div></div>
+                <section><h3 className="mb-2 font-bold">Commandes récentes ({clientDetail.orders?.length || 0})</h3><div className="max-h-64 overflow-auto rounded-lg border">{clientDetail.orders?.length ? clientDetail.orders.map(order => <div key={order.id} className="flex flex-col justify-between gap-2 border-b p-3 text-sm last:border-0 sm:flex-row"><div><strong>{order.order_code || order.id.slice(-8)}</strong><p className="text-gray-500">{(order.items || []).map(item => `${item.quantity}× ${item.product_name}`).join(', ')}</p></div><div className="sm:text-right"><p>{Number(order.total_amount || 0).toLocaleString('fr-GA')} FCFA</p><p className="text-gray-500">{new Date(order.created_date).toLocaleString('fr-FR')} · {order.status} · paiement {order.payment_status}</p></div></div>) : <p className="p-4 text-sm text-gray-500">Aucune commande enregistrée.</p>}</div></section>
+                <section><h3 className="mb-2 font-bold">Mouvements de points</h3><div className="max-h-48 overflow-auto rounded-lg border">{clientDetail.loyaltyPointEntries?.length ? clientDetail.loyaltyPointEntries.map((entry, index) => <div key={`${entry.created_at}-${index}`} className="flex justify-between gap-3 border-b p-3 text-sm last:border-0"><span>{entry.reason || entry.type}</span><span className="font-semibold">{entry.points > 0 ? '+' : ''}{entry.points} pts · {new Date(entry.created_at).toLocaleDateString('fr-FR')}</span></div>) : <p className="p-4 text-sm text-gray-500">Aucun mouvement.</p>}</div></section>
+              </div>}
+            </DialogContent>
+          </Dialog>
 
           <Card><CardHeader><CardTitle>Journal des ajustements manuels</CardTitle><CardDescription>Qui a modifié le solde, pour quel client, avec quel motif.</CardDescription></CardHeader><CardContent><Table className="min-w-[720px]"><TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Client</TableHead><TableHead>Admin</TableHead><TableHead>Variation</TableHead><TableHead>Motif</TableHead></TableRow></TableHeader><TableBody>{pointHistory.map(entry => <TableRow key={entry.id}><TableCell>{new Date(entry.created_at).toLocaleString('fr-FR')}</TableCell><TableCell>{entry.user.full_name}</TableCell><TableCell>{entry.actor?.full_name || '—'}</TableCell><TableCell>{entry.points > 0 ? '+' : ''}{entry.points}</TableCell><TableCell>{entry.reason}</TableCell></TableRow>)}</TableBody></Table></CardContent></Card>
         </TabsContent>

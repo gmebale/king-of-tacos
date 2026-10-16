@@ -191,9 +191,9 @@ export default function Menu() {
             />
           </div>
 
-          <div className="sticky top-0 z-30 -mx-4 min-w-0 overflow-hidden bg-amber-50/95 px-4 py-2 backdrop-blur sm:-mx-6 sm:px-6 md:static md:mx-0 md:bg-transparent md:p-0">
+          <div className="sticky top-0 z-30 -mx-4 min-w-0 overflow-x-auto overscroll-x-contain touch-pan-x bg-amber-50/95 px-4 py-2 backdrop-blur sm:-mx-6 sm:px-6 md:static md:mx-0 md:overflow-visible md:bg-transparent md:p-0">
             <Tabs value={category} onValueChange={setCategory}>
-              <TabsList className="flex h-auto w-full min-w-0 max-w-full justify-start gap-1 overflow-x-auto overflow-y-hidden rounded-xl border border-gray-200 bg-white p-1 scrollbar-hide md:justify-center md:flex-wrap md:overflow-visible">
+              <TabsList className="flex h-auto w-max min-w-max max-w-none justify-start gap-1 overflow-visible rounded-xl border border-gray-200 bg-white p-1 scrollbar-hide touch-pan-x md:w-full md:min-w-0 md:max-w-full md:justify-center md:flex-wrap">
                 {categories.map(cat => (
                   <TabsTrigger
                     key={cat.id}

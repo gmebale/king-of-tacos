@@ -6,12 +6,12 @@ const SHARE_IMAGE = `${SITE_URL}/Images/LOGO-KING-OF-TACOS.jpg`;
 
 const publicPages = {
   '/': {
-    title: 'King Of Tacos à Libreville | Tacos et repas à commander',
-    description: 'Commandez tacos, burgers et repas King Of Tacos à Libreville. Consultez le menu en ligne et choisissez le retrait ou la livraison selon disponibilité.'
+    title: 'Fast-food à Libreville | King Of Tacos',
+    description: 'Fast-food à Libreville : tacos français, burgers et repas King Of Tacos. Découvrez le menu et commandez en ligne en retrait ou en livraison selon disponibilité.'
   },
   '/menu': {
-    title: 'Menu King Of Tacos à Libreville | Tacos, burgers et burritos',
-    description: 'Découvrez le menu King Of Tacos à Libreville : tacos, burgers, burritos, accompagnements, boissons et desserts. Personnalisez votre commande en ligne.'
+    title: 'Menu fast-food à Libreville | Tacos et burgers King Of Tacos',
+    description: 'Découvrez le menu de notre fast-food à Libreville : tacos, burgers, burritos, accompagnements, boissons et desserts. Personnalisez votre commande en ligne.'
   },
   '/mentions-legales': {
     title: 'Mentions légales | King Of Tacos',
@@ -95,10 +95,17 @@ export default function SeoManager() {
       }
       structuredData.textContent = JSON.stringify({
         '@context': 'https://schema.org',
-        '@type': 'Organization',
+        '@type': 'Restaurant',
         name: 'King Of Tacos',
         url: SITE_URL,
-        logo: SHARE_IMAGE, areaServed: { '@type': 'City', name: 'Libreville' }
+        logo: SHARE_IMAGE,
+        image: SHARE_IMAGE,
+        telephone: '+24162937292',
+        email: 'kingoftacoslbv@gmail.com',
+        servesCuisine: ['French tacos', 'Mexican', 'Fast food'],
+        address: { '@type': 'PostalAddress', streetAddress: 'Camp de Gaulle, section VH1, Impasse des Paletuviers N64', addressLocality: 'Libreville', addressRegion: 'Estuaire', addressCountry: 'GA' },
+        hasMenu: `${SITE_URL}/menu`,
+        areaServed: { '@type': 'City', name: 'Libreville' }
       });
     } else {
       structuredData?.remove();
