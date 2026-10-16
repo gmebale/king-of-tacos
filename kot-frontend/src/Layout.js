@@ -119,7 +119,7 @@ export default function Layout({ children, currentPageName }) {
         <aside className={`fixed lg:static lg:top-0 top-16 left-0 bottom-0 transition-transform duration-300 ease-in-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 flex flex-col w-64 bg-gradient-to-b from-gray-900 to-black text-white border-r border-gray-800 z-[60]`}>
           <div className="p-6 border-b border-gray-800">
             <Link to={createPageUrl("Home")} className="flex items-center gap-3">
-              <img src="/Images/king-of-tacos-logo.jpg" alt="" className="h-10 w-10 rounded-xl bg-white object-contain" />
+              <img src="/Images/LOGO-KING-OF-TACOS.jpg" alt="" className="h-10 w-10 rounded-xl bg-white object-contain" />
               <div>
                 <h1 className="text-xl font-bold">King Of Tacos</h1>
                 <p className="text-xs text-gray-400">Admin</p>
@@ -165,7 +165,7 @@ export default function Layout({ children, currentPageName }) {
             <MenuIcon className="w-6 h-6" />
           </Button>
           <div className="flex items-center gap-2">
-            <img src="/Images/king-of-tacos-logo.jpg" alt="" className="h-9 w-9 rounded-lg bg-white object-contain" />
+            <img src="/Images/LOGO-KING-OF-TACOS.jpg" alt="" className="h-9 w-9 rounded-lg bg-white object-contain" />
             <h1 className="text-base font-bold sm:text-xl">King Of Tacos</h1>
           </div>
           <Button variant="ghost" size="icon" onClick={handleLogout}>
@@ -200,7 +200,7 @@ export default function Layout({ children, currentPageName }) {
         <div className="w-full px-6 py-4">
           <div className="flex items-center justify-between">
             <Link to={createPageUrl("Home")} className="flex items-center gap-3">
-              <img src="/Images/king-of-tacos-logo.jpg" alt="" className="h-12 w-12 rounded-2xl bg-white object-contain shadow-sm" />
+              <img src="/Images/LOGO-KING-OF-TACOS.jpg" alt="" className="h-12 w-12 rounded-2xl bg-white object-contain shadow-sm" />
               <div>
                 <h1 className="text-2xl font-bold bg-gradient-to-r from-amber-600 to-yellow-500 bg-clip-text text-transparent">
                   King Of Tacos
