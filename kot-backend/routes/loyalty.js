@@ -498,7 +498,7 @@ router.get('/admin/users/:userId', authenticateToken, requirePagePermission('loy
       select: { id: true, full_name: true, email: true, phone: true, loyalty_points: true, created_at: true,
         orders: { orderBy: { created_date: 'desc' }, take: 100, select: { id: true, order_code: true, created_date: true, total_amount: true, status: true, payment_status: true, order_type: true, items: { select: { product_name: true, quantity: true, price: true } } } },
         loyaltyRedemptions: { orderBy: { created_at: 'desc' }, take: 50, include: { reward: { select: { name: true } }, promoCode: { select: { code: true } } } },
-        loyaltyPointEntries: { orderBy: { created_at: 'desc' }, take: 100, select: { points: true, entry_type: true, reason: true, created_at: true } }
+        loyaltyPointEntries: { orderBy: { created_at: 'desc' }, take: 100, select: { points: true, type: true, reason: true, created_at: true } }
       }
     });
     if (!client) return res.status(404).json({ message: 'Client introuvable.' });
