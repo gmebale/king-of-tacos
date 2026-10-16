@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Product } from "../Entities/Product";
 import { motion, AnimatePresence } from "framer-motion";
 import { ShoppingCart, Plus, Minus, Search, Filter, ArrowLeft } from "lucide-react";
@@ -22,6 +22,9 @@ export default function Menu() {
   const [cart, setCart] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  const categoryTabsRef = useRef(null);
+  const swipeStartRef = useRef(null);
+  const [swipeDirection, setSwipeDirection] = useState(0);
 
   useEffect(() => {
     loadData();
@@ -154,6 +157,40 @@ export default function Menu() {
   };
   const selectedCategory = categories.find(item => item.name === category);
 
+  useEffect(() => {
+    const container = categoryTabsRef.current;
+    const activeTab = container?.querySelector('[data-state="active"]');
+    if (!container || !activeTab || window.innerWidth >= 768) return;
+    const containerRect = container.getBoundingClientRect();
+    const tabRect = activeTab.getBoundingClientRect();
+    container.scrollTo({
+      left: container.scrollLeft + tabRect.left - containerRect.left - (container.clientWidth - tabRect.width) / 2,
+      behavior: 'smooth'
+    });
+  }, [category]);
+
+  const handleCategorySwipeStart = (event) => {
+    if (event.touches.length !== 1) return;
+    const touch = event.touches[0];
+    swipeStartRef.current = { x: touch.clientX, y: touch.clientY };
+  };
+
+  const handleCategorySwipeEnd = (event) => {
+    const start = swipeStartRef.current;
+    swipeStartRef.current = null;
+    if (!start || window.innerWidth >= 768 || !categories.length) return;
+    const touch = event.changedTouches[0];
+    const deltaX = touch.clientX - start.x;
+    const deltaY = touch.clientY - start.y;
+    if (Math.abs(deltaX) < 60 || Math.abs(deltaX) < Math.abs(deltaY) * 1.25) return;
+
+    const currentIndex = categories.findIndex(item => item.name === category);
+    const nextIndex = currentIndex + (deltaX < 0 ? 1 : -1);
+    if (nextIndex < 0 || nextIndex >= categories.length) return;
+    setSwipeDirection(deltaX < 0 ? 1 : -1);
+    setCategory(categories[nextIndex].name);
+  };
+
   return (
     <div className="min-h-screen overflow-x-clip bg-gray-100 pb-32">
       <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 sm:py-8">
@@ -191,8 +228,8 @@ export default function Menu() {
             />
           </div>
 
-          <div className="sticky top-0 z-30 -mx-4 min-w-0 overflow-x-auto overscroll-x-contain touch-pan-x bg-amber-50/95 px-4 py-2 backdrop-blur sm:-mx-6 sm:px-6 md:static md:mx-0 md:overflow-visible md:bg-transparent md:p-0">
-            <Tabs value={category} onValueChange={setCategory}>
+          <div ref={categoryTabsRef} className="sticky top-0 z-30 -mx-4 min-w-0 overflow-x-auto overscroll-x-contain touch-pan-x bg-amber-50/95 px-4 py-2 backdrop-blur sm:-mx-6 sm:px-6 md:static md:mx-0 md:overflow-visible md:bg-transparent md:p-0">
+            <Tabs value={category} onValueChange={value => { setSwipeDirection(0); setCategory(value); }}>
               <TabsList className="flex h-auto w-max min-w-max max-w-none justify-start gap-1 overflow-visible rounded-xl border border-gray-200 bg-white p-1 scrollbar-hide touch-pan-x md:w-full md:min-w-0 md:max-w-full md:justify-center md:flex-wrap">
                 {categories.map(cat => (
                   <TabsTrigger
@@ -216,6 +253,7 @@ export default function Menu() {
         </div>}
 
         {/* Products Grid */}
+        <div className="touch-pan-y" onTouchStart={handleCategorySwipeStart} onTouchEnd={handleCategorySwipeEnd}>
         <AnimatePresence mode="wait">
           {isLoading ? (
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2 md:gap-6 lg:grid-cols-3">
@@ -225,9 +263,11 @@ export default function Menu() {
             </div>
           ) : (
             filteredProducts.length > 0 ? <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
+              key={category}
+              initial={{ opacity: 0, x: swipeDirection * 48 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: swipeDirection * -48 }}
+              transition={{ duration: 0.18 }}
               className="mb-8 grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2 md:gap-6 lg:grid-cols-3"
             >
               {filteredProducts.map((product) => {
@@ -247,11 +287,12 @@ export default function Menu() {
                   />
                 );
               })}
-            </motion.div> : <p className="rounded-2xl border border-gray-200 bg-white px-5 py-8 text-center text-gray-600">
+            </motion.div> : <motion.p key={category} initial={{ opacity: 0, x: swipeDirection * 48 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: swipeDirection * -48 }} transition={{ duration: 0.18 }} className="rounded-2xl border border-gray-200 bg-white px-5 py-8 text-center text-gray-600">
               {categories.length ? 'Nous n’avons pas trouvé de produit dans cette catégorie.' : 'Notre menu sera bientôt disponible.'}
-            </p>
+            </motion.p>
           )}
         </AnimatePresence>
+        </div>
 
         {error && !isLoading && (
           <motion.div
