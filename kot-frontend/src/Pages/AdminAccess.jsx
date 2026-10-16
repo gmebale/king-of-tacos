@@ -13,9 +13,11 @@ export default function AdminAccess() {
   const { user } = useAuthContext();
   const [accounts, setAccounts] = useState([]);
   const [permissions, setPermissions] = useState([]);
+  const [availableModules, setAvailableModules] = useState([]);
   const [selectedAccountId, setSelectedAccountId] = useState('');
   const [viewMode, setViewMode] = useState('accounts');
   const [draft, setDraft] = useState({});
+  const [draftModuleAccess, setDraftModuleAccess] = useState({});
   const [audit, setAudit] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -31,10 +33,12 @@ export default function AdminAccess() {
     try {
       const [matrix, history, accountResponse] = await Promise.all([api.get('/users/access/roles'), api.get('/users/access/audit'), api.get('/users/access/users')]);
       setPermissions(matrix.data.permissions);
+      setAvailableModules(matrix.data.modules || []);
       setAudit(history.data);
       setAccounts(accountResponse.data);
       setSelectedAccountId(current => accountResponse.data.some(account => String(account.id) === String(current)) ? current : String(accountResponse.data[0]?.id || ''));
       setDraft(accountResponse.data.find(account => String(account.id) === String(selectedAccountId))?.permissions || accountResponse.data[0]?.permissions || {});
+      setDraftModuleAccess(accountResponse.data.find(account => String(account.id) === String(selectedAccountId))?.moduleAccess || accountResponse.data[0]?.moduleAccess || {});
     } catch (error) {
       toast.error(error.response?.data?.message || 'Impossible de charger les droits d’accès.');
     } finally {
@@ -43,13 +47,17 @@ export default function AdminAccess() {
   };
 
   useEffect(() => { load(); }, []);
-  useEffect(() => { if (activeAccount) setDraft(activeAccount.permissions || {}); }, [activeAccount]);
+  useEffect(() => {
+    if (!activeAccount) return;
+    setDraft(activeAccount.permissions || {});
+    setDraftModuleAccess(activeAccount.moduleAccess || {});
+  }, [activeAccount]);
 
   const save = async () => {
     if (!activeAccount) return;
     setSaving(true);
     try {
-      await api.put(`/users/access/users/${activeAccount.id}`, { permissions: draft });
+      await api.put(`/users/access/users/${activeAccount.id}`, { permissions: draft, moduleAccess: draftModuleAccess });
       toast.success(`Droits du compte « ${activeAccount.full_name} » enregistrés.`);
       await load();
     } catch (error) {
@@ -66,13 +74,13 @@ export default function AdminAccess() {
     <header className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
       <div><div className="mb-2 flex items-center gap-2 text-amber-700"><ShieldCheck className="h-5 w-5" /> Gestion détaillée des accès</div>
         <h1 className="text-3xl font-bold text-gray-900">Personnel et droits d’accès</h1>
-        <p className="mt-2 max-w-3xl text-gray-600">Les autorisations individuelles remplacent celles du profil et sont appliquées côté serveur. Chaque changement est journalisé.</p>
+        <p className="mt-2 max-w-3xl text-gray-600">L’accès à chaque module et les autorisations d’action se règlent séparément. Les actions sont vérifiées côté serveur et chaque changement est journalisé.</p>
       </div>
-      <div className="flex gap-2"><Button variant="outline" onClick={() => setDraft(activeAccount?.permissions || {})} disabled={!activeAccount}><RotateCcw className="mr-2 h-4 w-4" />Réinitialiser</Button>
+      <div className="flex gap-2"><Button variant="outline" onClick={() => { setDraft(activeAccount?.permissions || {}); setDraftModuleAccess(activeAccount?.moduleAccess || {}); }} disabled={!activeAccount}><RotateCcw className="mr-2 h-4 w-4" />Réinitialiser</Button>
         <Button onClick={save} disabled={loading || saving || !activeAccount} className="bg-amber-500 hover:bg-amber-600"><Save className="mr-2 h-4 w-4" />{saving ? 'Enregistrement…' : 'Enregistrer'}</Button></div>
     </header>
 
-    <div className="flex flex-wrap gap-2"><Button variant={viewMode === 'staff' ? 'default' : 'outline'} onClick={() => setViewMode('staff')}>Gérer les comptes</Button><Button variant={viewMode === 'accounts' ? 'default' : 'outline'} onClick={() => { setViewMode('accounts'); setDraft(activeAccount?.permissions || {}); }}>Droits par compte</Button></div>
+    <div className="flex flex-wrap gap-2"><Button variant={viewMode === 'staff' ? 'default' : 'outline'} onClick={() => setViewMode('staff')}>Gérer les comptes</Button><Button variant={viewMode === 'accounts' ? 'default' : 'outline'} onClick={() => { setViewMode('accounts'); setDraft(activeAccount?.permissions || {}); setDraftModuleAccess(activeAccount?.moduleAccess || {}); }}>Droits par compte</Button></div>
 
     <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
       <Card className="h-fit"><CardHeader><CardTitle>Comptes du personnel</CardTitle></CardHeader><CardContent className="space-y-2">
@@ -81,8 +89,13 @@ export default function AdminAccess() {
       </CardContent></Card>
 
       <div className="space-y-4">
-        {Object.entries(groups).map(([group, entries]) => <Card key={group}><CardHeader className="pb-3"><CardTitle className="text-lg">{group}</CardTitle></CardHeader><CardContent className="divide-y">
-          <div className="flex items-center justify-between gap-4 border-b py-3"><div><div className="font-semibold text-gray-900">Activer / désactiver le module</div><div className="text-xs text-gray-500">Pour ce compte uniquement</div></div><Switch checked={entries.every(permission => draft[permission.code] === true)} disabled={!activeAccount || activeAccount.role === 'admin' || loading} onCheckedChange={checked => setDraft(current => ({ ...current, ...Object.fromEntries(entries.map(permission => [permission.code, checked])) }))} aria-label={`Activer le module ${group}`} /></div>
+        <Card><CardHeader><CardTitle>Accès aux modules</CardTitle><p className="text-sm text-gray-500">L’accès à une page est indépendant des actions autorisées dans celle-ci.</p></CardHeader><CardContent className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {availableModules.map(module => <label key={module.key} className="flex items-center justify-between gap-4 rounded-lg border p-3">
+            <span><span className="block font-medium text-gray-900">{module.label}</span><span className="mt-1 block text-xs text-gray-500">{module.description}</span></span>
+            <Switch checked={draftModuleAccess[module.key] === true} disabled={!activeAccount || activeAccount.role === 'admin' || loading} onCheckedChange={checked => setDraftModuleAccess(current => ({ ...current, [module.key]: checked }))} aria-label={`Accéder au module ${module.label}`} />
+          </label>)}
+        </CardContent></Card>
+        {Object.entries(groups).map(([group, entries]) => <Card key={group}><CardHeader className="pb-3"><CardTitle className="text-lg">Actions · {group}</CardTitle></CardHeader><CardContent className="divide-y">
           {entries.map(permission => <div key={permission.code} className="flex items-center justify-between gap-4 py-3">
             <div><div className="font-medium text-gray-800">{permission.label}</div><code className="text-xs text-gray-400">{permission.code}</code></div>
             <Switch checked={draft[permission.code] === true} disabled={activeAccount?.role === 'admin' || loading} onCheckedChange={checked => setDraft(current => ({ ...current, [permission.code]: checked }))} aria-label={permission.label} />

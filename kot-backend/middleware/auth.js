@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const { PrismaClient } = require('@prisma/client');
+const { ACCESS_MODULES, deriveModuleAccess } = require('../config/accessControl');
 
 const prisma = new PrismaClient();
 
@@ -13,7 +14,7 @@ const normalizeRole = (user) => {
 };
 
 const PAGE_CODE_PREFIXES = {
-  dashboard: ['dashboard.', 'reports.sales_total'], orders: ['orders.'], kitchen: ['kitchen.'], cashier: ['payments.', 'cash.', 'discounts.'],
+  dashboard: ['dashboard.', 'reports.sales_total'], orders: ['orders.'], kitchen: ['kitchen.'], kitchen_hot: ['kitchen.cuisine.'], kitchen_cold: ['kitchen.cuisine.'], bar: ['kitchen.bar.'], cashier: ['payments.', 'cash.', 'discounts.'],
   stock: ['stock.', 'admin.products', 'admin.prices', 'admin.menus'], finance: ['reports.sales_total', 'reports.sales_detail', 'reports.margins', 'reports.export'],
   settings: ['admin.settings'], staff: ['admin.users.', 'admin.access.'], loyalty: ['loyalty.'], reviews: ['reviews.'], customers: ['customers.']
 };
@@ -29,8 +30,7 @@ const hasPermission = (user, code) => {
   if (normalizeRole(user) === 'admin') return true;
   if (user.permissions && Object.prototype.hasOwnProperty.call(user.permissions, code)) return user.permissions[code] === true;
   if (user.pagePermissions && Object.prototype.hasOwnProperty.call(user.pagePermissions, code)) return user.pagePermissions[code] === true;
-  const pageKey = String(code).split('.')[0];
-  return user.pagePermissions?.[pageKey] === true;
+  return false;
 };
 
 const requirePermission = (code) => (req, res, next) => {
@@ -103,10 +103,19 @@ const authenticateToken = async (req, res, next) => {
     const allKitchenCodes = Object.keys(permissionMap).filter(code => code.startsWith('kitchen.'));
     if (allKitchenCodes.length) derivedPages.kitchen = allKitchenCodes.some(code => permissionMap[code] === true);
 
+    const savedPagePermissions = user.pagePermissions && typeof user.pagePermissions === 'object' ? user.pagePermissions : {};
+    const explicitModuleAccess = savedPagePermissions.__moduleAccess && typeof savedPagePermissions.__moduleAccess === 'object'
+      ? savedPagePermissions.__moduleAccess
+      : {};
+    const legacyEnabledPages = Object.fromEntries(ACCESS_MODULES
+      .filter(({ key }) => savedPagePermissions[key] === true)
+      .map(({ key }) => [key, true]));
     const pagePermissions = {
-      ...(user.pagePermissions && typeof user.pagePermissions === 'object' ? user.pagePermissions : {}),
       ...derivedPages,
-      ...permissionMap
+      ...deriveModuleAccess(permissionMap, savedPagePermissions),
+      ...legacyEnabledPages,
+      ...permissionMap,
+      ...explicitModuleAccess
     };
 
     req.user = {

@@ -88,4 +88,26 @@ const ROLE_PROFILES = [
   { slug: 'admin', name: 'Administrateur / Direction', description: 'Accès complet et gestion des droits.', profile: 'direction' }
 ];
 
-module.exports = { ACCESS_PERMISSIONS, PROFILE_GRANTS, ROLE_PROFILES };
+const ACCESS_MODULES = [
+  { key: 'dashboard', label: 'Tableau de bord', description: 'Ouvrir le tableau de bord.', codes: ['dashboard.access', 'reports.sales_total'] },
+  { key: 'orders', label: 'Commandes', description: 'Accéder à la gestion des commandes.', prefixes: ['orders.'] },
+  { key: 'kitchen', label: 'Cuisine et production', description: 'Accéder aux postes cuisine et bar.', prefixes: ['kitchen.'] },
+  { key: 'kitchen_hot', label: 'Cuisine chaude', description: 'Accéder au poste de cuisine chaude.', codes: ['kitchen.view'], prefixes: ['kitchen.cuisine.'] },
+  { key: 'kitchen_cold', label: 'Cuisine froide', description: 'Accéder au poste de cuisine froide.', codes: ['kitchen.view'], prefixes: ['kitchen.cuisine.'] },
+  { key: 'bar', label: 'Bar', description: 'Accéder au poste du bar.', prefixes: ['kitchen.bar.'] },
+  { key: 'cashier', label: 'Caisse', description: 'Accéder à la caisse, indépendamment des opérations autorisées.', prefixes: ['payments.', 'cash.', 'discounts.'] },
+  { key: 'stock', label: 'Stock et produits', description: 'Accéder aux stocks et aux produits.', prefixes: ['stock.'], codes: ['admin.products', 'admin.prices', 'admin.menus'] },
+  { key: 'finance', label: 'Finances', description: 'Accéder aux rapports financiers.', codes: ['reports.sales_total', 'reports.sales_detail', 'reports.cancellations', 'reports.discounts', 'reports.margins', 'reports.export'] },
+  { key: 'loyalty', label: 'Fidélité', description: 'Accéder à la gestion de la fidélité.', prefixes: ['loyalty.'] },
+  { key: 'settings', label: 'Paramètres', description: 'Accéder aux paramètres.', codes: ['admin.settings'] },
+  { key: 'staff', label: 'Personnel et droits', description: 'Accéder à la gestion du personnel.', prefixes: ['admin.users.', 'admin.access.'] },
+  { key: 'reviews', label: 'Avis', description: 'Accéder à la gestion des avis.', prefixes: ['reviews.'] },
+  { key: 'customers', label: 'Clients', description: 'Accéder aux fiches clients.', prefixes: ['customers.'] }
+];
+
+const deriveModuleAccess = (permissions = {}, legacyPagePermissions = {}) => Object.fromEntries(ACCESS_MODULES.map(({ key, codes = [], prefixes = [] }) => {
+  const hasAction = Object.entries(permissions).some(([code, granted]) => granted === true && (codes.includes(code) || prefixes.some(prefix => code.startsWith(prefix))));
+  return [key, legacyPagePermissions[key] === true || hasAction];
+}));
+
+module.exports = { ACCESS_PERMISSIONS, PROFILE_GRANTS, ROLE_PROFILES, ACCESS_MODULES, deriveModuleAccess };

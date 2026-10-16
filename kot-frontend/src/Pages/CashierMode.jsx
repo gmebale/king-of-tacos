@@ -30,6 +30,7 @@ import { fr } from "date-fns/locale";
 import api from "../services/api.service";
 import { formatCustomizationForDisplay } from "../utils/index";
 import { resolveMediaUrl } from "../utils/media";
+import { useAuthContext } from "../contexts/AuthContext";
 
 const escapeReceiptText = value => String(value ?? '').replace(/[&<>"']/g, character => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
@@ -100,6 +101,10 @@ const printCashReceipt = order => {
 };
 
 export default function CashierMode() {
+  const { user } = useAuthContext();
+  const can = permission => user?.role === 'admin' || user?.pagePermissions?.[permission] === true;
+  const canOpenCashRegister = can('cash.open_session') && can('cash.opening_amount');
+  const canCloseCashRegister = can('cash.count') && can('cash.close_session');
   const [orders, setOrders] = useState([]);
   const [reports, setReports] = useState({});
   const [isLoading, setIsLoading] = useState(true);
@@ -550,7 +555,7 @@ export default function CashierMode() {
 
               <div className="border-t pt-4">
                 <h3 className="text-lg font-semibold mb-4">Fermer la Caisse</h3>
-                <div className="space-y-4">
+                {canCloseCashRegister ? <div className="space-y-4">
                   <div>
                     <Label htmlFor="closing-balance">Solde de clôture (FCFA)</Label>
                     <Input
@@ -580,7 +585,7 @@ export default function CashierMode() {
                     <Lock className="w-4 h-4" />
                     {isClosingRegister ? 'Fermeture...' : 'Fermer la Caisse'}
                   </Button>
-                </div>
+                </div> : <p className="rounded-md bg-amber-50 p-4 text-amber-900">Vous pouvez consulter la caisse, mais vos droits ne permettent pas de la clôturer.</p>}
               </div>
             </div>
           ) : (
@@ -588,7 +593,7 @@ export default function CashierMode() {
               <p className="text-gray-600">La caisse est actuellement fermée.</p>
               <div className="border-t pt-4">
                 <h3 className="text-lg font-semibold mb-4">Ouvrir la Caisse</h3>
-                <div className="space-y-4">
+                {canOpenCashRegister ? <div className="space-y-4">
                   <div>
                     <Label htmlFor="opening-balance">Solde d'ouverture (FCFA)</Label>
                     <Input
@@ -609,7 +614,7 @@ export default function CashierMode() {
                     <Unlock className="w-4 h-4" />
                     {isOpeningRegister ? 'Ouverture...' : 'Ouvrir la Caisse'}
                   </Button>
-                </div>
+                </div> : <p className="rounded-md bg-amber-50 p-4 text-amber-900">Vous pouvez consulter la caisse, mais vos droits ne permettent pas de l’ouvrir.</p>}
               </div>
             </div>
           )}

@@ -2,7 +2,7 @@ const express = require('express');
 const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcryptjs');
 const { authenticateToken, requireRole, requirePermission, hasPermission } = require('../middleware/auth');
-const { ACCESS_PERMISSIONS, PROFILE_GRANTS, ROLE_PROFILES } = require('../config/accessControl');
+const { ACCESS_PERMISSIONS, PROFILE_GRANTS, ROLE_PROFILES, ACCESS_MODULES, deriveModuleAccess } = require('../config/accessControl');
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -205,7 +205,7 @@ router.get('/access/roles', authenticateToken, requireRole(['admin']), async (_r
       orderBy: { id: 'asc' }
     });
     const orderedRoles = roles.sort((a, b) => ROLE_PROFILES.findIndex(profile => profile.slug === a.slug) - ROLE_PROFILES.findIndex(profile => profile.slug === b.slug));
-    res.json({ permissions: ACCESS_PERMISSIONS, roles: orderedRoles.map(role => ({
+    res.json({ permissions: ACCESS_PERMISSIONS, modules: ACCESS_MODULES, roles: orderedRoles.map(role => ({
       id: role.id, slug: role.slug, name: role.name, description: role.description,
       permissions: Object.fromEntries(role.rolePermissions.map(entry => [entry.permission.code, entry.granted]))
     })) });
@@ -251,7 +251,7 @@ router.get('/access/users', prepareAccessCatalog, authenticateToken, requireRole
   try {
     const users = await prisma.user.findMany({
       where: { role: { not: 'client' } },
-      select: { id: true, full_name: true, email: true, role: true, is_active: true,
+      select: { id: true, full_name: true, email: true, role: true, is_active: true, pagePermissions: true,
         roleRef: { select: { rolePermissions: { include: { permission: { select: { code: true } } } } } },
         userPermissions: { include: { permission: { select: { code: true } } } } },
       orderBy: [{ full_name: 'asc' }, { id: 'asc' }]
@@ -260,7 +260,9 @@ router.get('/access/users', prepareAccessCatalog, authenticateToken, requireRole
       const effective = {};
       user.roleRef?.rolePermissions.forEach(entry => { effective[entry.permission.code] = entry.granted; });
       user.userPermissions.forEach(entry => { effective[entry.permission.code] = entry.granted; });
-      return { id: user.id, staff_code: `KOT-${String(user.id).padStart(6, '0')}`, full_name: user.full_name, email: user.email, role: user.role, is_active: user.is_active, permissions: effective };
+      const savedPages = user.pagePermissions && typeof user.pagePermissions === 'object' ? user.pagePermissions : {};
+      const moduleAccess = { ...deriveModuleAccess(effective, savedPages), ...(savedPages.__moduleAccess || {}) };
+      return { id: user.id, staff_code: `KOT-${String(user.id).padStart(6, '0')}`, full_name: user.full_name, email: user.email, role: user.role, is_active: user.is_active, permissions: effective, moduleAccess };
     }));
   } catch (error) {
     console.error('Get account access list error:', error);
@@ -272,23 +274,39 @@ router.put('/access/users/:id', prepareAccessCatalog, authenticateToken, require
   try {
     const id = Number(req.params.id);
     const permissions = req.body?.permissions;
+    const moduleAccess = req.body?.moduleAccess;
     if (!Number.isInteger(id) || !permissions || typeof permissions !== 'object' || Array.isArray(permissions)) {
       return res.status(400).json({ message: 'Compte ou matrice de permissions invalide.' });
     }
     if (Object.keys(permissions).some(code => !ACCESS_PERMISSIONS.some(permission => permission.code === code)) || Object.values(permissions).some(value => typeof value !== 'boolean')) {
       return res.status(400).json({ message: 'La matrice contient des droits inconnus ou des valeurs invalides.' });
     }
-    const target = await prisma.user.findUnique({ where: { id }, select: { id: true, full_name: true, role: true } });
+    if (moduleAccess !== undefined && (!moduleAccess || typeof moduleAccess !== 'object' || Array.isArray(moduleAccess)
+      || Object.keys(moduleAccess).some(key => !ACCESS_MODULES.some(module => module.key === key))
+      || Object.values(moduleAccess).some(value => typeof value !== 'boolean')
+      || ACCESS_MODULES.some(({ key }) => typeof moduleAccess[key] !== 'boolean'))) {
+      return res.status(400).json({ message: 'Les accès aux modules sont invalides.' });
+    }
+    const target = await prisma.user.findUnique({ where: { id }, select: { id: true, full_name: true, role: true, pagePermissions: true } });
     if (!target || target.role === 'client') return res.status(404).json({ message: 'Compte staff introuvable.' });
     if (target.role === 'admin' && ACCESS_PERMISSIONS.some(({ code }) => permissions[code] !== true)) return res.status(400).json({ message: 'Le compte Direction conserve tous les droits.' });
+    if (target.role === 'admin' && moduleAccess && ACCESS_MODULES.some(({ key }) => moduleAccess[key] !== true)) return res.status(400).json({ message: 'Le compte Direction conserve l’accès à tous les modules.' });
 
     const permissionRows = await prisma.permission.findMany({ select: { id: true, code: true } });
     const ids = new Map(permissionRows.map(permission => [permission.code, permission.id]));
-    await prisma.$transaction(ACCESS_PERMISSIONS.map(({ code }) => prisma.userPermission.upsert({
+    const updates = ACCESS_PERMISSIONS.map(({ code }) => prisma.userPermission.upsert({
       where: { user_id_permission_id: { user_id: id, permission_id: ids.get(code) } },
       update: { granted: permissions[code] === true },
       create: { user_id: id, permission_id: ids.get(code), granted: permissions[code] === true }
-    })));
+    }));
+    if (moduleAccess !== undefined) {
+      const savedPages = target.pagePermissions && typeof target.pagePermissions === 'object' ? target.pagePermissions : {};
+      updates.push(prisma.user.update({
+        where: { id },
+        data: { pagePermissions: { ...savedPages, __moduleAccess: moduleAccess } }
+      }));
+    }
+    await prisma.$transaction(updates);
     await recordAccessChange(req.user, 'access_user_permissions_updated', `Droits individuels modifiés pour ${target.full_name} (ID ${id}).`);
     res.json({ message: 'Droits individuels enregistrés.' });
   } catch (error) {

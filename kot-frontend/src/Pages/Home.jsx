@@ -9,6 +9,8 @@ import { Card } from "../Components/ui/card";
 import api from "../services/api.service";
 import { resolveMediaUrl } from "../utils/media";
 
+const googleBusinessUrl = "https://www.google.com/search?sca_esv=a01675dfb8ba76df&sxsrf=APpeQnv3l7iQNhf9eRFCV1n_Ke2QARbUCw:1792157848404&q=King+Of+Tacos&si=APenkKm7iecQ4G6P-TsbSMFKIQtv3EFIqRAFw-i8uEbk55Z-_xPbtkexS9VQrrLOMRLbmttvbLUuK_0JGvwHqWArbwRB-Kem1slAU9M02WEJPhb126wHEZAZFBZsyGGKqODXz86Mj61K&sa=X&ved=2ahUKEwjUtr2f1L6XAxUvVEEAHbc5IPIQrrQLegQIHRAA&biw=1366&bih=607&dpr=1#";
+
 export default function Home() {
   const { isAuthenticated } = useAuthContext();
   const [heroMedia, setHeroMedia] = useState({ media_url: '', media_type: '', overlay_opacity: 85, position_x: 50, position_y: 50, image_scale: 100 });
@@ -243,6 +245,26 @@ export default function Home() {
           </div>
         </section>
       )}
+
+      <section className="bg-white px-6 pb-16" aria-labelledby="google-reviews-heading">
+        <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-6 rounded-3xl border border-slate-200 bg-slate-50 p-8 text-center sm:p-10 md:flex-row md:text-left">
+          <div>
+            <p className="mb-2 text-sm font-bold uppercase tracking-[0.16em] text-amber-700">King Of Tacos sur Google</p>
+            <h2 id="google-reviews-heading" className="text-2xl font-bold text-slate-900 sm:text-3xl">Votre avis compte aussi</h2>
+            <p className="mt-2 max-w-2xl text-slate-600">Consultez notre fiche Google pour lire les avis et partager votre expérience.</p>
+          </div>
+          <a
+            href={googleBusinessUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-white px-5 py-3 font-semibold text-slate-900 shadow-sm ring-1 ring-slate-300 transition hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-600 sm:w-auto"
+          >
+            <Star className="h-5 w-5 fill-amber-400 text-amber-500" aria-hidden="true" />
+            Voir les avis et laisser un avis
+            <ArrowRight className="h-4 w-4" aria-hidden="true" />
+          </a>
+        </div>
+      </section>
 
       {/* CTA Section */}
       <section className="py-20 bg-gradient-to-r from-amber-600 to-yellow-500 text-white relative overflow-hidden">

@@ -99,9 +99,9 @@ export default function Layout({ children, currentPageName }) {
 
   const canAccessAdminNavItem = (item) => {
     if (!item.station) return hasPagePermission(item.permission);
-    if (item.station === "bar") return hasPagePermission("kitchen.bar.view") || hasPagePermission("bar");
+    if (item.station === "bar") return hasPagePermission("bar");
     const permission = item.station === "cuisine_chaude" ? "kitchen_hot" : "kitchen_cold";
-    return hasPagePermission("kitchen.cuisine.view") || (user?.role !== 'bar' && (hasPagePermission(permission) || hasPagePermission("kitchen")));
+    return hasPagePermission(permission);
   };
 
   if (isAdminPage) {
