@@ -103,8 +103,10 @@ const printCashReceipt = order => {
 export default function CashierMode() {
   const { user } = useAuthContext();
   const can = permission => user?.role === 'admin' || user?.pagePermissions?.[permission] === true;
-  const canOpenCashRegister = can('cash.open_session') && can('cash.opening_amount');
-  const canCloseCashRegister = can('cash.count') && can('cash.close_session');
+  const canOpenCashRegister = can('cash.open_session');
+  const canSetOpeningAmount = can('cash.opening_amount');
+  const canCountCash = can('cash.count');
+  const canCloseCashRegister = can('cash.close_session');
   const [orders, setOrders] = useState([]);
   const [reports, setReports] = useState({});
   const [isLoading, setIsLoading] = useState(true);
@@ -379,14 +381,14 @@ export default function CashierMode() {
   };
 
   const openCashRegister = async () => {
-    if (!openingBalance || openingBalance < 0) {
+    if (canSetOpeningAmount && (openingBalance === '' || !Number.isSafeInteger(Number(openingBalance)) || Number(openingBalance) < 0)) {
       alert('Veuillez entrer un solde d\'ouverture valide');
       return;
     }
 
     setIsOpeningRegister(true);
     try {
-      await api.post('/cashier/session/open', { opening_balance: Number(openingBalance), emergency_code: emergencyReopenCode });
+      await api.post('/cashier/session/open', { opening_balance: canSetOpeningAmount ? Number(openingBalance) : 0, emergency_code: emergencyReopenCode });
       await loadCashRegisterSession();
       setOpeningBalance('');
       setEmergencyReopenCode('');
@@ -399,7 +401,7 @@ export default function CashierMode() {
   };
 
   const closeCashRegister = async () => {
-    if (!closingBalance) {
+    if (canCountCash && (closingBalance === '' || !Number.isSafeInteger(Number(closingBalance)) || Number(closingBalance) < 0)) {
       alert('Veuillez entrer le solde de clôture');
       return;
     }
@@ -407,7 +409,7 @@ export default function CashierMode() {
     setIsClosingRegister(true);
     try {
       const closeResponse = await api.post('/cashier/session/close', {
-        closing_balance: Number(closingBalance),
+        closing_balance: canCountCash ? Number(closingBalance) : undefined,
         notes: closingNotes
       });
       // Télécharger automatiquement le rapport PDF de fermeture
@@ -556,7 +558,7 @@ export default function CashierMode() {
               <div className="border-t pt-4">
                 <h3 className="text-lg font-semibold mb-4">Fermer la Caisse</h3>
                 {canCloseCashRegister ? <div className="space-y-4">
-                  <div>
+                  {canCountCash && <div>
                     <Label htmlFor="closing-balance">Solde de clôture (FCFA)</Label>
                     <Input
                       id="closing-balance"
@@ -566,7 +568,8 @@ export default function CashierMode() {
                       onChange={(e) => setClosingBalance(e.target.value)}
                       placeholder="Entrez le solde réel"
                     />
-                  </div>
+                  </div>}
+                  {!canCountCash && <p className="rounded-md bg-amber-50 p-4 text-amber-900">Vous pouvez clôturer la caisse sans effectuer le comptage. Le solde théorique sera enregistré comme solde de clôture.</p>}
                   <div>
                     <Label htmlFor="closing-notes">Notes (optionnel)</Label>
                     <Textarea
@@ -594,7 +597,7 @@ export default function CashierMode() {
               <div className="border-t pt-4">
                 <h3 className="text-lg font-semibold mb-4">Ouvrir la Caisse</h3>
                 {canOpenCashRegister ? <div className="space-y-4">
-                  <div>
+                  {canSetOpeningAmount ? <div>
                     <Label htmlFor="opening-balance">Solde d'ouverture (FCFA)</Label>
                     <Input
                       id="opening-balance"
@@ -604,7 +607,7 @@ export default function CashierMode() {
                       onChange={(e) => setOpeningBalance(e.target.value)}
                       placeholder="Entrez le solde d'ouverture"
                     />
-                  </div>
+                  </div> : <p className="rounded-md bg-amber-50 p-4 text-amber-900">Vous pouvez ouvrir la caisse. Sans le droit de saisir le fond de caisse, le solde d’ouverture sera de 0 FCFA.</p>}
                   <div><Label htmlFor="emergency-reopen-code">Code d’urgence si la caisse a déjà été fermée aujourd’hui</Label><Input id="emergency-reopen-code" type="password" autoComplete="off" value={emergencyReopenCode} onChange={event => setEmergencyReopenCode(event.target.value)} placeholder="Laisser vide pour une ouverture normale" /></div>
                   <Button
                     onClick={openCashRegister}

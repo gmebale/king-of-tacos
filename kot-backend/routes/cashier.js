@@ -514,9 +514,10 @@ router.put('/session/emergency-code', authenticateToken, requireRole(['admin']),
 });
 
 // Open cash register
-router.post('/session/open', authenticateToken, requirePagePermission('cashier'), requirePermission('cash.open_session'), requirePermission('cash.opening_amount'), async (req, res) => {
+router.post('/session/open', authenticateToken, requirePagePermission('cashier'), requirePermission('cash.open_session'), async (req, res) => {
   try {
-    const { opening_balance } = req.body;
+    const canSetOpeningAmount = hasPermission(req.user, 'cash.opening_amount');
+    const opening_balance = canSetOpeningAmount ? req.body?.opening_balance : 0;
 
     if (!Number.isSafeInteger(opening_balance) || opening_balance < 0) {
       return res.status(400).json({ message: 'Le solde d’ouverture doit être un nombre entier de FCFA positif ou nul.' });
@@ -576,13 +577,10 @@ router.post('/session/open', authenticateToken, requirePagePermission('cashier')
 });
 
 // Close cash register
-router.post('/session/close', authenticateToken, requirePagePermission('cashier'), requirePermission('cash.count'), requirePermission('cash.close_session'), async (req, res) => {
+router.post('/session/close', authenticateToken, requirePagePermission('cashier'), requirePermission('cash.close_session'), async (req, res) => {
   try {
-    const { closing_balance, notes } = req.body;
-
-    if (!Number.isSafeInteger(closing_balance) || closing_balance < 0) {
-      return res.status(400).json({ message: 'Le solde de clôture doit être un nombre entier de FCFA positif ou nul.' });
-    }
+    const { notes } = req.body;
+    const canCountCash = hasPermission(req.user, 'cash.count');
 
     // Get current open session
     const session = await prisma.cashRegisterSession.findFirst({
@@ -591,6 +589,11 @@ router.post('/session/close', authenticateToken, requirePagePermission('cashier'
 
     if (!session) {
       return res.status(400).json({ message: 'No open cash register session found' });
+    }
+
+    const closing_balance = canCountCash ? req.body?.closing_balance : session.current_balance;
+    if (!Number.isSafeInteger(closing_balance) || closing_balance < 0) {
+      return res.status(400).json({ message: 'Le solde de clôture doit être un nombre entier de FCFA positif ou nul.' });
     }
 
     const pendingCounterOrders = await prisma.order.findMany({
