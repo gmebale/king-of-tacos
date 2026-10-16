@@ -1,7 +1,7 @@
 const express = require('express');
 const { PrismaClient } = require('@prisma/client');
 const { getPaidItemTaxMultiplier, getOrderItemTaxQuantity } = require('../utils/orderTaxAdjustment');
-const { authenticateToken, requirePagePermission } = require('../middleware/auth');
+const { authenticateToken, requirePagePermission, requirePermission } = require('../middleware/auth');
 
 const router = express.Router();
 const prisma = new PrismaClient();
