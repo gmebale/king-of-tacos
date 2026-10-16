@@ -22,6 +22,7 @@ export default function Checkout() {
   const [user, setUser] = useState(null);
   const [serviceLocations, setServiceLocations] = useState([]);
   const [onlineOrdering, setOnlineOrdering] = useState(null);
+  const [deliveryInfo, setDeliveryInfo] = useState(null);
   const [linkedCustomer, setLinkedCustomer] = useState(null);
   const [searchingLoyaltyCustomer, setSearchingLoyaltyCustomer] = useState(false);
   const [promoInput, setPromoInput] = useState('');
@@ -56,6 +57,9 @@ export default function Checkout() {
     api.get('/settings/online-ordering')
       .then(response => setOnlineOrdering(response.data))
       .catch(error => console.error('Error loading online ordering availability:', error));
+    api.get('/settings/delivery-info')
+      .then(response => setDeliveryInfo(response.data))
+      .catch(error => console.error('Error loading delivery information:', error));
   }, []);
 
   const loadCart = () => {
@@ -331,7 +335,7 @@ export default function Checkout() {
                         <Truck className="w-5 h-5 text-amber-600" />
                         <div>
                           <p className="font-semibold">Livraison</p>
-                          <p className="text-sm text-gray-500">Livraison à domicile · frais à régler au livreur partenaire</p>
+                          <p className="text-sm text-gray-500">Frais facturés séparément par le livreur partenaire</p>
                         </div>
                       </Label>
                     </div>}
@@ -365,17 +369,36 @@ export default function Checkout() {
                   )}
 
                   {formData.order_type === "livraison" && (
-                    <div className="mt-4">
-                      <Label htmlFor="address">Adresse de livraison *</Label>
-                      <Textarea
-                        id="address"
-                        required
-                        value={formData.delivery_address}
-                        onChange={(e) => setFormData({...formData, delivery_address: e.target.value})}
-                        className="rounded-xl border-2 focus:border-amber-400"
-                        placeholder="Numéro, rue, quartier, ville..."
-                        rows={3}
-                      />
+                    <div className="mt-4 space-y-3">
+                      <div>
+                        <Label htmlFor="address">Adresse de livraison *</Label>
+                        <Textarea
+                          id="address"
+                          required
+                          value={formData.delivery_address}
+                          onChange={(e) => setFormData({...formData, delivery_address: e.target.value})}
+                          className="rounded-xl border-2 focus:border-amber-400"
+                          placeholder="Numéro, rue, quartier, ville..."
+                          rows={3}
+                        />
+                      </div>
+                      <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-950">
+                        <p className="font-semibold">Zone et frais de livraison</p>
+                        <p className="mt-1">
+                          {deliveryInfo?.delivery_radius_km
+                            ? `Rayon indicatif : ${deliveryInfo.delivery_radius_km} km autour du restaurant. `
+                            : 'Les quartiers desservis dépendent de votre adresse. '}
+                          Les frais sont fixés par le livreur partenaire et ne sont pas inclus dans le total ci-dessous. Confirmez la zone et le tarif avec nous avant de valider.
+                        </p>
+                        {deliveryInfo?.phone && (
+                          <a
+                            href={`tel:${String(deliveryInfo.phone).replace(/[^+\d]/g, '')}`}
+                            className="mt-3 inline-flex min-h-10 items-center font-semibold text-blue-800 underline underline-offset-2"
+                          >
+                            Appeler le restaurant pour confirmer
+                          </a>
+                        )}
+                      </div>
                     </div>
                   )}
 

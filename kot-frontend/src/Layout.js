@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { createPageUrl } from "./utils";
 import { useAuthContext } from "./contexts/AuthContext";
@@ -36,15 +36,28 @@ export default function Layout({ children, currentPageName }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [cartCount, setCartCount] = useState(0);
 
-  useEffect(() => {
-    updateCartCount();
+  const updateCartCount = useCallback(() => {
+    let cart = [];
+    try {
+      cart = JSON.parse(localStorage.getItem('kingoftacos_cart') || '[]');
+    } catch (error) {
+      console.error('Impossible de lire le panier enregistré:', error);
+    }
+    const total = Array.isArray(cart)
+      ? cart.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0)
+      : 0;
+    setCartCount(total);
   }, []);
 
-  const updateCartCount = () => {
-    const cart = JSON.parse(localStorage.getItem('kingoftacos_cart') || '[]');
-    const total = cart.reduce((sum, item) => sum + item.quantity, 0);
-    setCartCount(total);
-  };
+  useEffect(() => {
+    updateCartCount();
+    window.addEventListener('cart-updated', updateCartCount);
+    window.addEventListener('storage', updateCartCount);
+    return () => {
+      window.removeEventListener('cart-updated', updateCartCount);
+      window.removeEventListener('storage', updateCartCount);
+    };
+  }, [location.pathname, updateCartCount]);
 
   const handleLogout = async () => {
     await logout();
@@ -106,9 +119,7 @@ export default function Layout({ children, currentPageName }) {
         <aside className={`fixed lg:static lg:top-0 top-16 left-0 bottom-0 transition-transform duration-300 ease-in-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 flex flex-col w-64 bg-gradient-to-b from-gray-900 to-black text-white border-r border-gray-800 z-[60]`}>
           <div className="p-6 border-b border-gray-800">
             <Link to={createPageUrl("Home")} className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-yellow-400 to-amber-600 rounded-xl flex items-center justify-center">
-                <UtensilsCrossed className="w-6 h-6 text-white" />
-              </div>
+              <img src="/Images/king-of-tacos-logo.jpg" alt="" className="h-10 w-10 rounded-xl bg-white object-contain" />
               <div>
                 <h1 className="text-xl font-bold">King Of Tacos</h1>
                 <p className="text-xs text-gray-400">Admin</p>
@@ -153,7 +164,10 @@ export default function Layout({ children, currentPageName }) {
           <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(!sidebarOpen)}>
             <MenuIcon className="w-6 h-6" />
           </Button>
-          <h1 className="text-xl font-bold">King Of Tacos</h1>
+          <div className="flex items-center gap-2">
+            <img src="/Images/king-of-tacos-logo.jpg" alt="" className="h-9 w-9 rounded-lg bg-white object-contain" />
+            <h1 className="text-base font-bold sm:text-xl">King Of Tacos</h1>
+          </div>
           <Button variant="ghost" size="icon" onClick={handleLogout}>
             <LogOut className="w-5 h-5" />
           </Button>
@@ -186,9 +200,7 @@ export default function Layout({ children, currentPageName }) {
         <div className="w-full px-6 py-4">
           <div className="flex items-center justify-between">
             <Link to={createPageUrl("Home")} className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-gradient-to-br from-yellow-400 to-amber-600 rounded-2xl flex items-center justify-center shadow-lg">
-                <UtensilsCrossed className="w-7 h-7 text-white" />
-              </div>
+              <img src="/Images/king-of-tacos-logo.jpg" alt="" className="h-12 w-12 rounded-2xl bg-white object-contain shadow-sm" />
               <div>
                 <h1 className="text-2xl font-bold bg-gradient-to-r from-amber-600 to-yellow-500 bg-clip-text text-transparent">
                   King Of Tacos

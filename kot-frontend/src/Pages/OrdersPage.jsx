@@ -14,13 +14,14 @@ import {
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "../Components/ui/card";
 import { Button } from "../Components/ui/button";
+import { Input } from "../Components/ui/input";
 import { Badge } from "../Components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../Components/ui/tabs";
 import { Textarea } from "../Components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "../Components/ui/dialog";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { createPageUrl } from "../utils";
 import api from "../services/api.service";
 import { Order } from '../Entities/Order';
@@ -34,6 +35,7 @@ import { formatCustomization } from "../utils/customization";
 
 export default function OrdersPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { addToCart } = useCart();
   const [orders, setOrders] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -48,8 +50,19 @@ export default function OrdersPage() {
   const [cancellationReasons, setCancellationReasons] = useState([]);
   const [cancellationOrder, setCancellationOrder] = useState(null);
   const [isCancelling, setIsCancelling] = useState(false);
+  const [guestCredentials, setGuestCredentials] = useState({
+    order_code: location.state?.guestOrder?.orderCode || '',
+    phone: location.state?.guestOrder?.phone || ''
+  });
+  const [guestOrder, setGuestOrder] = useState(null);
+  const [guestTrackError, setGuestTrackError] = useState('');
+  const [isTrackingGuestOrder, setIsTrackingGuestOrder] = useState(false);
 
   useEffect(() => {
+    if (!User.isAuthenticated()) {
+      setIsLoading(false);
+      return;
+    }
     loadOrders();
     loadProducts();
     loadCancellationReasons();
@@ -63,6 +76,21 @@ export default function OrdersPage() {
       console.error('Error loading orders:', error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const trackGuestOrder = async (event) => {
+    event.preventDefault();
+    setGuestTrackError('');
+    setGuestOrder(null);
+    setIsTrackingGuestOrder(true);
+    try {
+      const response = await api.post('/orders/track', guestCredentials);
+      setGuestOrder(response.data);
+    } catch (error) {
+      setGuestTrackError(error.response?.data?.message || 'Impossible de retrouver cette commande. Réessayez.');
+    } finally {
+      setIsTrackingGuestOrder(false);
     }
   };
 
@@ -213,25 +241,47 @@ export default function OrdersPage() {
   // Check if user is authenticated
   if (!User.isAuthenticated()) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 p-4 md:p-6 flex items-center justify-center">
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="text-center max-w-md"
-        >
-          <Package className="w-16 h-16 mx-auto mb-4 text-gray-400" />
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">
-            Connexion requise
-          </h1>
-          <p className="text-gray-600 mb-6">
-            Vous devez vous connecter pour pouvoir suivre vos commandes.
-          </p>
-          <Button
-            onClick={() => navigate(createPageUrl("Login"))}
-            className="w-full"
-          >
-            Se connecter
-          </Button>
+      <div className="min-h-screen bg-gradient-to-br from-amber-50 via-white to-yellow-50 px-4 py-10">
+        <motion.div initial={{ opacity: 0, y: -16 }} animate={{ opacity: 1, y: 0 }} className="mx-auto max-w-xl">
+          <Card className="rounded-3xl border border-amber-100 bg-white p-5 shadow-lg sm:p-8">
+            <CardHeader className="px-0 pt-0">
+              <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-100 text-amber-700"><Package className="h-7 w-7" /></div>
+              <CardTitle className="text-2xl text-slate-900">Suivre une commande invitée</CardTitle>
+              <p className="text-sm leading-6 text-slate-600">Saisissez le numéro affiché après votre commande et le téléphone utilisé au moment de l’achat.</p>
+            </CardHeader>
+            <CardContent className="px-0 pb-0">
+              <form onSubmit={trackGuestOrder} className="space-y-4">
+                <div>
+                  <label htmlFor="guest-order-code" className="mb-1.5 block text-sm font-medium text-slate-800">Numéro de commande</label>
+                  <Input id="guest-order-code" required autoComplete="off" placeholder="KOT-260101-0001" value={guestCredentials.order_code} onChange={event => setGuestCredentials(current => ({ ...current, order_code: event.target.value.toUpperCase() }))} />
+                </div>
+                <div>
+                  <label htmlFor="guest-order-phone" className="mb-1.5 block text-sm font-medium text-slate-800">Téléphone utilisé pour la commande</label>
+                  <Input id="guest-order-phone" required type="tel" autoComplete="tel" placeholder="Ex. : 074452464" value={guestCredentials.phone} onChange={event => setGuestCredentials(current => ({ ...current, phone: event.target.value }))} />
+                </div>
+                {guestTrackError && <p className="text-sm text-red-700" role="alert">{guestTrackError}</p>}
+                <Button type="submit" disabled={isTrackingGuestOrder} className="w-full rounded-xl bg-amber-500 py-5 text-slate-950 hover:bg-amber-600">
+                  {isTrackingGuestOrder ? 'Recherche…' : 'Afficher le suivi'}
+                </Button>
+              </form>
+              {guestOrder && (
+                <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-4" role="status">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="font-bold text-slate-900">Commande {guestOrder.order_code}</p>
+                    <Badge className={`${getStatusColor(guestOrder.status)} border`}>{getStatusText(guestOrder.status)}</Badge>
+                  </div>
+                  <p className="mt-2 text-sm text-slate-600">{format(new Date(guestOrder.created_date), 'dd/MM/yyyy HH:mm', { locale: fr })} · {guestOrder.order_type === 'livraison' ? 'Livraison' : 'À emporter'}</p>
+                  <ul className="mt-3 space-y-1 border-t border-amber-200 pt-3 text-sm text-slate-700">
+                    {guestOrder.items.map((item, index) => <li key={`${item.product_name}-${index}`}>{item.quantity} × {item.product_name}</li>)}
+                  </ul>
+                  <p className="mt-3 text-right font-bold text-slate-900">{Number(guestOrder.total_amount).toLocaleString()} FCFA</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+          <div className="mt-5 text-center">
+            <Button variant="outline" onClick={() => navigate(createPageUrl('Login'))}>Se connecter à mon compte</Button>
+          </div>
         </motion.div>
       </div>
     );

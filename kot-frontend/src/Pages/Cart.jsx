@@ -106,6 +106,7 @@ export default function Cart() {
                             size="icon"
                             variant="ghost"
                             onClick={() => removeFromCart(item.product.id, item.customization)}
+                            aria-label={`Retirer ${item.product.name} du panier`}
                             className="text-red-500 hover:bg-red-50"
                           >
                             <Trash2 className="w-4 h-4" />
@@ -117,6 +118,7 @@ export default function Cart() {
                             size="icon"
                             variant="outline"
                             onClick={() => updateQuantity(item.product.id, item.quantity - 1, item.customization)}
+                            aria-label={`Diminuer la quantité de ${item.product.name}`}
                             className="h-11 w-11 rounded-xl border-amber-400 text-amber-600 hover:bg-amber-50 sm:h-8 sm:w-8"
                           >
                             <Minus className="w-3 h-3" />
@@ -127,6 +129,7 @@ export default function Cart() {
                           <Button
                             size="icon"
                             onClick={() => updateQuantity(item.product.id, item.quantity + 1, item.customization)}
+                            aria-label={`Augmenter la quantité de ${item.product.name}`}
                             className="h-11 w-11 rounded-xl bg-gradient-to-r from-yellow-400 to-amber-600 text-slate-900 sm:h-8 sm:w-8"
                           >
                             <Plus className="w-3 h-3" />

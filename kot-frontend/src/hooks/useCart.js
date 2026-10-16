@@ -52,6 +52,7 @@ export const useCart = () => {
     try {
       localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(newCart));
       setCart(newCart);
+      window.dispatchEvent(new Event('cart-updated'));
     } catch (error) {
       console.error('Erreur lors de la sauvegarde du panier:', error);
     }

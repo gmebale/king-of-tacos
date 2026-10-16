@@ -112,7 +112,7 @@ export default function Menu() {
 
     setCart(newCart);
     localStorage.setItem('kingoftacos_cart', JSON.stringify(newCart));
-    window.dispatchEvent(new Event('storage'));
+    window.dispatchEvent(new Event('cart-updated'));
   };
 
   const updateQuantity = (productId, change, customization = null) => {
@@ -127,7 +127,7 @@ export default function Menu() {
 
     setCart(newCart);
     localStorage.setItem('kingoftacos_cart', JSON.stringify(newCart));
-    window.dispatchEvent(new Event('storage'));
+    window.dispatchEvent(new Event('cart-updated'));
   };
 
   const cartTotal = cart.reduce((sum, item) => {
@@ -287,9 +287,7 @@ export default function Menu() {
                   />
                 );
               })}
-            </motion.div> : <motion.p key={category} initial={{ opacity: 0, x: swipeDirection * 48 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: swipeDirection * -48 }} transition={{ duration: 0.18 }} className="rounded-2xl border border-gray-200 bg-white px-5 py-8 text-center text-gray-600">
-              {categories.length ? 'Nous n’avons pas trouvé de produit dans cette catégorie.' : 'Notre menu sera bientôt disponible.'}
-            </motion.p>
+            </motion.div> : null
           )}
         </AnimatePresence>
         </div>
@@ -311,7 +309,18 @@ export default function Menu() {
             animate={{ opacity: 1 }}
             className="text-center py-20"
           >
-            <p className="text-gray-500 text-lg">Aucun produit trouvé</p>
+            <p className="text-gray-700 text-lg font-medium">
+              {searchQuery
+                ? `Aucun produit ne correspond à « ${searchQuery} ».`
+                : categories.length
+                  ? 'Cette catégorie ne contient pas encore de produit.'
+                  : 'Notre menu sera bientôt disponible.'}
+            </p>
+            {searchQuery && (
+              <Button variant="outline" onClick={() => setSearchQuery('')} className="mt-4">
+                Effacer la recherche
+              </Button>
+            )}
           </motion.div>
         )}
       </div>

@@ -27,7 +27,7 @@ router.get('/public', async (_req, res) => {
           rating: true,
           comment: true,
           created_at: true,
-          user: { select: { full_name: true } }
+          user: { select: { id: true } }
         }
       })
     ]);
@@ -35,10 +35,7 @@ router.get('/public', async (_req, res) => {
       total,
       average_rating: aggregate._avg.rating ? Number(aggregate._avg.rating.toFixed(1)) : 0,
       data: rows.map(({ user, ...review }) => {
-        const [firstName, ...familyNames] = String(user?.full_name || '').trim().split(/\s+/).filter(Boolean);
-        const customerName = firstName
-          ? `${firstName}${familyNames.length ? ` ${familyNames[0].charAt(0).toUpperCase()}.` : ''}`
-          : 'Client King Of Tacos';
+        const customerName = user?.id ? `Client ${String(user.id).slice(-4)}` : 'Client vérifié';
         return { ...review, customer_name: customerName };
       })
     });

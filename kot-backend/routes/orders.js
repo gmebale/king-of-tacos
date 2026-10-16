@@ -214,6 +214,13 @@ async function generateOrderCode() {
   return code;
 }
 
+function normalizeGabonPhone(value) {
+  let digits = String(value || '').replace(/\D/g, '');
+  if (digits.startsWith('00241')) digits = digits.slice(5);
+  else if (digits.startsWith('241')) digits = digits.slice(3);
+  return digits.length === 8 ? `0${digits}` : digits;
+}
+
 // Utility function to format customization details
 function formatCustomization(customization, productCustomization) {
   if (!customization || !productCustomization?.isConfigurable) {
@@ -308,6 +315,41 @@ router.get('/', authenticateToken, requirePagePermission('orders', 'dashboard'),
 });
 
 // Get user's orders
+router.post('/track', async (req, res) => {
+  try {
+    const orderCode = typeof req.body.order_code === 'string' ? req.body.order_code.trim().toUpperCase() : '';
+    const phoneDigits = normalizeGabonPhone(req.body.phone);
+    if (!/^KOT-\d{6}-\d{4,}$/.test(orderCode) || phoneDigits.length < 7 || phoneDigits.length > 15) {
+      return res.status(400).json({ message: 'Saisissez un numéro de commande et le téléphone utilisé lors de la commande.' });
+    }
+
+    const order = await prisma.order.findUnique({
+      where: { order_code: orderCode },
+      select: {
+        order_code: true,
+        status: true,
+        payment_status: true,
+        order_type: true,
+        total_amount: true,
+        created_date: true,
+        customer_phone: true,
+        items: { select: { product_name: true, quantity: true } }
+      }
+    });
+    const savedPhoneDigits = normalizeGabonPhone(order?.customer_phone);
+    if (!order || !savedPhoneDigits || savedPhoneDigits !== phoneDigits) {
+      return res.status(404).json({ message: 'Commande introuvable. Vérifiez le numéro et le téléphone saisis.' });
+    }
+
+    const { customer_phone, ...safeOrder } = order;
+    res.set('Cache-Control', 'no-store');
+    res.json(safeOrder);
+  } catch (error) {
+    console.error('Track guest order error:', error);
+    res.status(500).json({ message: 'Impossible de charger le suivi pour le moment.' });
+  }
+});
+
 router.get('/my-orders', authenticateToken, async (req, res) => {
   try {
     const orders = await prisma.order.findMany({

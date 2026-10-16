@@ -50,7 +50,6 @@ export default function Home() {
             muted
             loop
             playsInline
-            controls
             aria-label="Vidéo de présentation du restaurant"
             className="absolute inset-0 h-full w-full object-cover"
             style={{ objectPosition: `${heroMedia.position_x ?? 50}% ${heroMedia.position_y ?? 50}%`, transform: `scale(${Number(heroMedia.image_scale || 100) / 100})` }}
@@ -234,7 +233,7 @@ export default function Home() {
                       </div>
                       <div>
                         <p className="font-bold text-slate-900">{review.customer_name}</p>
-                        <p className="text-xs text-slate-500">Commande vérifiée</p>
+                        <p className="text-xs text-slate-500">Commande payée et terminée</p>
                       </div>
                     </div>
                   </Card>

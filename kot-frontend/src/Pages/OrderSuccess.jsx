@@ -9,6 +9,7 @@ import api from "../services/api.service";
 export default function OrderSuccess() {
   const location = useLocation();
   const pvitPayment = location.state?.pvitPayment;
+  const guestOrder = location.state?.guestOrder;
   const statusProvider = pvitPayment ? 'pvit' : 'ebilling';
   const ebillingPayment = location.state?.ebillingPayment || pvitPayment;
   const [paymentStatus, setPaymentStatus] = useState(ebillingPayment ? (ebillingPayment.initiationError ? 'failed' : 'requires_action') : 'paid');
@@ -123,7 +124,8 @@ export default function OrderSuccess() {
         <h1 className="text-3xl md:text-4xl font-bold mb-4 text-gray-900">
           {!ebillingPayment ? 'Commande confirmée !' : paymentConflict ? 'Paiement reçu, vérification nécessaire' : isPaid ? 'Paiement confirmé !' : isFailed ? 'Paiement non abouti' : 'Confirmez sur votre téléphone'}
         </h1>
-        {ebillingPayment?.orderCode && <p className="mb-3 text-gray-600">Commande {ebillingPayment.orderCode}</p>}
+        {(ebillingPayment?.orderCode || guestOrder?.orderCode) && <p className="mb-3 font-semibold text-gray-700">Numéro de commande : {ebillingPayment?.orderCode || guestOrder.orderCode}</p>}
+        {guestOrder?.orderCode && <p className="mb-4 text-sm text-gray-600">Gardez ce numéro. Le téléphone utilisé pour commander vous sera demandé pour afficher le suivi.</p>}
         <p className="text-lg text-gray-600 mb-3">
           {!ebillingPayment
             ? 'Votre commande a bien été enregistrée.'
@@ -148,7 +150,7 @@ export default function OrderSuccess() {
               Réessayer avec {pvitPayment ? 'MyPVIT' : ebillingPayment.paymentSystemName === 'moovmoney' ? 'Moov Money' : ebillingPayment.paymentSystemName === 'SIMU' ? 'SIMU' : 'Airtel Money'}
             </Button>
           )}
-          <Link to={createPageUrl("OrdersPage")}>
+          <Link to={createPageUrl("OrdersPage")} state={guestOrder ? { guestOrder } : undefined}>
             <Button className="w-full bg-gradient-to-r from-yellow-400 to-amber-600 hover:from-yellow-500 hover:to-amber-700 text-slate-900 py-5 rounded-2xl text-lg">
               <List className="mr-2 h-5 w-5" />Suivre ma commande
             </Button>

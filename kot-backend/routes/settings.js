@@ -71,6 +71,25 @@ router.get('/online-ordering', async (_req, res) => {
   }
 });
 
+router.get('/delivery-info', async (_req, res) => {
+  try {
+    const rows = await prisma.settings.findMany({
+      where: { key: { in: ['delivery_radius', 'phone'] } },
+      select: { key: true, value: true }
+    });
+    const settings = Object.fromEntries(rows.map(row => [row.key, row.value]));
+    const radius = Number(settings.delivery_radius);
+    res.set('Cache-Control', 'public, max-age=300');
+    res.json({
+      delivery_radius_km: Number.isFinite(radius) && radius > 0 ? radius : null,
+      phone: settings.phone || null
+    });
+  } catch (error) {
+    console.error('Get delivery information error:', error);
+    res.status(500).json({ message: 'Impossible de charger les informations de livraison.' });
+  }
+});
+
 router.put('/online-ordering', authenticateToken, requirePagePermission('settings'), async (req, res) => {
   try {
     res.set('Cache-Control', 'no-store');

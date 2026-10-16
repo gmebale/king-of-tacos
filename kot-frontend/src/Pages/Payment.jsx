@@ -146,15 +146,17 @@ export default function Payment() {
       };
 
       if (isStaffOrder) {
-        await Order.createStaff({
+        const order = await Order.createStaff({
           ...orderData,
           payment_method: formData.payment_method,
           server_code: serverCode
         });
         sessionStorage.removeItem("kot_staff_order_mode");
         localStorage.removeItem('kingoftacos_cart');
-        window.dispatchEvent(new Event('storage'));
-        navigate(createPageUrl("OrderSuccess"));
+        window.dispatchEvent(new Event('cart-updated'));
+        navigate(createPageUrl("OrderSuccess"), {
+          state: { guestOrder: { orderCode: order.order_code, phone: formData.customer_phone } }
+        });
       } else {
         const useMobileMoney = mobileMoneyAvailable;
         const order = createdOrder || await Order.create({
@@ -164,7 +166,7 @@ export default function Payment() {
         if (useMobileMoney && !createdOrder) setCreatedOrder(order);
 
         localStorage.removeItem('kingoftacos_cart');
-        window.dispatchEvent(new Event('storage'));
+        window.dispatchEvent(new Event('cart-updated'));
 
         if (useMobileMoney && paymentProvider === 'pvit') {
           let initiationError = null;
@@ -176,7 +178,10 @@ export default function Payment() {
             initiationError = error.response?.data?.message || 'Le démarrage du paiement PVit n’a pas pu être confirmé.';
           }
           navigate(createPageUrl("OrderSuccess"), {
-            state: { pvitPayment: { orderId: order.id, orderCode: order.order_code, paymentStatusToken: order.payment_status_token, operatorCode: paymentSystemName, payerPhone: normalizedPvitPhone, initiationError } }
+            state: {
+              pvitPayment: { orderId: order.id, orderCode: order.order_code, paymentStatusToken: order.payment_status_token, operatorCode: paymentSystemName, payerPhone: normalizedPvitPhone, initiationError },
+              guestOrder: { orderCode: order.order_code, phone: formData.customer_phone }
+            }
           });
         } else if (useMobileMoney) {
           let initiationError = null;
@@ -189,10 +194,15 @@ export default function Payment() {
             initiationError = error.response?.data?.message || 'Le démarrage du paiement n’a pas pu être confirmé.';
           }
           navigate(createPageUrl("OrderSuccess"), {
-            state: { ebillingPayment: { orderId: order.id, orderCode: order.order_code, paymentStatusToken: order.payment_status_token, paymentSystemName, payerMsisdn: paymentSystemName === 'SIMU' ? simuMsisdn : undefined, initiationError } }
+            state: {
+              ebillingPayment: { orderId: order.id, orderCode: order.order_code, paymentStatusToken: order.payment_status_token, paymentSystemName, payerMsisdn: paymentSystemName === 'SIMU' ? simuMsisdn : undefined, initiationError },
+              guestOrder: { orderCode: order.order_code, phone: formData.customer_phone }
+            }
           });
         } else {
-          navigate(createPageUrl("OrderSuccess"));
+          navigate(createPageUrl("OrderSuccess"), {
+            state: { guestOrder: { orderCode: order.order_code, phone: formData.customer_phone } }
+          });
         }
       }
     } catch (error) {
