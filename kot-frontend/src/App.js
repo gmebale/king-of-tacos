@@ -27,6 +27,7 @@ import AdminLoyalty from './Pages/AdminLoyalty';
 import AdminReviews from './Pages/AdminReviews';
 import AdminMobileMoney from './Pages/AdminMobileMoney';
 import StaffOrderStart from './Pages/StaffOrderStart';
+import GuideUtilisation from './Pages/GuideUtilisation';
 import LegalPage from './Pages/LegalPage';
 import SeoManager from './Components/common/SeoManager';
 import { Toaster } from 'react-hot-toast';
@@ -63,6 +64,7 @@ function App() {
           <Route path="/admin/loyalty" element={<ProtectedRoute requiredPermission="loyalty"><Layout currentPageName="AdminLoyalty"><AdminLoyalty /></Layout></ProtectedRoute>} />
           <Route path="/admin/settings" element={<ProtectedRoute requiredPermission="settings"><Layout currentPageName="AdminSettings"><AdminSettings /></Layout></ProtectedRoute>} />
           <Route path="/admin/reviews" element={<ProtectedRoute requiredPermission="reviews"><Layout currentPageName="AdminReviews"><AdminReviews /></Layout></ProtectedRoute>} />
+          <Route path="/admin/guide" element={<ProtectedRoute excludedRoles={['client']}><Layout currentPageName="GuideUtilisation"><GuideUtilisation /></Layout></ProtectedRoute>} />
           <Route path="/login" element={<Layout currentPageName="Auth"><Login /></Layout>} />
           <Route path="/register" element={<Layout currentPageName="Auth"><Register /></Layout>} />
           <Route path="/mentions-legales" element={<Layout currentPageName="Legal"><LegalPage page="legal" /></Layout>} />

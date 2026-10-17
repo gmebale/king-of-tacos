@@ -36,7 +36,8 @@ export function createPageUrl(pageName) {
     AdminAccess: '/admin/access',
     AdminLoyalty: '/admin/loyalty',
     AdminSettings: '/admin/settings',
-    AdminReviews: '/admin/reviews'
+    AdminReviews: '/admin/reviews',
+    AdminGuide: '/admin/guide'
   };
 
   return routes[pageName] || '/';

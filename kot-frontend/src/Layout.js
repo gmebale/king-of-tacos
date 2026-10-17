@@ -22,7 +22,8 @@ import {
   TrendingUp,
   MessageSquare,
   Smartphone,
-  ShieldCheck
+  ShieldCheck,
+  BookOpen
 } from "lucide-react";
 import { Button } from "./Components/ui/button";
 import { motion } from "framer-motion";
@@ -94,10 +95,12 @@ export default function Layout({ children, currentPageName }) {
     { name: user?.role === 'admin' ? "Personnel et droits" : "Personnel", path: user?.role === 'admin' ? "AdminAccess" : "AdminStaff", permission: "staff", icon: ShieldCheck },
     { name: "Fidélité", path: "AdminLoyalty", permission: "loyalty", icon: Star },
     { name: "Avis", path: "AdminReviews", permission: "reviews", icon: MessageSquare },
-    { name: "Paramètres", path: "AdminSettings", permission: "settings", icon: Settings }
+    { name: "Paramètres", path: "AdminSettings", permission: "settings", icon: Settings },
+    { name: "Guide d’utilisation", path: "AdminGuide", staffOnly: true, icon: BookOpen }
   ];
 
   const canAccessAdminNavItem = (item) => {
+    if (item.staffOnly) return user?.role && user.role !== 'client';
     if (!item.station) return hasPagePermission(item.permission);
     if (item.station === "bar") return hasPagePermission("bar");
     const permission = item.station === "cuisine_chaude" ? "kitchen_hot" : "kitchen_cold";
