@@ -399,8 +399,9 @@ export default function AdminStaff() {
 
                 {newUser.role !== "client" && (
                   <div>
-                    <Label htmlFor="server-code">Code personnel confidentiel (6 lettres ou chiffres) *</Label>
+                    <Label htmlFor="server-code">Code des actions sensibles (6 lettres ou chiffres) *</Label>
                     <Input id="server-code" required minLength={6} maxLength={6} autoComplete="off" value={newUser.server_code} onChange={(e) => setNewUser({ ...newUser, server_code: e.target.value.toUpperCase() })} className="mt-1 uppercase" />
+                    <p className="mt-1 text-xs text-gray-500">Défini par la Direction à la création du compte. Il sera demandé pour confirmer certaines actions sensibles.</p>
                   </div>
                 )}
 
@@ -515,6 +516,9 @@ export default function AdminStaff() {
                           {user.role === "admin" && <Shield className="w-3 h-3 mr-1" />}
                           {getRoleLabel(user.role)}
                         </Badge>
+                        {user.role !== 'client' && <Badge className={user.has_staff_code ? 'border-green-200 bg-green-50 text-green-800' : 'border-amber-300 bg-amber-50 text-amber-900'}>
+                          {user.has_staff_code ? 'Code d’action configuré' : 'Code d’action à définir'}
+                        </Badge>}
                         {user.loyalty_points > 0 && (
                           <Badge className="bg-yellow-100 text-yellow-800 border-yellow-300">
                             <Star className="w-3 h-3 mr-1" />
@@ -644,8 +648,9 @@ export default function AdminStaff() {
 
               {currentUser?.role === 'admin' && editingUser.role !== "client" && (
                 <div>
-                  <Label htmlFor="edit-server-code">Code personnel confidentiel (6 lettres ou chiffres){!editingUser.has_staff_code ? ' *' : ''}</Label>
+                  <Label htmlFor="edit-server-code">{editingUser.has_staff_code ? 'Réinitialiser le code des actions sensibles' : 'Initialiser le code des actions sensibles'} (6 lettres ou chiffres){!editingUser.has_staff_code ? ' *' : ''}</Label>
                   <Input id="edit-server-code" minLength={6} maxLength={6} required={!editingUser.has_staff_code} autoComplete="new-password" placeholder={editingUser.has_staff_code ? 'Laisser vide pour conserver le code actuel' : 'Saisir un code unique'} value={editingUser.server_code || ""} onChange={(e) => setEditingUser({ ...editingUser, server_code: e.target.value.toUpperCase() })} className="mt-1 uppercase" />
+                  <p className="mt-1 text-xs text-gray-500">Seule la Direction peut définir ou réinitialiser ce code. Il est nécessaire pour confirmer certaines actions sensibles et ne sera plus affiché après enregistrement.</p>
                 </div>
               )}
 
