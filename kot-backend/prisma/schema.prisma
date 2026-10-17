@@ -67,6 +67,17 @@ model UserPermission {
   @@map("user_permissions")
 }
 
+model GoogleLoginCode {
+  code_hash  String   @id @db.Char(64)
+  user_id    Int
+  user       User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  expires_at DateTime
+  created_at DateTime @default(now())
+
+  @@index([expires_at])
+  @@map("google_login_codes")
+}
+
 enum OrderStatus {
   en_attente
   en_preparation
@@ -163,6 +174,7 @@ model User {
   createdExpenses   Expense[]
   createdCashExpenses CashExpense[]
   expenseCatalogItems ExpenseCatalogItem[]
+  googleLoginCodes GoogleLoginCode[]
 
   @@map("users")
 }

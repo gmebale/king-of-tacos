@@ -30,6 +30,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from ".
 import { Badge } from "../Components/ui/badge";
 import { MapPin } from "lucide-react";
 import { Link } from "react-router-dom";
+import { useAuthContext } from "../contexts/AuthContext";
 
 function formatDateInput(date) {
   const year = date.getFullYear();
@@ -39,6 +40,12 @@ function formatDateInput(date) {
 }
 
 export default function AdminFinance() {
+  const { user } = useAuthContext();
+  const can = code => user?.role === 'admin' || user?.pagePermissions?.[code] === true;
+  const canSeeSalesTotal = can('reports.sales_total');
+  const canSeeSalesDetail = can('reports.sales_detail');
+  const canSeeMargins = can('reports.margins');
+  const canManageExpenses = can('finance.expenses.manage') || can('finance.expenses.view');
   const [revenueData, setRevenueData] = useState([]);
   const [topProducts, setTopProducts] = useState([]);
   const [topCustomers, setTopCustomers] = useState([]);
@@ -56,10 +63,11 @@ export default function AdminFinance() {
   const [endDate, setEndDate] = useState(() => formatDateInput(new Date()));
 
   useEffect(() => {
+    if (!canSeeSalesDetail) return;
     api.get('/finance/filter-options')
       .then(response => setFilterOptions(response.data || { locations: [], servers: [] }))
       .catch(error => console.error('Error loading finance filter options:', error));
-  }, []);
+  }, [canSeeSalesDetail]);
 
   useEffect(() => {
     loadFinanceData();
@@ -80,12 +88,12 @@ export default function AdminFinance() {
         ...(selectedServer !== 'all' ? { server_id: selectedServer } : {})
       };
       const [revenueRes, productsRes, customersRes, locationsRes, serversRes, profitRes] = await Promise.all([
-        api.get('/finance/revenue', { params }),
-        api.get('/finance/top-products', { params }),
-        api.get('/finance/top-customers', { params }),
-        api.get('/finance/top-locations', { params }),
-        api.get('/finance/top-servers', { params }),
-        api.get('/finance/profit-summary', { params: { start_date: startDate, end_date: endDate } })
+        canSeeSalesTotal ? api.get('/finance/revenue', { params }) : Promise.resolve({ data: [] }),
+        canSeeSalesDetail ? api.get('/finance/top-products', { params }) : Promise.resolve({ data: [] }),
+        canSeeSalesDetail ? api.get('/finance/top-customers', { params }) : Promise.resolve({ data: [] }),
+        canSeeSalesDetail ? api.get('/finance/top-locations', { params }) : Promise.resolve({ data: [] }),
+        canSeeSalesDetail ? api.get('/finance/top-servers', { params }) : Promise.resolve({ data: [] }),
+        canSeeMargins ? api.get('/finance/profit-summary', { params: { start_date: startDate, end_date: endDate } }) : Promise.resolve({ data: null })
       ]);
 
       setRevenueData(revenueRes.data || []);
@@ -129,11 +137,11 @@ export default function AdminFinance() {
             <Printer className="w-4 h-4 mr-2" />
             Imprimer le rapport
           </Button>
-          <Link to="/admin/finance/expenses"><Button variant="outline">Gérer les dépenses</Button></Link>
+          {canManageExpenses && <Link to="/admin/finance/expenses"><Button variant="outline">Gérer les dépenses</Button></Link>}
         </div>
 
       {/* Combined filters */}
-        <Card className="mb-6">
+      {(canSeeSalesTotal || canSeeSalesDetail || canSeeMargins) && <Card className="mb-6">
           <CardContent className="pt-6">
             <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-4">
               <div>
@@ -154,25 +162,28 @@ export default function AdminFinance() {
                   onChange={(e) => setEndDate(e.target.value)}
                 />
               </div>
-              <div>
+              {canSeeSalesDetail && <div>
                 <Label htmlFor="location-filter">Lieu</Label>
                 <select id="location-filter" value={selectedLocation} onChange={event => setSelectedLocation(event.target.value)} className="mt-1 h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
                   <option value="all">Tous les lieux</option>
                   {filterOptions.locations.map(location => <option key={location.value} value={location.value}>{location.label}</option>)}
                 </select>
-              </div>
-              <div>
+              </div>}
+              {canSeeSalesDetail && <div>
                 <Label htmlFor="server-filter">Serveur</Label>
                 <select id="server-filter" value={selectedServer} onChange={event => setSelectedServer(event.target.value)} className="mt-1 h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
                   <option value="all">Tous les serveurs</option>
                   {filterOptions.servers.map(server => <option key={server.id} value={server.id}>{server.full_name}</option>)}
                 </select>
-              </div>
+              </div>}
             </div>
           </CardContent>
-        </Card>
+        </Card>}
       </motion.div>
 
+      {!canSeeSalesTotal && !canSeeSalesDetail && !canSeeMargins && <p className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-900">Aucun droit de consultation des rapports financiers n’est activé pour ce compte.</p>}
+
+      {canSeeSalesTotal && <>
       {/* Revenue Chart */}
       <Card className="mb-8">
         <CardHeader>
@@ -194,7 +205,6 @@ export default function AdminFinance() {
           </ResponsiveContainer>
         </CardContent>
       </Card>
-
       {/* Summary Cards */}
       <div className="grid md:grid-cols-3 gap-6 mb-8">
         <Card className="border-2">
@@ -248,14 +258,15 @@ export default function AdminFinance() {
           </CardContent>
         </Card>
       </div>
+      </>}
 
-      <section className="mb-8">
+      {canSeeMargins && <section className="mb-8">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-xl font-semibold">Résultat après taxes et charges</h2>
             <p className="text-sm text-gray-500">Période sélectionnée, toutes zones et tous serveurs confondus.</p>
           </div>
-          <Link to="/admin/finance/expenses" className="text-sm font-medium text-blue-700 underline">Ouvrir l’onglet Dépenses</Link>
+          {canManageExpenses && <Link to="/admin/finance/expenses" className="text-sm font-medium text-blue-700 underline">Ouvrir l’onglet Dépenses</Link>}
         </div>
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {[
@@ -279,10 +290,10 @@ export default function AdminFinance() {
             </TableBody></Table></CardContent>
           </Card>
         )}
-      </section>
+      </section>}
 
 
-
+      {canSeeSalesDetail && <>
       <div className="grid lg:grid-cols-2 gap-6">
         {/* Top Products */}
         <Card>
@@ -422,6 +433,7 @@ export default function AdminFinance() {
           </CardContent>
         </Card>
       </div>
+      </>}
     </div>
   );
 }

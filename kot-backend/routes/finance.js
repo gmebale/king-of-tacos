@@ -1,7 +1,7 @@
 const express = require('express');
 const { PrismaClient } = require('@prisma/client');
 const { getPaidItemTaxMultiplier, getOrderItemTaxQuantity } = require('../utils/orderTaxAdjustment');
-const { authenticateToken, requirePagePermission, requirePermission } = require('../middleware/auth');
+const { authenticateToken, requirePagePermission, requirePermission, requireAnyPermission } = require('../middleware/auth');
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -47,7 +47,7 @@ function getLostOrderFilter(query) {
 }
 
 // Get revenue data aggregated by date (admin only)
-router.get('/revenue', authenticateToken, requirePagePermission('finance', 'dashboard'), async (req, res) => {
+router.get('/revenue', authenticateToken, requirePagePermission('finance', 'dashboard'), requirePermission('reports.sales_total'), async (req, res) => {
   try {
     const [sales, lostOrders] = await Promise.all([
       prisma.order.findMany({
@@ -91,7 +91,7 @@ router.get('/revenue', authenticateToken, requirePagePermission('finance', 'dash
 });
 
 // Get top-selling products (admin only)
-router.get('/top-products', authenticateToken, requirePagePermission('finance', 'dashboard'), async (req, res) => {
+router.get('/top-products', authenticateToken, requirePagePermission('finance', 'dashboard'), requirePermission('reports.sales_detail'), async (req, res) => {
   try {
     const { limit = 10 } = req.query;
     const whereClause = getNonLostOrderFilter(getFinanceFilters(req.query));
@@ -142,7 +142,7 @@ router.get('/top-products', authenticateToken, requirePagePermission('finance', 
 });
 
 // Get top customers (admin only)
-router.get('/top-customers', authenticateToken, requirePagePermission('finance', 'dashboard'), async (req, res) => {
+router.get('/top-customers', authenticateToken, requirePagePermission('finance', 'dashboard'), requirePermission('reports.sales_detail'), async (req, res) => {
   try {
     const { limit = 10 } = req.query;
     const whereClause = { ...getNonLostOrderFilter(getFinanceFilters(req.query)), user_id: { not: null } };
@@ -189,7 +189,7 @@ router.get('/top-customers', authenticateToken, requirePagePermission('finance',
   }
 });
 
-router.get('/filter-options', authenticateToken, requirePagePermission('finance', 'dashboard'), async (_req, res) => {
+router.get('/filter-options', authenticateToken, requirePagePermission('finance', 'dashboard'), requirePermission('reports.sales_detail'), async (_req, res) => {
   try {
     const [servers, locations] = await Promise.all([
       prisma.user.findMany({
@@ -209,7 +209,7 @@ router.get('/filter-options', authenticateToken, requirePagePermission('finance'
   }
 });
 
-router.get('/top-locations', authenticateToken, requirePagePermission('finance', 'dashboard'), async (req, res) => {
+router.get('/top-locations', authenticateToken, requirePagePermission('finance', 'dashboard'), requirePermission('reports.sales_detail'), async (req, res) => {
   try {
     const [orders, lostOrders] = await Promise.all([
       prisma.order.findMany({
@@ -240,7 +240,7 @@ router.get('/top-locations', authenticateToken, requirePagePermission('finance',
   }
 });
 
-router.get('/top-servers', authenticateToken, requirePagePermission('finance', 'dashboard'), async (req, res) => {
+router.get('/top-servers', authenticateToken, requirePagePermission('finance', 'dashboard'), requirePermission('reports.sales_detail'), async (req, res) => {
   try {
     const baseFilter = getFinanceFilters(req.query);
     if (!baseFilter.validated_by) baseFilter.validated_by = { not: null };
@@ -274,7 +274,7 @@ router.get('/top-servers', authenticateToken, requirePagePermission('finance', '
   }
 });
 
-router.get('/profit-summary', authenticateToken, requirePagePermission('finance', 'dashboard'), async (req, res) => {
+router.get('/profit-summary', authenticateToken, requirePagePermission('finance', 'dashboard'), requirePermission('reports.margins'), async (req, res) => {
   try {
     const dateFilter = getFinanceFilters({ start_date: req.query.start_date, end_date: req.query.end_date });
     const expenseDateFilter = getFinanceFilters({ start_date: req.query.start_date, end_date: req.query.end_date }, 'expense_date');
@@ -360,7 +360,7 @@ router.get('/profit-summary', authenticateToken, requirePagePermission('finance'
   }
 });
 
-router.get('/expense-catalog', authenticateToken, async (req, res) => {
+router.get('/expense-catalog', authenticateToken, requirePagePermission('cashier', 'finance'), requireAnyPermission('finance.expenses.view', 'finance.expenses.manage', 'cash.expense.record'), async (req, res) => {
   try {
     const items = await prisma.expenseCatalogItem.findMany({ orderBy: [{ active: 'desc' }, { category: 'asc' }] });
     res.json(items);
@@ -399,7 +399,7 @@ router.patch('/expense-catalog/:id', authenticateToken, requirePagePermission('f
   }
 });
 
-router.get('/expenses', authenticateToken, requirePagePermission('finance', 'dashboard'), async (req, res) => {
+router.get('/expenses', authenticateToken, requirePagePermission('finance', 'dashboard'), requirePermission('finance.expenses.view'), async (req, res) => {
   try {
     const filters = getFinanceFilters({ start_date: req.query.start_date, end_date: req.query.end_date }, 'expense_date');
     const expenses = await prisma.expense.findMany({
@@ -417,7 +417,7 @@ router.get('/expenses', authenticateToken, requirePagePermission('finance', 'das
   }
 });
 
-router.get('/cash-expenses', authenticateToken, requirePagePermission('finance', 'dashboard'), async (req, res) => {
+router.get('/cash-expenses', authenticateToken, requirePagePermission('finance', 'dashboard'), requirePermission('finance.expenses.view'), async (req, res) => {
   try {
     const filters = getFinanceFilters({ start_date: req.query.start_date, end_date: req.query.end_date }, 'expense_date');
     const expenses = await prisma.cashExpense.findMany({

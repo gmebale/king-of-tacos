@@ -115,7 +115,7 @@ export default function ProductFormDialog({ open, onOpenChange, product, onSave 
 
     setUploading(true);
     try {
-      const { file_url } = await UploadFile({ file });
+      const { file_url } = await UploadFile({ file, purpose: 'product' });
       setFormData({...formData, image: file_url});
       setImagePreview(file_url);
     } catch (error) {

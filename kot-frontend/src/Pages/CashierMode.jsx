@@ -31,6 +31,7 @@ import api from "../services/api.service";
 import { formatCustomizationForDisplay } from "../utils/index";
 import { resolveMediaUrl } from "../utils/media";
 import { useAuthContext } from "../contexts/AuthContext";
+import { toast } from 'react-hot-toast';
 
 const escapeReceiptText = value => String(value ?? '').replace(/[&<>"']/g, character => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
@@ -39,7 +40,7 @@ const escapeReceiptText = value => String(value ?? '').replace(/[&<>"']/g, chara
 const printCashReceipt = order => {
   const printWindow = window.open('', '_blank', 'width=420,height=720');
   if (!printWindow) {
-    window.alert('Autorisez les fenêtres surgissantes pour imprimer le ticket.');
+    toast.error('Autorisez les fenêtres surgissantes pour imprimer le ticket.');
     return;
   }
   const code = order.order_code || `KOT-${order.id?.slice(-6) || ''}`;
@@ -261,7 +262,7 @@ export default function CashierMode() {
       window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Error downloading report:', error);
-      alert(`Impossible de générer le rapport ${formatType === 'excel' ? 'Excel' : 'PDF'}.`);
+      toast.error(`Impossible de générer le rapport ${formatType === 'excel' ? 'Excel' : 'PDF'}.`);
     } finally {
       setIsDownloadingReport(false);
     }
@@ -293,7 +294,7 @@ export default function CashierMode() {
       await loadOrders();
     } catch (error) {
       console.error('Error marking order as delivered:', error);
-      alert(error.response?.data?.message || 'Impossible de mettre à jour la livraison.');
+      toast.error(error.response?.data?.message || 'Impossible de mettre à jour la livraison.');
     }
   };
 
@@ -303,7 +304,7 @@ export default function CashierMode() {
       await Promise.all([loadOrders(), loadCashRegisterSession()]);
       return true;
     } catch (error) {
-      alert(error.response?.data?.message || 'Impossible de confirmer le paiement.');
+      toast.error(error.response?.data?.message || 'Impossible de confirmer le paiement.');
       return false;
     }
   };
@@ -313,7 +314,7 @@ export default function CashierMode() {
       await api.post(`/orders/${orderId}/close`);
       await loadOrders();
     } catch (error) {
-      alert(error.response?.data?.message || 'Impossible de clôturer la commande.');
+      toast.error(error.response?.data?.message || 'Impossible de clôturer la commande.');
     }
   };
 
@@ -323,7 +324,7 @@ export default function CashierMode() {
       await api.put(`/cashier/orders/${orderId}/refund`);
       await loadOrders();
     } catch (error) {
-      alert(error.response?.data?.message || 'Impossible d’enregistrer le remboursement.');
+      toast.error(error.response?.data?.message || 'Impossible d’enregistrer le remboursement.');
     }
   };
 
@@ -366,11 +367,11 @@ export default function CashierMode() {
         items: expenseForm.items.map(item => ({ product_id: Number(item.product_id), quantity: Number(item.quantity), unit_cost: Number(item.unit_cost) }))
       };
       await api.post('/cashier/session/expenses', payload);
-      alert('Dépense enregistrée dans cette session de caisse.');
+      toast.success('Dépense enregistrée dans cette session de caisse.');
       setExpenseForm({ catalog_item_id: '', amount: '', payment_method: 'cash', supplier: '', items: [{ product_id: '', quantity: 1, unit_cost: '' }] });
       await Promise.all([loadCashRegisterSession(), loadExpenseData()]);
     } catch (error) {
-      alert(error.response?.data?.message || 'Impossible d’enregistrer cette dépense.');
+      toast.error(error.response?.data?.message || 'Impossible d’enregistrer cette dépense.');
     } finally {
       setIsSavingExpense(false);
     }
@@ -382,7 +383,7 @@ export default function CashierMode() {
 
   const openCashRegister = async () => {
     if (canSetOpeningAmount && (openingBalance === '' || !Number.isSafeInteger(Number(openingBalance)) || Number(openingBalance) < 0)) {
-      alert('Veuillez entrer un solde d\'ouverture valide');
+      toast.error('Veuillez entrer un solde d\'ouverture valide');
       return;
     }
 
@@ -394,7 +395,7 @@ export default function CashierMode() {
       setEmergencyReopenCode('');
     } catch (error) {
       console.error('Error opening cash register:', error);
-      alert(error.response?.data?.message || 'Erreur lors de l’ouverture de la caisse');
+      toast.error(error.response?.data?.message || 'Erreur lors de l’ouverture de la caisse');
     } finally {
       setIsOpeningRegister(false);
     }
@@ -402,7 +403,7 @@ export default function CashierMode() {
 
   const closeCashRegister = async () => {
     if (canCountCash && (closingBalance === '' || !Number.isSafeInteger(Number(closingBalance)) || Number(closingBalance) < 0)) {
-      alert('Veuillez entrer le solde de clôture');
+      toast.error('Veuillez entrer le solde de clôture');
       return;
     }
 
@@ -430,7 +431,7 @@ export default function CashierMode() {
           window.URL.revokeObjectURL(url);
         } catch (pdfError) {
           console.error('Error downloading close report:', pdfError);
-          alert('Clôture effectuée mais le rapport PDF n’a pas pu être téléchargé.');
+          toast.error('Clôture effectuée mais le rapport PDF n’a pas pu être téléchargé.');
         }
       }
       await loadCashRegisterSession();
@@ -438,7 +439,7 @@ export default function CashierMode() {
       setClosingNotes('');
     } catch (error) {
       console.error('Error closing cash register:', error);
-      alert(error.response?.data?.message || 'Erreur lors de la fermeture de la caisse');
+      toast.error(error.response?.data?.message || 'Erreur lors de la fermeture de la caisse');
     } finally {
       setIsClosingRegister(false);
     }
@@ -652,6 +653,7 @@ export default function CashierMode() {
                       onMarkDelivered={markAsDelivered}
                       onMarkPaid={markAsPaid}
                       onClose={closeOrder}
+                      canCloseOrder={can('orders.close')}
                       onRefund={recordRefund}
                       getStatusColor={getStatusColor}
                       getStatusText={getStatusText}
@@ -873,7 +875,7 @@ export default function CashierMode() {
 }
 
 // Order Card Component
-function OrderCard({ order, onGenerateInvoice, onPrintReceipt, onMarkDelivered, onMarkPaid, onClose, onRefund, getStatusColor, getStatusText }) {
+function OrderCard({ order, onGenerateInvoice, onPrintReceipt, onMarkDelivered, onMarkPaid, onClose, onRefund, canCloseOrder, getStatusColor, getStatusText }) {
   const total = order.total_amount; 
   const displayCode = order.order_code || `KOT-${order.id?.slice(-6) || ''}`;
   const [paymentMethod, setPaymentMethod] = useState(order.payment_method || 'cash');
@@ -991,7 +993,7 @@ function OrderCard({ order, onGenerateInvoice, onPrintReceipt, onMarkDelivered, 
         {order.status === 'annulee' && order.payment_status === 'paid' && (
           <Button size="sm" variant="outline" onClick={() => onRefund(order.id)}>Enregistrer le remboursement</Button>
         )}
-        {canClose && (
+        {canClose && canCloseOrder && (
           <Button size="sm" variant="outline" onClick={() => onClose(order.id)}>Clôturer</Button>
         )}
       </div>

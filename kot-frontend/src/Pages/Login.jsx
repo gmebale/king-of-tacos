@@ -25,14 +25,14 @@ export default function Login() {
   const from = location.state?.from?.pathname || createPageUrl('Home');
 
   useEffect(() => {
-    // Vérifier token Google OAuth dans paramètres URL
+    // Échanger le code OAuth à usage unique, puis retirer immédiatement le code de l’URL.
     const urlParams = new URLSearchParams(location.search);
-    const token = urlParams.get('token');
+    const code = urlParams.get('code');
 
-    if (token) {
-      authService.googleLogin(token)
+    if (code) {
+      navigate(location.pathname, { replace: true });
+      authService.googleLogin(code)
         .then(() => {
-          navigate(createPageUrl('Login'), { replace: true });
           navigate(from, { replace: true });
         })
         .catch((error) => {

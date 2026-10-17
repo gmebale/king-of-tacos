@@ -2,7 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const crypto = require('crypto');
 const fs = require('fs/promises');
-const { authenticateToken, requirePagePermission } = require('../middleware/auth');
+const { authenticateToken, hasPermission } = require('../middleware/auth');
 
 const router = express.Router();
 const mediaByMime = {
@@ -52,7 +52,24 @@ const uploadSingle = (req, res, next) => upload.single('file')(req, res, error =
 });
 
 // Upload endpoint
-router.post('/', authenticateToken, requirePagePermission('stock', 'settings'), uploadSingle, (req, res) => {
+const authorizeUploadPurpose = (req, res, next) => {
+  const purpose = req.get('X-Upload-Purpose');
+  const access = purpose === 'product'
+    ? { page: 'stock', action: 'admin.products' }
+    : purpose === 'homepage'
+      ? { page: 'settings', action: 'admin.settings' }
+      : null;
+  if (!access) return res.status(400).json({ message: 'Destination du téléversement invalide.' });
+  if (req.user.role !== 'admin' && req.user.pagePermissions?.[access.page] !== true) {
+    return res.status(403).json({ message: 'Accès refusé à ce module.' });
+  }
+  if (!hasPermission(req.user, access.action)) {
+    return res.status(403).json({ message: 'Vous n’êtes pas autorisé à téléverser ce média.' });
+  }
+  next();
+};
+
+router.post('/', authenticateToken, authorizeUploadPurpose, uploadSingle, (req, res) => {
   (async () => {
     if (!req.file) {
       return res.status(400).json({ message: 'Choisissez une image JPEG, PNG ou WebP.' });

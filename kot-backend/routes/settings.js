@@ -1,6 +1,6 @@
 const express = require('express');
 const { PrismaClient } = require('@prisma/client');
-const { authenticateToken, requirePagePermission, requireRole } = require('../middleware/auth');
+const { authenticateToken, requirePagePermission, requirePermission, requireRole } = require('../middleware/auth');
 const pvit = require('../services/pvit');
 
 const router = express.Router();
@@ -90,7 +90,7 @@ router.get('/delivery-info', async (_req, res) => {
   }
 });
 
-router.put('/online-ordering', authenticateToken, requirePagePermission('settings'), async (req, res) => {
+router.put('/online-ordering', authenticateToken, requirePagePermission('settings'), requirePermission('admin.settings'), async (req, res) => {
   try {
     res.set('Cache-Control', 'no-store');
     const { enabled, outside_hours_mode, weekly } = req.body || {};
@@ -295,7 +295,7 @@ router.get('/homepage', async (_req, res) => {
   }
 });
 
-router.put('/homepage', authenticateToken, requirePagePermission('settings'), async (req, res) => {
+router.put('/homepage', authenticateToken, requirePagePermission('settings'), requirePermission('admin.settings'), async (req, res) => {
   try {
     const mediaUrl = typeof req.body?.media_url === 'string' ? req.body.media_url.trim() : '';
     const mediaType = typeof req.body?.media_type === 'string' ? req.body.media_type : '';
@@ -362,7 +362,7 @@ router.get('/restaurant', authenticateToken, requirePagePermission('settings'), 
 });
 
 // Update restaurant settings
-router.put('/restaurant', authenticateToken, requirePagePermission('settings'), async (req, res) => {
+router.put('/restaurant', authenticateToken, requirePagePermission('settings'), requirePermission('admin.settings'), async (req, res) => {
   try {
     const { name, address, phone, email, opening_hours, delivery_radius, minimum_order } = req.body;
 
@@ -438,7 +438,7 @@ router.get('/payment', async (req, res) => {
 });
 
 // Update payment settings (admin)
-router.put('/payment', authenticateToken, requirePagePermission('settings'), async (req, res) => {
+router.put('/payment', authenticateToken, requirePagePermission('settings'), requirePermission('admin.settings'), async (req, res) => {
   try {
     const {
       mobile_money_enabled,

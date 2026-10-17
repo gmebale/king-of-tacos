@@ -1,6 +1,7 @@
 const express = require('express');
 const pvit = require('../services/pvit');
 const { PrismaClient } = require('@prisma/client');
+const { rateLimit } = require('../middleware/rateLimit');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { authenticateToken, requireRole, requirePagePermission, requirePermission, hasPermission } = require('../middleware/auth');
@@ -315,7 +316,7 @@ router.get('/', authenticateToken, requirePagePermission('orders', 'dashboard'),
 });
 
 // Get user's orders
-router.post('/track', async (req, res) => {
+router.post('/track', rateLimit({ windowMs: 15 * 60 * 1000, max: 12, message: 'Trop de recherches de commande. Réessayez dans quelques minutes.' }), async (req, res) => {
   try {
     const orderCode = typeof req.body.order_code === 'string' ? req.body.order_code.trim().toUpperCase() : '';
     const phoneDigits = normalizeGabonPhone(req.body.phone);
@@ -579,8 +580,6 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ message: 'La commande doit contenir au moins un produit' });
     }
 
-    console.log('Received order data:', { items, total_amount, customer_name });
-
     // Check if user is authenticated
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
@@ -621,7 +620,7 @@ router.post('/', async (req, res) => {
       discountAmount = calculatePromoDiscount(promo, promoBasis);
       if (!discountAmount) return res.status(400).json({ message: 'Ce code promo ne s’applique pas à cette commande.' });
       if (promo.user_id) {
-        loyaltyRedemption = await prisma.loyaltyRedemption.findFirst({ where: { promo_code_id: promo.id, user_id: userId, status: 'claimed' } });
+        loyaltyRedemption = await prisma.loyaltyRedemption.findFirst({ where: { promo_code_id: promo.id, user_id: userId, status: 'claimed', OR: [{ expires_at: null }, { expires_at: { gt: new Date() } }] } });
         if (!loyaltyRedemption) return res.status(400).json({ message: 'Cette récompense a déjà été utilisée.' });
       }
     }
@@ -641,43 +640,52 @@ router.post('/', async (req, res) => {
 
     // Create order
     const orderCode = await generateOrderCode();
-    const order = await prisma.order.create({
-      data: {
-        order_code: orderCode,
-        user_id: userId,
-        total_amount: finalTotal,
-        discount_amount: discountAmount,
-        promo_code_id: promo?.id || null,
-        loyalty_redemption_id: loyaltyRedemption?.id || null,
-        customer_name,
-        customer_phone,
-        customer_email,
-        order_type,
-        service_location: null,
-        delivery_address,
-        pickup_time: acceptedPickupTime,
-        notes,
-        payment_method: payment_method || null,
-        items: {
-          create: orderItems
-        }
-      },
-      include: {
-        items: true
-      }
-    });
-
-    if (promo) {
-      const consumed = await prisma.promoCode.updateMany({
-        where: { id: promo.id, is_active: true, used_count: promo.used_count },
-        data: { used_count: { increment: 1 } }
+    const order = await prisma.$transaction(async tx => {
+      const createdOrder = await tx.order.create({
+        data: {
+          order_code: orderCode,
+          user_id: userId,
+          total_amount: finalTotal,
+          discount_amount: discountAmount,
+          promo_code_id: promo?.id || null,
+          loyalty_redemption_id: loyaltyRedemption?.id || null,
+          customer_name,
+          customer_phone,
+          customer_email,
+          order_type,
+          service_location: null,
+          delivery_address,
+          pickup_time: acceptedPickupTime,
+          notes,
+          payment_method: payment_method || null,
+          items: { create: orderItems }
+        },
+        include: { items: true }
       });
-      if (!consumed.count) {
-        await prisma.order.delete({ where: { id: order.id } });
-        return res.status(409).json({ message: 'Ce code promo vient d’être utilisé.' });
+
+      if (promo) {
+        const consumedPromo = await tx.promoCode.updateMany({
+          where: { id: promo.id, is_active: true, used_count: promo.used_count },
+          data: { used_count: { increment: 1 } }
+        });
+        if (!consumedPromo.count) throw Object.assign(new Error('Ce code promo vient d’être utilisé.'), { statusCode: 409 });
       }
-    }
-    if (loyaltyRedemption) await prisma.loyaltyRedemption.update({ where: { id: loyaltyRedemption.id }, data: { status: 'used' } });
+
+      if (loyaltyRedemption) {
+        const consumedRedemption = await tx.loyaltyRedemption.updateMany({
+          where: {
+            id: loyaltyRedemption.id,
+            user_id: userId,
+            status: 'claimed',
+            OR: [{ expires_at: null }, { expires_at: { gt: new Date() } }]
+          },
+          data: { status: 'used' }
+        });
+        if (!consumedRedemption.count) throw Object.assign(new Error('Cette récompense vient d’être utilisée ou a expiré.'), { statusCode: 409 });
+      }
+
+      return createdOrder;
+    });
 
     console.log('Created order:', order.id, 'with items:', order.items.length);
 
@@ -977,7 +985,7 @@ router.post('/:id/validate', authenticateToken, requirePermission('orders.send_t
 });
 
 // Close order (caissier closes in cash register)
-router.post('/:id/close', authenticateToken, requirePermission('cash.close_session'), async (req, res) => {
+router.post('/:id/close', authenticateToken, requirePermission('orders.close'), async (req, res) => {
   try {
     const { id } = req.params;
     const order = await prisma.order.findUnique({ where: { id } });

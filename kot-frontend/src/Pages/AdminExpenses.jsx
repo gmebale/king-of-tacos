@@ -8,12 +8,17 @@ import { Input } from '../Components/ui/input';
 import { Label } from '../Components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '../Components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../Components/ui/table';
+import { useAuthContext } from '../contexts/AuthContext';
 
 function localDateValue(date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
 
 export default function AdminExpenses() {
+  const { user } = useAuthContext();
+  const can = code => user?.role === 'admin' || user?.pagePermissions?.[code] === true;
+  const canViewExpenses = can('finance.expenses.view');
+  const canManageExpenses = can('finance.expenses.manage');
   const [catalog, setCatalog] = useState([]);
   const [legacyExpenses, setLegacyExpenses] = useState([]);
   const [cashExpenses, setCashExpenses] = useState([]);
@@ -32,6 +37,7 @@ export default function AdminExpenses() {
   };
 
   const loadLegacyExpenses = async () => {
+    if (!canViewExpenses) return;
     try {
       const params = { start_date: startDate, end_date: endDate };
       const [legacyResponse, cashResponse] = await Promise.all([
@@ -46,7 +52,7 @@ export default function AdminExpenses() {
   };
 
   useEffect(() => { loadCatalog(); }, []);
-  useEffect(() => { loadLegacyExpenses(); }, [startDate, endDate]);
+  useEffect(() => { loadLegacyExpenses(); }, [startDate, endDate, canViewExpenses]);
 
   const submit = async event => {
     event.preventDefault();
@@ -84,7 +90,7 @@ export default function AdminExpenses() {
         <Link to="/admin/finance"><Button variant="outline"><ArrowLeft className="mr-2 h-4 w-4" />Retour aux finances</Button></Link>
       </div>
 
-      <Card>
+      {canManageExpenses && <Card>
         <CardHeader><CardTitle>Ajouter un poste au catalogue</CardTitle></CardHeader>
         <CardContent>
           <form onSubmit={submit} className="grid gap-4 md:grid-cols-4">
@@ -95,9 +101,9 @@ export default function AdminExpenses() {
           </form>
           <p className="mt-3 text-sm text-gray-500">Créer un poste ne modifie ni la caisse, ni la comptabilité, ni le stock.</p>
         </CardContent>
-      </Card>
+      </Card>}
 
-      <Card>
+      {canViewExpenses && <Card>
         <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-4"><div><CardTitle>Dépenses enregistrées en caisse</CardTitle><p className="mt-1 text-sm text-gray-500">Mouvements liés aux sessions de caisse et repris dans les rapports financiers.</p></div><div className="flex w-full flex-wrap gap-2 sm:w-auto"><div className="min-w-0 flex-1 sm:flex-none"><Label htmlFor="cash-expense-start">Du</Label><Input id="cash-expense-start" type="date" value={startDate} onChange={event => setStartDate(event.target.value)} /></div><div className="min-w-0 flex-1 sm:flex-none"><Label htmlFor="cash-expense-end">Au</Label><Input id="cash-expense-end" type="date" value={endDate} onChange={event => setEndDate(event.target.value)} /></div></div></CardHeader>
         <CardContent>
           <Table className="min-w-[960px]">
@@ -108,22 +114,22 @@ export default function AdminExpenses() {
             </TableBody>
           </Table>
         </CardContent>
-      </Card>
+      </Card>}
 
-      <Card>
+      {(canViewExpenses || canManageExpenses) && <Card>
         <CardHeader><CardTitle>Catalogue des dépenses</CardTitle></CardHeader>
         <CardContent>
           <Table className="min-w-[680px]">
             <TableHeader><TableRow><TableHead>Catégorie</TableHead><TableHead>Libellé</TableHead><TableHead>Type</TableHead><TableHead>État</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
             <TableBody>
-              {catalog.map(item => <TableRow key={item.id}><TableCell>{item.category}</TableCell><TableCell>{item.description}</TableCell><TableCell>{item.expense_type === 'stock_purchase' ? 'Achat de stock' : 'Dépense courante'}</TableCell><TableCell>{item.active ? 'Actif' : 'Désactivé'}</TableCell><TableCell className="text-right"><Button size="sm" variant="outline" onClick={() => toggleActive(item)}>{item.active ? 'Désactiver' : 'Réactiver'}</Button></TableCell></TableRow>)}
+              {catalog.map(item => <TableRow key={item.id}><TableCell>{item.category}</TableCell><TableCell>{item.description}</TableCell><TableCell>{item.expense_type === 'stock_purchase' ? 'Achat de stock' : 'Dépense courante'}</TableCell><TableCell>{item.active ? 'Actif' : 'Désactivé'}</TableCell><TableCell className="text-right">{canManageExpenses && <Button size="sm" variant="outline" onClick={() => toggleActive(item)}>{item.active ? 'Désactiver' : 'Réactiver'}</Button>}</TableCell></TableRow>)}
               {!catalog.length && <TableRow><TableCell colSpan={5} className="py-8 text-center text-gray-500">Aucun poste de dépense. Ajoutez-en un ci-dessus.</TableCell></TableRow>}
             </TableBody>
           </Table>
         </CardContent>
-      </Card>
+      </Card>}
 
-      <Card>
+      {canViewExpenses && <Card>
         <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-4"><div><CardTitle>Ancien historique</CardTitle><p className="mt-1 text-sm text-gray-500">Ces écritures antérieures sont conservées. Les nouvelles dépenses seront enregistrées depuis la caisse.</p></div><div className="flex w-full flex-wrap gap-2 sm:w-auto"><div className="min-w-0 flex-1 sm:flex-none"><Label htmlFor="expense-start">Du</Label><Input id="expense-start" type="date" value={startDate} onChange={event => setStartDate(event.target.value)} /></div><div className="min-w-0 flex-1 sm:flex-none"><Label htmlFor="expense-end">Au</Label><Input id="expense-end" type="date" value={endDate} onChange={event => setEndDate(event.target.value)} /></div></div></CardHeader>
         <CardContent>
           <Table className="min-w-[760px]">
@@ -134,7 +140,7 @@ export default function AdminExpenses() {
             </TableBody>
           </Table>
         </CardContent>
-      </Card>
+      </Card>}
     </div>
   );
 }

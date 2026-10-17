@@ -2,6 +2,7 @@ require('dotenv').config();
 
 const express = require('express');
 const cors = require('cors');
+const { rateLimit } = require('./middleware/rateLimit');
 const session = require('express-session');
 const passport = require('passport');
 require('./routes/auth'); // Charger la configuration Passport
@@ -22,6 +23,7 @@ const reviewsRoutes = require('./routes/reviews');
 const app = express();
 const prisma = new PrismaClient();
 const PORT = process.env.PORT || 5000;
+app.set('trust proxy', 1);
 
 // Configuration session (nécessaire pour Passport)
 app.use(session({
@@ -40,7 +42,22 @@ app.use(passport.initialize());
 app.use(passport.session());
 
 // Middleware
-app.use(cors());
+const allowedOrigins = new Set(
+  [process.env.FRONTEND_URL, ...(process.env.CORS_ORIGINS || '').split(',')]
+    .map(origin => origin?.trim().replace(/\/$/, ''))
+    .filter(Boolean)
+);
+if (process.env.NODE_ENV !== 'production') {
+  allowedOrigins.add('http://localhost:3000');
+  allowedOrigins.add('http://127.0.0.1:3000');
+}
+app.use(cors({
+  origin(origin, callback) {
+    // Non-browser clients and same-origin requests do not send an Origin header.
+    if (!origin || allowedOrigins.has(origin.replace(/\/$/, ''))) return callback(null, true);
+    return callback(new Error('Origin not allowed by CORS'));
+  }
+}));
 app.use('/api/payments/stripe/webhook', express.raw({ type: 'application/json' }));
 app.use('/api/payments/ebilling/webhook', express.urlencoded({
   extended: false,
@@ -57,13 +74,6 @@ app.use((req, res, next) => {
 app.use('/uploads', express.static('uploads'));
 // The reverse proxy forwards /api/* to this container; expose uploaded media there too.
 app.use('/api/uploads', express.static('uploads'));
-app.use(session({
-  secret: process.env.SESSION_SECRET || 'your-secret-key',
-  resave: false,
-  saveUninitialized: false
-}));
-app.use(passport.initialize());
-app.use(passport.session());
 
 // Passport serialize/deserialize
 passport.serializeUser((user, done) => {

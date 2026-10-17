@@ -2,10 +2,11 @@ import api from './api.service';
 
 class AuthService {
 
-  async googleLogin(token) {
+  async googleLogin(code) {
     try {
-      if (token) {
-        localStorage.setItem('auth_token', token);
+      if (code) {
+        const response = await api.post('/auth/oauth/exchange', { code });
+        localStorage.setItem('auth_token', response.data.token);
         // Dispatch event pour notifier changement état auth
         window.dispatchEvent(new CustomEvent('auth-change'));
         // Récupérer infos utilisateur après stockage token

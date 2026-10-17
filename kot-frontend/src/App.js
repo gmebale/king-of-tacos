@@ -29,11 +29,13 @@ import AdminMobileMoney from './Pages/AdminMobileMoney';
 import StaffOrderStart from './Pages/StaffOrderStart';
 import LegalPage from './Pages/LegalPage';
 import SeoManager from './Components/common/SeoManager';
+import { Toaster } from 'react-hot-toast';
 
 function App() {
   return (
     <ErrorBoundary>
       <Router>
+        <Toaster position="top-right" toastOptions={{ duration: 4500 }} />
         <SeoManager />
         <Routes>
           <Route path="/" element={<Layout currentPageName="Home"><Home /></Layout>} />

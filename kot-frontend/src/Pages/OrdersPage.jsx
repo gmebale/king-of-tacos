@@ -32,6 +32,7 @@ import { useCart } from '../hooks/useCart';
 import EditOrderDialog from "../Components/EditOrderDialog";
 import OrderCancellationDialog from "../Components/OrderCancellationDialog";
 import { formatCustomization } from "../utils/customization";
+import { toast } from 'react-hot-toast';
 
 export default function OrdersPage() {
   const navigate = useNavigate();
@@ -130,7 +131,7 @@ export default function OrdersPage() {
       navigate(createPageUrl("Cart"));
     } catch (error) {
       console.error('Error reordering:', error);
-      alert('Erreur lors de la recommande');
+      toast.error('Erreur lors de la recommande');
     }
   };
 
@@ -180,7 +181,7 @@ export default function OrdersPage() {
       setCancellationOrder(null);
       await loadOrders();
     } catch (error) {
-      alert(error.response?.data?.message || 'Erreur lors de l’annulation de la commande.');
+      toast.error(error.response?.data?.message || 'Erreur lors de l’annulation de la commande.');
     } finally {
       setIsCancelling(false);
     }

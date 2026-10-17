@@ -115,7 +115,6 @@ export default function Payment() {
     setIsSubmitting(true);
 
     try {
-      console.log('Cart before filtering:', cart);
       const orderItems = cart.filter(item => item.product).map(item => ({
         product_id: item.product.id,
         product_name: item.product.name,
@@ -124,8 +123,6 @@ export default function Payment() {
         customization: item.customization,
         customizationSummary: item.customizationSummary
       }));
-      console.log('Order items to send:', orderItems);
-
       const orderData = {
         items: orderItems,
         total_amount: total,

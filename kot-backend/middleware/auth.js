@@ -39,6 +39,12 @@ const requirePermission = (code) => (req, res, next) => {
   next();
 };
 
+const requireAnyPermission = (...codes) => (req, res, next) => {
+  if (!req.user) return res.status(401).json({ message: 'Authentication required' });
+  if (!codes.some(code => hasPermission(req.user, code))) return res.status(403).json({ message: 'Accès refusé à cette opération' });
+  next();
+};
+
 const requireStaffActionCode = async (req, res, next) => {
   try {
     const code = String(req.body?.staff_action_code || '');
@@ -173,6 +179,7 @@ module.exports = {
   requireRole,
   requirePagePermission,
   requirePermission,
+  requireAnyPermission,
   requireStaffActionCode,
   hasPermission,
   normalizeRole

@@ -4,6 +4,8 @@ const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const appleSignin = require('apple-signin-auth');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
+const { rateLimit } = require('../middleware/rateLimit');
 const { PrismaClient } = require('@prisma/client');
 const { authenticateToken } = require('../middleware/auth');
 
@@ -62,17 +64,45 @@ router.get('/google',
 
 router.get('/google/callback',
   passport.authenticate('google', { session: false, failureRedirect: '/login' }),
-  (req, res) => {
-    // Génération token JWT
-    const token = jwt.sign(
-      { userId: req.user.id, email: req.user.email },
-      process.env.JWT_SECRET,
-      { expiresIn: '24h' }
-    );
-    // Redirection avec token
-    res.redirect(`${process.env.FRONTEND_URL}/login?token=${token}`);
+  async (req, res) => {
+    try {
+      const code = crypto.randomBytes(32).toString('base64url');
+      const codeHash = crypto.createHash('sha256').update(code).digest('hex');
+      const now = new Date();
+      await prisma.googleLoginCode.deleteMany({ where: { expires_at: { lte: now } } });
+      await prisma.googleLoginCode.create({
+        data: { code_hash: codeHash, user_id: req.user.id, expires_at: new Date(now.getTime() + 2 * 60 * 1000) }
+      });
+      const redirectUrl = new URL('/login', process.env.FRONTEND_URL);
+      redirectUrl.searchParams.set('code', code);
+      res.redirect(redirectUrl.toString());
+    } catch (error) {
+      console.error('Google login exchange code error:', error);
+      res.redirect(`${process.env.FRONTEND_URL}/login?error=oauth`);
+    }
   }
 );
+
+router.post('/oauth/exchange', rateLimit({ windowMs: 15 * 60 * 1000, max: 12, message: 'Trop de tentatives de connexion. Réessayez plus tard.' }), async (req, res) => {
+  try {
+    const code = typeof req.body?.code === 'string' ? req.body.code : '';
+    if (code.length < 40 || code.length > 64) return res.status(401).json({ message: 'Code de connexion invalide ou expiré.' });
+    const codeHash = crypto.createHash('sha256').update(code).digest('hex');
+    const loginCode = await prisma.googleLoginCode.findUnique({ where: { code_hash: codeHash }, select: { user_id: true, expires_at: true } });
+    const now = new Date();
+    if (!loginCode || loginCode.expires_at <= now) return res.status(401).json({ message: 'Code de connexion invalide ou expiré.' });
+    const consumed = await prisma.googleLoginCode.deleteMany({ where: { code_hash: codeHash, expires_at: { gt: now } } });
+    if (!consumed.count) return res.status(401).json({ message: 'Ce code de connexion a déjà été utilisé.' });
+    const user = await prisma.user.findFirst({ where: { id: loginCode.user_id, is_active: true }, select: { id: true, email: true } });
+    if (!user) return res.status(401).json({ message: 'Compte désactivé ou introuvable.' });
+    const token = jwt.sign({ userId: user.id, email: user.email }, process.env.JWT_SECRET, { expiresIn: '24h' });
+    res.set('Cache-Control', 'no-store');
+    res.json({ token });
+  } catch (error) {
+    console.error('Google login exchange error:', error);
+    res.status(500).json({ message: 'Impossible de terminer la connexion Google.' });
+  }
+});
 
 // Route Sign in with Apple
 router.post('/apple', async (req, res) => {
@@ -142,7 +172,7 @@ router.post('/apple', async (req, res) => {
 });
 
 // Register
-router.post('/register', async (req, res) => {
+router.post('/register', rateLimit({ windowMs: 60 * 60 * 1000, max: 6, message: 'Trop de tentatives d’inscription depuis cette connexion. Réessayez plus tard.' }), async (req, res) => {
   try {
     const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
     const password = typeof req.body?.password === 'string' ? req.body.password : '';
@@ -209,7 +239,7 @@ router.post('/register', async (req, res) => {
 });
 
 // Login
-router.post('/login', async (req, res) => {
+router.post('/login', rateLimit({ windowMs: 15 * 60 * 1000, max: 10, skipSuccessfulRequests: true, message: 'Trop de tentatives de connexion. Réessayez dans quelques minutes.' }), async (req, res) => {
   try {
     const { email, password } = req.body;
 

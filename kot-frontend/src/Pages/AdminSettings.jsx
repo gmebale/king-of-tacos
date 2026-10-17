@@ -329,7 +329,7 @@ const AdminSettings = () => {
     if (!file) return;
     setUploadingHeroMedia(true);
     try {
-      const uploaded = await UploadFile({ file });
+      const uploaded = await UploadFile({ file, purpose: 'homepage' });
       setHeroMedia(current => ({ ...current, media_url: uploaded.file_url, media_type: uploaded.media_type }));
       toast.success('Média téléversé. Pensez à enregistrer la bannière.');
     } catch (error) {
