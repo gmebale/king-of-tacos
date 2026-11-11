@@ -243,6 +243,7 @@ router.post('/ebilling/ussd-push', async (req, res) => {
   let reservationOrderId = null;
   let reservationValue = null;
   let previousProviderId = null;
+  let ebillingInvoicePersisted = false;
 
   try {
     const { orderId, paymentStatusToken, paymentSystemName } = req.body;
@@ -302,6 +303,12 @@ router.post('/ebilling/ussd-push', async (req, res) => {
       }
       return res.status(409).json({ message: 'Une tentative E-Billing est déjà en cours. Actualisez son statut avant de recommencer.' });
     }
+    if (String(order.payment_provider_id || '').startsWith('ebilling-starting:')) {
+      return res.status(409).json({ message: 'Le démarrage d’une demande E-Billing est déjà en cours. Actualisez le statut avant de recommencer.' });
+    }
+    if (order.payment_provider_id && !existingDetails) {
+      return res.status(409).json({ message: 'Une tentative de paiement avec un autre prestataire est associée à cette commande.' });
+    }
 
     const reservation = `ebilling-starting:${Date.now()}`;
     reservationOrderId = order.id;
@@ -353,6 +360,7 @@ router.post('/ebilling/ussd-push', async (req, res) => {
       data: { payment_provider_id: detailsJson }
     });
     if (!invoiceSaved.count) return res.status(409).json({ message: 'La commande a changé pendant la création de la facture.' });
+    ebillingInvoicePersisted = true;
 
     let pushResponse;
     try {
@@ -363,7 +371,7 @@ router.post('/ebilling/ussd-push', async (req, res) => {
           where: { id: order.id, payment_provider_id: detailsJson, payment_status: order.payment_status },
           data: { payment_status: 'failed' }
         });
-        return res.status(422).json({ message: 'L’opérateur a refusé la demande USSD. Vérifiez le numéro et réessayez.' });
+        return res.status(422).json({ paymentNotStarted: true, message: 'L’opérateur a refusé la demande USSD. Vérifiez le numéro et réessayez.' });
       }
       throw error;
     }
@@ -393,6 +401,7 @@ router.post('/ebilling/ussd-push', async (req, res) => {
       }).catch(() => {});
     }
     res.status(502).json({
+      paymentNotStarted: !ebillingInvoicePersisted,
       message: 'E-Billing n’a pas pu confirmer le démarrage du paiement. Consultez le statut de la commande avant toute nouvelle tentative.'
     });
   }
@@ -439,6 +448,14 @@ router.get('/ebilling/status/:orderId', async (req, res) => {
     return res.status(403).json({ message: 'Autorisation de suivi invalide ou expirée.' });
   }
   try {
+    const order = await prisma.order.findUnique({ where: { id: orderId } });
+    if (!order) return res.status(404).json({ message: 'Commande introuvable.' });
+    if (!parseEbillingDetails(order) && String(order.payment_provider_id || '').startsWith('ebilling-starting:')) {
+      return res.json({ paymentStatus: 'requires_action', providerState: 'INITIATING', manualReviewRequired: true, orderCode: order.order_code });
+    }
+    if (!parseEbillingDetails(order) && !order.payment_provider_id) {
+      return res.status(404).json({ paymentNotStarted: true, message: 'Aucune demande E-Billing n’a été enregistrée pour cette commande.' });
+    }
     const status = await reconcileEbillingOrder(orderId);
     if (status.error) return res.status(404).json({ message: status.error });
     res.json(status);
@@ -484,13 +501,22 @@ router.post('/ebilling/webhook', async (req, res) => {
   }
 });
 
-async function applyPvitStatus(order, providerStatus) {
+async function applyPvitStatus(order, providerStatus, transactionId = null) {
   const details = parsePvitDetails(order);
   if (!details) throw new Error('La tentative PVit associée à la commande est invalide.');
+  if (transactionId) details.transactionId = String(transactionId);
   const status = String(providerStatus || '').toUpperCase();
   const nextPaymentStatus = status === 'SUCCESS' ? 'paid' : status === 'FAILED' ? 'failed' : 'requires_action';
   const conflict = order.status === 'annulee' || Boolean(order.closed_at);
-  if (order.payment_status === nextPaymentStatus) return { paymentStatus: nextPaymentStatus, providerState: status, conflict: conflict && nextPaymentStatus === 'paid' };
+  if (order.payment_status === nextPaymentStatus) {
+    if (transactionId && parsePvitDetails(order)?.transactionId !== String(transactionId)) {
+      await prisma.order.updateMany({
+        where: { id: order.id, payment_provider_id: order.payment_provider_id, payment_status: order.payment_status },
+        data: { payment_provider_id: serializePvitDetails({ ...details, state: status }) }
+      });
+    }
+    return { paymentStatus: nextPaymentStatus, providerState: status, conflict: conflict && nextPaymentStatus === 'paid' };
+  }
   const updatedCount = await prisma.$transaction(async tx => {
     const updated = await tx.order.updateMany({
       where: { id: order.id, payment_method: 'mobile_money', payment_provider_id: order.payment_provider_id, payment_status: { in: ['pending', 'requires_action', 'failed'] } },
@@ -519,8 +545,12 @@ async function applyPvitStatus(order, providerStatus) {
 router.post('/pvit/create', async (req, res) => {
   let reservation = null;
   let previousProviderId = null;
+  let paymentRequestSent = false;
+  let requestedOrderId = null;
+  let pvitAttemptDetails = null;
   try {
     const { orderId, paymentStatusToken, operatorCode, payerPhone } = req.body || {};
+    requestedOrderId = orderId;
     if (!orderId || !verifyPaymentStatusToken(paymentStatusToken, orderId)) return res.status(403).json({ message: 'Autorisation de paiement invalide ou expirée.' });
     const baseConfig = pvit.getConfig();
     if (!baseConfig.configured) return res.status(503).json({ message: 'Le paiement PVit n’est pas encore configuré.' });
@@ -545,7 +575,9 @@ router.post('/pvit/create', async (req, res) => {
     if (order.status === 'annulee' || order.closed_at || order.payment_status === 'paid' || order.payment_status === 'refunded') return res.status(409).json({ message: 'Cette commande ne peut plus être payée.' });
     if (!Number.isInteger(order.total_amount) || order.total_amount < 100 || order.total_amount > 490000) return res.status(400).json({ message: 'Le montant PVit doit être compris entre 100 et 490 000 FCFA.' });
     const existingDetails = parsePvitDetails(order);
-    if (existingDetails && ['PENDING', 'SUCCESS'].includes(existingDetails.state)) return res.json({ orderCode: order.order_code, paymentStatus: order.payment_status, providerState: existingDetails.state, reused: true });
+    if (existingDetails && ['INITIATING', 'AMBIGUOUS', 'PENDING', 'SUCCESS'].includes(existingDetails.state)) {
+      return res.json({ orderCode: order.order_code, paymentStatus: order.payment_status, providerState: existingDetails.state, merchantReferenceId: existingDetails.reference, reused: true });
+    }
     if (order.payment_provider_id && !existingDetails) return res.status(409).json({ message: 'Une tentative de paiement par un autre prestataire existe déjà.' });
 
     const reference = 'K' + crypto.randomBytes(6).toString('hex').toUpperCase();
@@ -557,18 +589,51 @@ router.post('/pvit/create', async (req, res) => {
     });
     if (!claimed.count) return res.status(409).json({ message: 'Cette commande a changé d’état. Actualisez-la avant de payer.' });
     await pvit.verifyCustomer(normalizedPayerPhone, operatorCode);
-    const initiated = await pvit.createPayment({ amount: order.total_amount, phone: normalizedPayerPhone, reference, operatorCode, orderCode: order.order_code || order.id });
-    const details = serializePvitDetails({ reference, transactionId: initiated.transactionId, operatorCode, state: initiated.status, initiatedAt: Date.now() });
-    const saved = await prisma.order.updateMany({
+    pvitAttemptDetails = {
+      reference,
+      transactionId: null,
+      operatorCode,
+      state: 'INITIATING',
+      initiatedAt: Date.now()
+    };
+    const attemptDetailsJson = serializePvitDetails(pvitAttemptDetails);
+    const attemptSaved = await prisma.order.updateMany({
       where: { id: order.id, payment_provider_id: reservation, payment_status: order.payment_status },
-      data: { payment_provider_id: details, payment_status: 'requires_action' }
+      data: { payment_provider_id: attemptDetailsJson, payment_status: 'requires_action' }
     });
-    if (!saved.count) return res.status(409).json({ message: 'La demande PVit a été lancée, mais la commande a changé. Contactez le restaurant avant de réessayer.' });
-    return res.json({ orderCode: order.order_code, paymentStatus: 'requires_action', providerState: initiated.status });
+    if (!attemptSaved.count) return res.status(409).json({ message: 'La commande a changé avant l’envoi du paiement. Actualisez son statut.' });
+
+    // Save the unique reference before contacting the provider. If the connection
+    // times out after PVit has accepted the request, its callback can still match it.
+    paymentRequestSent = true;
+    const initiated = await pvit.createPayment({ amount: order.total_amount, phone: normalizedPayerPhone, reference, operatorCode, orderCode: order.order_code || order.id });
+    const saved = await prisma.order.updateMany({
+      where: { id: order.id, payment_provider_id: attemptDetailsJson, payment_status: 'requires_action' },
+      data: { payment_provider_id: serializePvitDetails({ ...pvitAttemptDetails, transactionId: initiated.transactionId, state: initiated.status }) }
+    });
+    if (!saved.count) {
+      const refreshed = await prisma.order.findUnique({ where: { id: order.id } });
+      const refreshedDetails = parsePvitDetails(refreshed);
+      if (refreshed?.payment_status === 'paid' || refreshedDetails?.transactionId === initiated.transactionId) {
+        return res.json({ orderCode: order.order_code, paymentStatus: refreshed.payment_status, providerState: refreshedDetails?.state || initiated.status, merchantReferenceId: reference });
+      }
+      return res.status(202).json({ orderCode: order.order_code, paymentStatus: 'requires_action', providerState: 'AMBIGUOUS', merchantReferenceId: reference, message: 'Le paiement a été transmis, mais sa réponse doit être vérifiée. Ne relancez pas la demande.' });
+    }
+    return res.json({ orderCode: order.order_code, paymentStatus: 'requires_action', providerState: initiated.status, merchantReferenceId: reference });
   } catch (error) {
-    if (reservation) await prisma.order.updateMany({ where: { payment_provider_id: reservation }, data: { payment_provider_id: previousProviderId } }).catch(() => {});
     console.error('PVit payment initiation error:', error.message);
-    return res.status(502).json({ message: error.message || 'Impossible de démarrer le paiement PVit.' });
+    if (paymentRequestSent) {
+      const ambiguousDetails = { ...pvitAttemptDetails, state: 'AMBIGUOUS' };
+      await prisma.order.updateMany({
+        where: { id: requestedOrderId, payment_method: 'mobile_money', payment_status: 'requires_action' },
+        data: { payment_provider_id: serializePvitDetails(ambiguousDetails) }
+      }).catch(() => {});
+      return res.status(202).json({ paymentStatus: 'requires_action', providerState: 'AMBIGUOUS', merchantReferenceId: ambiguousDetails.reference, message: 'Le statut du paiement est incertain. Vérifiez-le avant toute nouvelle tentative.' });
+    }
+    if (reservation) await prisma.order.updateMany({ where: { payment_provider_id: reservation }, data: { payment_provider_id: previousProviderId } }).catch(() => {});
+    const response = { message: error.message || 'Impossible de démarrer le paiement PVit.' };
+    response.paymentNotStarted = true;
+    return res.status(502).json(response);
   }
 });
 
@@ -578,7 +643,28 @@ router.get('/pvit/status/:orderId', async (req, res) => {
   try {
     const order = await prisma.order.findUnique({ where: { id: orderId } });
     const details = parsePvitDetails(order);
-    if (!order || !details) return res.status(404).json({ message: 'Paiement PVit introuvable.' });
+    if (!order) return res.status(404).json({ message: 'Commande introuvable.' });
+    if (!details && String(order.payment_provider_id || '').startsWith('pvit-starting:')) {
+      return res.json({
+        paymentStatus: 'requires_action',
+        providerState: 'INITIATING',
+        merchantReferenceId: String(order.payment_provider_id).slice('pvit-starting:'.length),
+        manualReviewRequired: true,
+        conflict: order.status === 'annulee' || Boolean(order.closed_at),
+        orderCode: order.order_code
+      });
+    }
+    if (!details) return res.status(404).json({ paymentNotStarted: true, message: 'Aucune demande PVit n’a été enregistrée pour cette commande.' });
+    if (!details.transactionId) {
+      return res.json({
+        paymentStatus: 'requires_action',
+        providerState: details.state || 'AMBIGUOUS',
+        merchantReferenceId: details.reference,
+        manualReviewRequired: true,
+        conflict: order.status === 'annulee' || Boolean(order.closed_at),
+        orderCode: order.order_code
+      });
+    }
     let result = { paymentStatus: order.payment_status, providerState: details.state, conflict: order.status === 'annulee' || Boolean(order.closed_at) };
     const fallbackDelayMs = Math.max(180000, Number(process.env.PVIT_STATUS_FALLBACK_DELAY_MS) || 180000);
     const paymentStartedAt = details.initiatedAt || new Date(order.created_date).getTime();
@@ -586,7 +672,11 @@ router.get('/pvit/status/:orderId', async (req, res) => {
     if (!['paid', 'failed', 'refunded'].includes(order.payment_status) && statusCheckDue) {
       const checked = await checkPvitStatusCached(details.transactionId, details.operatorCode);
       if (['SUCCESS', 'FAILED'].includes(checked.status)) result = await applyPvitStatus(order, checked.status);
-      else result = { ...result, providerState: checked.status };
+      else result = {
+        ...result,
+        providerState: checked.status,
+        ...(checked.status === 'AMBIGUOUS' ? { manualReviewRequired: true, merchantReferenceId: details.reference } : {})
+      };
     }
     return res.json({ ...result, orderCode: order.order_code });
   } catch (error) {
@@ -602,12 +692,12 @@ router.post('/pvit/callback', async (req, res) => {
   try {
     const order = await prisma.order.findFirst({ where: { payment_method: 'mobile_money', payment_provider_id: { contains: String(merchantReferenceId) } } });
     const details = parsePvitDetails(order);
-    if (!order || !details || details.reference !== String(merchantReferenceId) || details.transactionId !== String(transactionId)) return res.status(409).json({ message: 'La notification PVit ne correspond à aucune tentative de paiement.' });
+    if (!order || !details || details.reference !== String(merchantReferenceId) || (details.transactionId && details.transactionId !== String(transactionId))) return res.status(409).json({ message: 'La notification PVit ne correspond à aucune tentative de paiement.' });
     const expectedAccountCode = pvit.getAccountCode(details.operatorCode);
     if (!expectedAccountCode || Number(amount) !== order.total_amount || accountOperationCode !== expectedAccountCode || transactionOperation !== 'PAYMENT') return res.status(409).json({ message: 'Les données PVit ne correspondent pas à la commande.' });
     const callbackStatus = String(status).toUpperCase();
     if (['SUCCESS', 'FAILED'].includes(callbackStatus)) {
-      await applyPvitStatus(order, callbackStatus);
+      await applyPvitStatus(order, callbackStatus, transactionId);
     } else {
       console.warn('PVit callback received a non-final status for order', order.order_code, callbackStatus);
     }

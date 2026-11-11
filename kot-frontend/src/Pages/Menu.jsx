@@ -12,6 +12,8 @@ import { createPageUrl } from "../utils";
 import ProductCard from "../Components/menu/ProductCard";
 import CartSummary from "../Components/menu/CartSummary";
 
+const ALL_CATEGORIES = "__all__";
+
 export default function Menu() {
   const navigate = useNavigate();
   const [products, setProducts] = useState([]);
@@ -48,10 +50,15 @@ export default function Menu() {
       const inferredCategories = [...new Map(visibleProducts
         .filter(product => product.category?.name)
         .map(product => [product.category.name, product.category])).values()];
-      const visibleCategories = configuredCategories.length ? configuredCategories : inferredCategories;
+      const categoriesWithProducts = configuredCategories.length ? configuredCategories : inferredCategories;
+      const visibleCategories = categoriesWithProducts.filter(cat =>
+        visibleProducts.some(product => product.category?.name === cat.name)
+      );
       setProducts(visibleProducts);
       setCategories(visibleCategories);
-      setCategory(current => visibleCategories.some(cat => cat.name === current) ? current : (visibleCategories[0]?.name || ''));
+      setCategory(current => current === ALL_CATEGORIES || visibleCategories.some(cat => cat.name === current)
+        ? current
+        : ALL_CATEGORIES);
     } catch (err) {
       setError('Erreur de chargement des produits. Vérifiez la connexion au serveur.');
       console.error('Error loading products:', err);
@@ -68,7 +75,9 @@ export default function Menu() {
   const filterProducts = () => {
     let filtered = products;
 
-    filtered = filtered.filter(p => p.category?.name === category);
+    if (category !== ALL_CATEGORIES) {
+      filtered = filtered.filter(p => p.category?.name === category);
+    }
 
     if (searchQuery) {
       filtered = filtered.filter(p =>
@@ -182,13 +191,17 @@ export default function Menu() {
     const touch = event.changedTouches[0];
     const deltaX = touch.clientX - start.x;
     const deltaY = touch.clientY - start.y;
-    if (Math.abs(deltaX) < 60 || Math.abs(deltaX) < Math.abs(deltaY) * 1.25) return;
+    const isHorizontal = Math.abs(deltaX) >= Math.abs(deltaY);
+    const distance = isHorizontal ? deltaX : deltaY;
+    if (Math.abs(distance) < 60) return;
 
-    const currentIndex = categories.findIndex(item => item.name === category);
-    const nextIndex = currentIndex + (deltaX < 0 ? 1 : -1);
-    if (nextIndex < 0 || nextIndex >= categories.length) return;
-    setSwipeDirection(deltaX < 0 ? 1 : -1);
-    setCategory(categories[nextIndex].name);
+    const categoryValues = [ALL_CATEGORIES, ...categories.map(item => item.name)];
+    const currentIndex = categoryValues.indexOf(category);
+    const forward = distance < 0;
+    const nextIndex = currentIndex + (forward ? 1 : -1);
+    if (currentIndex < 0 || nextIndex < 0 || nextIndex >= categoryValues.length) return;
+    setSwipeDirection((forward ? 1 : -1) * (isHorizontal ? 1 : 2));
+    setCategory(categoryValues[nextIndex]);
   };
 
   return (
@@ -231,6 +244,12 @@ export default function Menu() {
           <div ref={categoryTabsRef} className="sticky top-0 z-30 -mx-4 min-w-0 overflow-x-auto overscroll-x-contain touch-pan-x bg-amber-50/95 px-4 py-2 backdrop-blur sm:-mx-6 sm:px-6 md:static md:mx-0 md:overflow-visible md:bg-transparent md:p-0">
             <Tabs value={category} onValueChange={value => { setSwipeDirection(0); setCategory(value); }}>
               <TabsList className="flex h-auto w-max min-w-max max-w-none justify-start gap-1 overflow-visible rounded-xl border border-gray-200 bg-white p-1 scrollbar-hide touch-pan-x md:w-full md:min-w-0 md:max-w-full md:justify-center md:flex-wrap">
+                <TabsTrigger
+                  value={ALL_CATEGORIES}
+                  className="shrink-0 whitespace-nowrap rounded-lg px-3 py-1.5 text-xs data-[state=active]:bg-gradient-to-r data-[state=active]:from-yellow-400 data-[state=active]:to-amber-500 data-[state=active]:text-slate-900 sm:px-4 sm:py-2 sm:text-sm"
+                >
+                  Tous
+                </TabsTrigger>
                 {categories.map(cat => (
                   <TabsTrigger
                     key={cat.id}
@@ -245,9 +264,9 @@ export default function Menu() {
           </div>
         </div>
 
-        {selectedCategory && <div className="mb-4 flex items-end justify-between gap-3 md:mb-5">
+        {(selectedCategory || category === ALL_CATEGORIES) && <div className="mb-4 flex items-end justify-between gap-3 md:mb-5">
           <div>
-            <h2 className="text-lg font-bold text-slate-900 sm:text-xl">{categoryLabel(selectedCategory.displayName || selectedCategory.name)}</h2>
+            <h2 className="text-lg font-bold text-slate-900 sm:text-xl">{category === ALL_CATEGORIES ? 'Tous' : categoryLabel(selectedCategory.displayName || selectedCategory.name)}</h2>
             <p className="mt-1 text-sm text-slate-600">Nous avons {filteredProducts.length} proposition{filteredProducts.length > 1 ? 's' : ''} pour vous.</p>
           </div>
         </div>}
@@ -264,9 +283,9 @@ export default function Menu() {
           ) : (
             filteredProducts.length > 0 ? <motion.div
               key={category}
-              initial={{ opacity: 0, x: swipeDirection * 48 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: swipeDirection * -48 }}
+              initial={{ opacity: 0, x: Math.abs(swipeDirection) === 1 ? swipeDirection * 48 : 0, y: Math.abs(swipeDirection) === 2 ? Math.sign(swipeDirection) * 48 : 0 }}
+              animate={{ opacity: 1, x: 0, y: 0 }}
+              exit={{ opacity: 0, x: Math.abs(swipeDirection) === 1 ? swipeDirection * -48 : 0, y: Math.abs(swipeDirection) === 2 ? Math.sign(swipeDirection) * -48 : 0 }}
               transition={{ duration: 0.18 }}
               className="mb-8 grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2 md:gap-6 lg:grid-cols-3"
             >

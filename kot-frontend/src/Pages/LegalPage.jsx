@@ -2,7 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, FileText, ShieldCheck, Truck, Scale } from 'lucide-react';
 
-const legalDate = '15 octobre 2026';
+const legalDate = '19 octobre 2026';
 
 const sections = {
   legal: {
@@ -38,6 +38,7 @@ const sections = {
     content: (
       <>
         <p><strong>Mise à jour : {legalDate}.</strong> Les présentes conditions s’appliquent aux commandes de repas et boissons passées sur le site King Of Tacos. Avant de confirmer, le client peut vérifier le récapitulatif de sa commande et corriger les informations saisies.</p>
+        <p>Les avis et notes Google affichés sur le site sont fournis par Google Maps Platform et restent soumis aux <a href="https://cloud.google.com/maps-platform/terms" target="_blank" rel="noopener noreferrer" className="text-amber-700 underline">conditions Google Maps Platform</a>.</p>
         <h2>1. Produits, disponibilité et prix</h2>
         <p>Le menu présente les produits, leurs prix et, le cas échéant, les choix et suppléments disponibles. Les prix des produits affichés par King Of Tacos sont en FCFA et taxes incluses. Les choix effectués et le montant dû à King Of Tacos sont récapitulés avant confirmation. La disponibilité peut évoluer selon le stock ; si un produit commandé ne peut être fourni, le restaurant contacte le client pour convenir d’une solution ou procéder au remboursement correspondant lorsqu’un paiement a déjà été encaissé.</p>
         <h2>2. Commande et confirmation</h2>
@@ -77,6 +78,8 @@ const sections = {
         </ul>
         <h2>Paiement et autres destinataires</h2>
         <p>Les données nécessaires au paiement sont transmises au prestataire de paiement choisi et affiché au moment du règlement, notamment MyPVIT lorsqu’il est utilisé. King Of Tacos ne demande pas et ne doit pas recevoir le code secret Mobile Money du client. Les données sont également accessibles aux personnes habilitées du restaurant et aux prestataires techniques nécessaires à l’hébergement et à l’authentification. Elles ne sont pas vendues.</p>
+        <h2>Avis Google</h2>
+        <p>La page d’accueil peut afficher la note et les avis publics de la fiche King Of Tacos au moyen de Google Maps Platform. Le serveur demande ces informations à Google avec l’identifiant de la fiche, les utilise uniquement pour les afficher, et ne les enregistre pas dans la base de données du site. Ouvrir un lien Google Maps transfère le visiteur vers Google, qui traite alors les données selon ses propres règles. Consultez les <a href="https://policies.google.com/terms" target="_blank" rel="noopener noreferrer" className="text-amber-700 underline">conditions de Google</a> et les <a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer" className="text-amber-700 underline">règles de confidentialité de Google</a>.</p>
         <h2>Hébergement et transferts</h2>
         <p>Le serveur VPS du site est situé à Vilnius, en Lituanie. Une copie de toutes les données du site et des transactions est hébergée à Libreville, au Gabon. Google, les prestataires de paiement et les prestataires techniques peuvent également traiter les données selon leurs services et leurs propres conditions. Le transfert des données et les garanties applicables doivent respecter les règles gabonaises de protection des données.</p>
         <h2>Durée de conservation</h2>

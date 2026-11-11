@@ -9,17 +9,19 @@ import { Card } from "../Components/ui/card";
 import api from "../services/api.service";
 import { resolveMediaUrl } from "../utils/media";
 
-const googleBusinessUrl = "https://www.google.com/search?sca_esv=a01675dfb8ba76df&sxsrf=APpeQnv3l7iQNhf9eRFCV1n_Ke2QARbUCw:1792157848404&q=King+Of+Tacos&si=APenkKm7iecQ4G6P-TsbSMFKIQtv3EFIqRAFw-i8uEbk55Z-_xPbtkexS9VQrrLOMRLbmttvbLUuK_0JGvwHqWArbwRB-Kem1slAU9M02WEJPhb126wHEZAZFBZsyGGKqODXz86Mj61K&sa=X&ved=2ahUKEwjUtr2f1L6XAxUvVEEAHbc5IPIQrrQLegQIHRAA&biw=1366&bih=607&dpr=1#";
+const googleBusinessSearchUrl = "https://www.google.com/maps/search/?api=1&query=King%20Of%20Tacos%20Libreville";
 
 export default function Home() {
   const { isAuthenticated } = useAuthContext();
   const [heroMedia, setHeroMedia] = useState({ media_url: '', media_type: '', overlay_opacity: 85, position_x: 50, position_y: 50, image_scale: 100 });
   const [reviews, setReviews] = useState({ data: [], total: 0, average_rating: 0 });
+  const [googleReviews, setGoogleReviews] = useState(null);
 
   useEffect(() => {
     window.scrollTo(0, 0);
     api.get('/settings/homepage').then(response => setHeroMedia(current => ({ ...current, ...response.data }))).catch(() => {});
     api.get('/reviews/public').then(response => setReviews(response.data)).catch(() => {});
+    api.get('/reviews/google').then(response => setGoogleReviews(response.data)).catch(() => {});
   }, []);
 
   const features = [
@@ -246,6 +248,59 @@ export default function Home() {
         </section>
       )}
 
+      {googleReviews?.reviews?.length > 0 && (
+        <section className="relative overflow-hidden bg-white py-16" aria-labelledby="google-reviews-feed-heading">
+          <div className="mx-auto max-w-7xl px-6">
+            <div className="mb-10 flex flex-col items-center justify-between gap-6 text-center md:flex-row md:text-left">
+              <div>
+                <p className="mb-3 text-sm font-bold uppercase tracking-[0.2em] text-amber-700">Avis Google</p>
+                <h2 id="google-reviews-feed-heading" className="text-3xl font-black text-slate-900 md:text-4xl">Ce que nos clients disent sur Google</h2>
+                <p className="mt-3 text-slate-600">Les avis affichés sont sélectionnés et classés par Google.</p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-6 py-4">
+                <div className="flex items-center justify-center gap-1" aria-label={`Note Google ${googleReviews.average_rating} sur 5`}>
+                  {[1, 2, 3, 4, 5].map(star => (
+                    <Star key={star} className={`h-5 w-5 ${star <= Math.round(googleReviews.average_rating) ? 'fill-amber-400 text-amber-400' : 'text-slate-200'}`} />
+                  ))}
+                </div>
+                <p className="mt-1 text-center text-sm text-slate-600">
+                  <strong className="text-slate-900">{googleReviews.average_rating.toFixed(1)}/5</strong> · {googleReviews.total} avis Google
+                </p>
+              </div>
+            </div>
+
+            <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+              {googleReviews.reviews.map((review, index) => (
+                <motion.div key={`${review.author.name}-${index}`} initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.2 }} transition={{ delay: index * 0.06 }}>
+                  <Card className="flex h-full flex-col rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                    <div className="mb-4 flex items-center justify-between gap-3">
+                      <div className="flex gap-1" aria-label={`Note ${review.rating} sur 5`}>
+                        {[1, 2, 3, 4, 5].map(star => <Star key={star} className={`h-4 w-4 ${star <= review.rating ? 'fill-amber-400 text-amber-400' : 'text-slate-200'}`} />)}
+                      </div>
+                      <span className="text-xs text-slate-500">{review.published_description}</span>
+                    </div>
+                    <p className="flex-1 whitespace-pre-line leading-relaxed text-slate-700">{review.text ? `“${review.text}”` : 'Avis sans commentaire.'}</p>
+                    <div className="mt-5 flex items-center gap-3 border-t border-slate-100 pt-4">
+                      {review.author.photo_uri ? <img src={review.author.photo_uri} alt="" className="h-10 w-10 rounded-full" referrerPolicy="no-referrer" /> : <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100 font-bold text-amber-800">{review.author.name.charAt(0).toUpperCase()}</div>}
+                      <div className="min-w-0 flex-1">
+                        {review.author.uri ? <a href={review.author.uri} target="_blank" rel="noopener noreferrer" className="truncate font-semibold text-slate-900 hover:underline">{review.author.name}</a> : <p className="truncate font-semibold text-slate-900">{review.author.name}</p>}
+                        {review.translated && <p className="text-xs text-slate-500">Traduit par Google</p>}
+                        <div className="flex gap-3 text-xs text-slate-600">
+                          {review.review_url && <a href={review.review_url} target="_blank" rel="noopener noreferrer" className="hover:underline">Voir cet avis sur Google Maps</a>}
+                          {review.report_url && <a href={review.report_url} target="_blank" rel="noopener noreferrer" className="hover:underline">Signaler</a>}
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
+                </motion.div>
+              ))}
+            </div>
+            <p translate="no" className="mt-5 text-center text-xs font-normal text-[#5E5E5E]">Google Maps</p>
+            <p className="mt-2 text-center text-xs text-slate-600">Les avis sont classés par pertinence. Google ne vérifie pas chaque avis, mais retire les contenus frauduleux identifiés.</p>
+          </div>
+        </section>
+      )}
+
       <section className="bg-white px-6 pb-16" aria-labelledby="google-reviews-heading">
         <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-6 rounded-3xl border border-slate-200 bg-slate-50 p-8 text-center sm:p-10 md:flex-row md:text-left">
           <div>
@@ -254,13 +309,13 @@ export default function Home() {
             <p className="mt-2 max-w-2xl text-slate-600">Consultez notre fiche Google pour lire les avis et partager votre expérience.</p>
           </div>
           <a
-            href={googleBusinessUrl}
+            href={googleReviews?.review_url || googleReviews?.place_url || googleBusinessSearchUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-white px-5 py-3 font-semibold text-slate-900 shadow-sm ring-1 ring-slate-300 transition hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-600 sm:w-auto"
           >
             <Star className="h-5 w-5 fill-amber-400 text-amber-500" aria-hidden="true" />
-            Voir les avis et laisser un avis
+            {googleReviews?.review_url ? 'Lire les avis et laisser un avis' : 'Consulter notre fiche Google'}
             <ArrowRight className="h-4 w-4" aria-hidden="true" />
           </a>
         </div>

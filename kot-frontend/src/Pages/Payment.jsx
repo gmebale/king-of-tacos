@@ -167,21 +167,24 @@ export default function Payment() {
 
         if (useMobileMoney && paymentProvider === 'pvit') {
           let initiationError = null;
+          let paymentNotStarted = false;
           try {
             await api.post('/payments/pvit/create', {
               orderId: order.id, paymentStatusToken: order.payment_status_token, operatorCode: paymentSystemName, payerPhone: normalizedPvitPhone
             });
           } catch (error) {
             initiationError = error.response?.data?.message || 'Le démarrage du paiement PVit n’a pas pu être confirmé.';
+            paymentNotStarted = error.response?.data?.paymentNotStarted === true || Boolean(error.response && error.response.status < 500 && error.response.status !== 409);
           }
           navigate(createPageUrl("OrderSuccess"), {
             state: {
-              pvitPayment: { orderId: order.id, orderCode: order.order_code, paymentStatusToken: order.payment_status_token, operatorCode: paymentSystemName, payerPhone: normalizedPvitPhone, initiationError },
+              pvitPayment: { orderId: order.id, orderCode: order.order_code, paymentStatusToken: order.payment_status_token, operatorCode: paymentSystemName, payerPhone: normalizedPvitPhone, initiationError, paymentNotStarted },
               guestOrder: { orderCode: order.order_code, phone: formData.customer_phone }
             }
           });
         } else if (useMobileMoney) {
           let initiationError = null;
+          let paymentNotStarted = false;
           try {
             await api.post('/payments/ebilling/ussd-push', {
               orderId: order.id, paymentStatusToken: order.payment_status_token, paymentSystemName,
@@ -189,10 +192,11 @@ export default function Payment() {
             });
           } catch (error) {
             initiationError = error.response?.data?.message || 'Le démarrage du paiement n’a pas pu être confirmé.';
+            paymentNotStarted = error.response?.data?.paymentNotStarted === true || Boolean(error.response && error.response.status < 500 && error.response.status !== 409);
           }
           navigate(createPageUrl("OrderSuccess"), {
             state: {
-              ebillingPayment: { orderId: order.id, orderCode: order.order_code, paymentStatusToken: order.payment_status_token, paymentSystemName, payerMsisdn: paymentSystemName === 'SIMU' ? simuMsisdn : undefined, initiationError },
+              ebillingPayment: { orderId: order.id, orderCode: order.order_code, paymentStatusToken: order.payment_status_token, paymentSystemName, payerMsisdn: paymentSystemName === 'SIMU' ? simuMsisdn : undefined, initiationError, paymentNotStarted },
               guestOrder: { orderCode: order.order_code, phone: formData.customer_phone }
             }
           });

@@ -44,7 +44,8 @@ export default function AdminMobileMoney() {
     loadOrders();
   }, [statusFilter]);
 
-  const handleApprove = async (id) => {
+  const handleApprove = async (id, pvitDetails) => {
+    if (pvitDetails && !window.confirm(`Vérifiez dans le compte PVit que la transaction ${pvitDetails.reference} est bien encaissée avant de confirmer. Continuer ?`)) return;
     try {
       setActionLoading(id);
       await api.put(`/payments/mobile-money/${id}/approve`);
@@ -57,8 +58,11 @@ export default function AdminMobileMoney() {
     }
   };
 
-  const handleReject = async (id) => {
-    if (!window.confirm("Rejeter ce paiement mobile money ?")) return;
+  const handleReject = async (id, pvitDetails) => {
+    const confirmation = pvitDetails
+      ? `Ne rejetez que si le compte PVit confirme que ${pvitDetails.reference} a échoué. Rejeter cette commande ?`
+      : "Rejeter ce paiement mobile money ?";
+    if (!window.confirm(confirmation)) return;
     try {
       setActionLoading(id);
       await api.put(`/payments/mobile-money/${id}/reject`);
@@ -119,13 +123,18 @@ export default function AdminMobileMoney() {
             const statusLabel = STATUS_LABELS[order.payment_status] || order.payment_status;
             const statusStyle = STATUS_STYLES[order.payment_status] || "bg-gray-100 text-gray-800 border-gray-200";
             let ebillingDetails = null;
+            let pvitDetails = null;
             try {
+              if (typeof order.payment_provider_id === 'string' && order.payment_provider_id.startsWith('pvit-starting:')) {
+                pvitDetails = { reference: order.payment_provider_id.slice('pvit-starting:'.length), state: 'INITIATING' };
+              }
               const parsed = JSON.parse(order.payment_provider_id || 'null');
               if (parsed?.provider === 'ebilling') ebillingDetails = parsed;
               else if (parsed?.p === 'ebilling') ebillingDetails = {
                 paymentSystemName: parsed.s,
                 pushState: parsed.t
               };
+              else if (parsed?.p === 'pvit') pvitDetails = { reference: parsed.r, state: parsed.s };
             } catch (_error) { /* Legacy/manual Mobile Money order. */ }
             return (
               <Card key={order.id} className="border-2">
@@ -138,6 +147,7 @@ export default function AdminMobileMoney() {
                   </div>
 
                   {ebillingDetails && <p className="text-sm text-gray-600">Paiement automatisé · {ebillingDetails.paymentSystemName === 'moovmoney' ? 'Moov Money' : ebillingDetails.paymentSystemName === 'SIMU' ? 'SIMU (Lab)' : 'Airtel Money'} · État opérateur : {ebillingDetails.pushState || 'en attente'}</p>}
+                  {pvitDetails && ['INITIATING', 'AMBIGUOUS'].includes(pvitDetails.state) && <p className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">Statut PVit incertain. Vérifiez la référence <strong>{pvitDetails.reference}</strong> dans l’espace marchand avant toute validation ou tout rejet.</p>}
                   <Badge className={`border ${statusStyle}`}>{statusLabel}</Badge>
                 </CardHeader>
                 <CardContent className="space-y-3">
@@ -202,14 +212,14 @@ export default function AdminMobileMoney() {
                   {order.payment_status === "requires_action" && !ebillingDetails && (
                     <div className="flex flex-col md:flex-row gap-2">
                       <Button
-                        onClick={() => handleApprove(order.id)}
+                        onClick={() => handleApprove(order.id, pvitDetails)}
                         disabled={actionLoading === order.id}
                         className="bg-green-600 hover:bg-green-700"
                       >
                         {actionLoading === order.id ? "Validation..." : "Valider"}
                       </Button>
                       <Button
-                        onClick={() => handleReject(order.id)}
+                        onClick={() => handleReject(order.id, pvitDetails)}
                         disabled={actionLoading === order.id}
                         variant="destructive"
                       >

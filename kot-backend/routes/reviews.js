@@ -1,9 +1,75 @@
 const express = require('express');
 const { PrismaClient, ReviewStatus } = require('@prisma/client');
 const { authenticateToken, requirePagePermission, requirePermission } = require('../middleware/auth');
+const fetch = require('node-fetch');
+const { rateLimit } = require('../middleware/rateLimit');
 
 const router = express.Router();
 const prisma = new PrismaClient();
+
+// Google Places content is fetched live and is never persisted or cached here.
+router.get('/google', rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 60,
+  message: 'Trop de demandes d’avis Google. Réessayez dans quelques minutes.'
+}), async (_req, res) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+  res.set('Pragma', 'no-cache');
+
+  const apiKey = process.env.GOOGLE_PLACES_API_KEY;
+  const placeId = process.env.GOOGLE_PLACE_ID;
+  if (!apiKey || !placeId) {
+    return res.status(503).json({ configured: false, message: 'Les avis Google ne sont pas configurés.' });
+  }
+
+  try {
+    const response = await fetch(
+      `https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}?languageCode=fr&regionCode=GA`,
+      {
+        method: 'GET',
+        timeout: 8000,
+        headers: {
+          'X-Goog-Api-Key': apiKey,
+          'X-Goog-FieldMask': 'id,displayName,rating,userRatingCount,reviews,googleMapsUri'
+        }
+      }
+    );
+
+    if (!response.ok) {
+      console.error(`Google Places request failed with status ${response.status}`);
+      return res.status(502).json({ message: 'Les avis Google sont temporairement indisponibles.' });
+    }
+
+    const place = await response.json();
+    const reviews = Array.isArray(place.reviews) ? place.reviews.slice(0, 5).map(review => ({
+      rating: Number(review.rating) || 0,
+      text: review.text?.text || review.originalText?.text || '',
+      translated: Boolean(review.text?.text && review.originalText?.text && review.text.text !== review.originalText.text),
+      published_description: review.relativePublishTimeDescription || '',
+      author: {
+        name: review.authorAttribution?.displayName || 'Client Google',
+        uri: review.authorAttribution?.uri || null,
+        photo_uri: review.authorAttribution?.photoUri || null
+      },
+      review_url: review.googleMapsUri || null,
+      report_url: review.flagContentUri || null
+    })) : [];
+
+    return res.json({
+      configured: true,
+      source: 'google',
+      display_name: place.displayName?.text || 'King Of Tacos',
+      average_rating: Number(place.rating) || 0,
+      total: Number(place.userRatingCount) || 0,
+      place_url: place.googleMapsUri || null,
+      review_url: process.env.GOOGLE_REVIEW_URL || null,
+      reviews
+    });
+  } catch (error) {
+    console.error('Get Google reviews error:', error.message);
+    return res.status(502).json({ message: 'Les avis Google sont temporairement indisponibles.' });
+  }
+});
 
 // Helper to validate rating
 function isValidRating(rating) {

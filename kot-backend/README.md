@@ -84,7 +84,23 @@ EBILLING_CLIENT_ID=
 EBILLING_CLIENT_SECRET=
 EBILLING_WEBHOOK_KEY_ID=
 EBILLING_WEBHOOK_SIGNING_KEY=
+
+# Google Places API (avis affichés sur la page d'accueil)
+GOOGLE_PLACES_API_KEY=
+GOOGLE_PLACE_ID=
+# Lien direct « écrire un avis », copié depuis le Profil d'établissement Google
+GOOGLE_REVIEW_URL=
 ```
+
+#### Configurer les avis Google
+
+1. Dans Google Cloud Console, sélectionnez le projet associé au site, activez la facturation et l'API **Places API (New)**.
+2. Créez une clé API réservée au backend. Restreignez-la à l'API Places et, si l'hébergement le permet, aux adresses IP sortantes du serveur. Ne placez jamais cette clé dans le frontend.
+3. Récupérez le **Place ID** de la fiche King Of Tacos avec le [Place ID Finder de Google](https://developers.google.com/maps/documentation/places/web-service/place-id), puis renseignez `GOOGLE_PLACES_API_KEY`, `GOOGLE_PLACE_ID` et `GOOGLE_REVIEW_URL` dans `kot-backend/.env.production` sur le serveur (ou dans `.env` en local).
+4. Depuis le Profil d'établissement Google, utilisez **Lire les avis > Obtenir plus d'avis** et copiez le lien direct fourni dans `GOOGLE_REVIEW_URL`. Sans ce lien, le bouton du site ouvre la fiche Google Maps, où le visiteur pourra lire les avis.
+5. Redémarrez le backend. L'endpoint public `GET /api/reviews/google` renvoie la note, le nombre d'avis et jusqu'à cinq avis Google. Il les récupère à la demande, sans les enregistrer en base ni les mettre en cache.
+
+La requête Places demande le champ `reviews`, dont la tarification peut être supérieure à une requête de détails de lieu sans avis. Configurez les quotas et alertes de budget dans Google Cloud avant d'activer la clé. Les avis doivent conserver leur attribution Google et leur auteur ; l'interface les relie à Google Maps. Consultez la documentation officielle Google sur les [champs Place Details](https://developers.google.com/maps/documentation/places/web-service/data-fields), la [facturation Places](https://developers.google.com/maps/documentation/places/web-service/usage-and-billing) et les [règles d'affichage du contenu Places](https://developers.google.com/maps/documentation/places/web-service/policies).
 
 E-Billing production URLs from the merchant guide are `https://stg.billing-easy.com/api` and
 `https://billing-easy.com/oauth/token`. Enable `EBILLING_ENABLED` only after the merchant credentials
