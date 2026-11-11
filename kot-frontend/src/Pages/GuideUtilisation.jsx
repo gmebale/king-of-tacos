@@ -21,7 +21,7 @@ const sections = [
   {
     icon: Package,
     title: 'Produits et stocks',
-    description: 'Catalogue, catégories, formules et options, disponibilité, entrées, pertes, inventaires et corrections de stock.'
+    description: 'Catalogue, catégories et inventaire. Sur ordinateur, les flèches parcourent les catégories ; les étapes de personnalisation (sauces, viandes, boissons…) peuvent être enregistrées, réutilisées et mises à jour comme modèles.'
   },
   {
     icon: Users,

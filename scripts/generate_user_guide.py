@@ -117,7 +117,7 @@ story.append(P('<b>Dans ce guide</b>', 'Subsection'))
 for item in ['Parcours de commande client et commande au comptoir', 'Service, cuisine, bar et caisse', 'Produits, inventaire et finances', 'Comptes, permissions, fidélité, avis et réglages']:
     story.append(P('• ' + item, 'BulletKOT'))
 story.append(Spacer(1, 25*mm))
-story.append(P('Version du 17 octobre 2026  ·  FCFA', 'CoverSub'))
+story.append(P('Version du 11 novembre 2026  ·  FCFA', 'CoverSub'))
 story.append(PageBreak())
 
 # Getting started and roles
@@ -238,10 +238,21 @@ story += heading('6. Produits, carte et inventaire', 'Le module Stock permet aux
 story.append(P('Catalogue produits', 'Subsection'))
 story += bullets([
     'Créer ou modifier les informations du produit : nom, catégorie, description, prix, image, disponibilité et taxes applicables.',
-    'Pour une formule ou un produit configurable, renseigner les groupes de choix, les options, le nombre minimum/maximum et les suppléments.',
+    'Pour une formule ou un produit configurable, ajouter des étapes de choix : sauces, viandes, boissons, accompagnements ou suppléments. Régler pour chacune le mode de choix, les quantités minimum et maximum et les suppléments éventuels.',
     'Vérifier les produits liés aux options : une option indisponible peut rendre le choix impossible à la commande.',
     'Désactiver un produit temporairement plutôt que le supprimer lorsque son historique doit être conservé.'
 ])
+story.append(P('Enregistrer et réutiliser les étapes', 'Subsection'))
+story += bullets([
+    'Configurez une étape une première fois, puis cliquez sur « Enregistrer comme modèle » et donnez-lui un nom facile à reconnaître, par exemple « Sauces tacos » ou « Boissons menu enfant ».',
+    'Pour un autre produit ou menu, choisissez cette étape dans « Ajouter une étape enregistrée », puis cliquez sur « Ajouter l’étape ». Les choix et les règles sont recopiés dans ce produit et restent modifiables.',
+    'Une modification locale ne change que le produit en cours. Pour créer un nouvel affichage réutilisable, enregistrez cette variante comme un nouveau modèle.',
+    '« Mettre à jour le modèle » change le modèle pour les prochaines utilisations seulement. Les produits déjà configurés ne changent pas automatiquement.',
+    'Pour reprendre la nouvelle version dans un produit précis, ouvrez ce produit et cliquez sur « Appliquer la version du modèle ». Vérifiez ensuite les choix et enregistrez le produit.'
+])
+story.append(callout('Important', 'Les étapes enregistrées réutilisent des produits du catalogue. Si une sauce, une boisson ou une autre option change de nom, de disponibilité ou de prix, vérifiez chaque étape concernée avant de valider le produit.'))
+story.append(P('Naviguer entre les catégories sur ordinateur', 'Subsection'))
+story.append(P('Dans la barre des catégories du stock, utilisez les flèches gauche et droite qui encadrent les onglets pour passer à la catégorie précédente ou suivante. La flèche est désactivée au début ou à la fin de la liste. Sur mobile et tablette, faites défiler les onglets horizontalement et touchez la catégorie souhaitée.'))
 story.append(P('Mouvements de stock', 'Subsection'))
 story += bullets([
     'Consulter les niveaux actuels et les alertes de stock faible.',

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Product } from "../Entities/Product";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Search, Edit, Trash2, AlertCircle, Eye, EyeOff, Tags } from "lucide-react";
+import { Plus, Search, Edit, Trash2, AlertCircle, Eye, EyeOff, Tags, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "../Components/ui/button";
 import { Input } from "../Components/ui/input";
 import { Badge } from "../Components/ui/badge";
@@ -177,6 +177,15 @@ export default function AdminStock() {
     stats[cat.name] = products.filter(p => p.category?.name === cat.name).length;
   });
 
+  const categoryOptions = ["all", ...categories.map(cat => cat.name)];
+  const selectedCategoryIndex = categoryOptions.indexOf(categoryFilter);
+  const moveCategory = (direction) => {
+    const nextIndex = selectedCategoryIndex + direction;
+    if (nextIndex >= 0 && nextIndex < categoryOptions.length) {
+      setCategoryFilter(categoryOptions[nextIndex]);
+    }
+  };
+
   return (
     <div className="p-3 sm:p-4 md:p-6 lg:p-8">
       <motion.div
@@ -253,10 +262,21 @@ export default function AdminStock() {
         </div>
 
         {/* Scrollable Tabs */}
-        <div className="relative">
+        <div className="flex min-w-0 items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            onClick={() => moveCategory(-1)}
+            disabled={selectedCategoryIndex <= 0}
+            aria-label="Afficher la catégorie précédente"
+            className="hidden h-10 w-10 shrink-0 rounded-xl border-gray-300 lg:inline-flex"
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </Button>
           <Tabs value={categoryFilter} onValueChange={setCategoryFilter}>
             <div 
-              className="overflow-x-auto scrollbar-hide -mx-3 sm:-mx-4 px-3 sm:px-4"
+              className="min-w-0 flex-1 overflow-x-auto scrollbar-hide -mx-3 sm:-mx-4 px-3 sm:px-4 lg:mx-0 lg:px-0"
               style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
             >
               <TabsList 
@@ -280,6 +300,17 @@ export default function AdminStock() {
               </TabsList>
             </div>
           </Tabs>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            onClick={() => moveCategory(1)}
+            disabled={selectedCategoryIndex < 0 || selectedCategoryIndex >= categoryOptions.length - 1}
+            aria-label="Afficher la catégorie suivante"
+            className="hidden h-10 w-10 shrink-0 rounded-xl border-gray-300 lg:inline-flex"
+          >
+            <ChevronRight className="h-5 w-5" />
+          </Button>
         </div>
       </div>
 

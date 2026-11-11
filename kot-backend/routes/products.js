@@ -1,4 +1,5 @@
 const express = require('express');
+const crypto = require('crypto');
 const { PrismaClient } = require('@prisma/client');
 const { authenticateToken, requirePagePermission, requirePermission, hasPermission } = require('../middleware/auth');
 
@@ -6,6 +7,7 @@ const router = express.Router();
 const prisma = new PrismaClient();
 const PREPARATION_STATIONS = ['bar', 'cuisine_chaude', 'cuisine_froide'];
 const PRODUCT_TYPES = ['simple', 'configurable', 'combo', 'modifier'];
+const CUSTOMIZATION_STEP_TEMPLATES_KEY = 'product_customization_step_templates';
 
 function parseTaxRateIds(value) {
   if (value === undefined) return undefined;
@@ -85,6 +87,100 @@ async function validateCustomizationReferences(tx, customization, excludedProduc
   const matches = await tx.product.findMany({ where: { id: { in: ids } }, select: { id: true } });
   return matches.length === ids.length ? null : 'Un produit choisi comme option ou suggestion n’existe plus.';
 }
+
+async function readCustomizationStepTemplates() {
+  const setting = await prisma.settings.findUnique({
+    where: { key: CUSTOMIZATION_STEP_TEMPLATES_KEY },
+    select: { value: true }
+  });
+  if (!setting?.value) return [];
+  const templates = JSON.parse(setting.value);
+  return Array.isArray(templates) ? templates : [];
+}
+
+async function writeCustomizationStepTemplates(templates) {
+  const value = JSON.stringify(templates);
+  if (Buffer.byteLength(value, 'utf8') > 60000) {
+    const error = new Error('La bibliothèque d’étapes est pleine. Supprimez des modèles inutilisés.');
+    error.statusCode = 413;
+    throw error;
+  }
+  await prisma.settings.upsert({
+    where: { key: CUSTOMIZATION_STEP_TEMPLATES_KEY },
+    update: { value },
+    create: { key: CUSTOMIZATION_STEP_TEMPLATES_KEY, value }
+  });
+}
+
+function validateCustomizationStepTemplate(name, group) {
+  const normalizedName = String(name || '').trim();
+  if (!normalizedName || normalizedName.length > 100) return { error: 'Le nom du modèle doit contenir entre 1 et 100 caractères.' };
+  if (!group || typeof group !== 'object' || Array.isArray(group)) return { error: 'Étape de personnalisation invalide.' };
+  const normalizedGroup = normalizeOptionGroups({ optionGroups: [group] })[0];
+  const customizationError = validateCustomization('configurable', { optionGroups: [normalizedGroup] });
+  return customizationError
+    ? { error: customizationError }
+    : { template: { name: normalizedName, group: normalizedGroup } };
+}
+
+router.get('/customization-steps', authenticateToken, requirePagePermission('stock'), requirePermission('admin.products'), async (_req, res) => {
+  try {
+    res.set('Cache-Control', 'no-store');
+    const templates = await readCustomizationStepTemplates();
+    res.json(templates.sort((a, b) => a.name.localeCompare(b.name, 'fr')));
+  } catch (error) {
+    console.error('Get customization step templates error:', error);
+    res.status(500).json({ message: 'Impossible de charger les étapes enregistrées.' });
+  }
+});
+
+router.post('/customization-steps', authenticateToken, requirePagePermission('stock'), requirePermission('admin.products'), async (req, res) => {
+  try {
+    const validated = validateCustomizationStepTemplate(req.body?.name, req.body?.group);
+    if (validated.error) return res.status(400).json({ message: validated.error });
+    const invalidReference = await validateCustomizationReferences(prisma, { optionGroups: [validated.template.group] });
+    if (invalidReference) return res.status(400).json({ message: invalidReference });
+    const templates = await readCustomizationStepTemplates();
+    const template = { id: crypto.randomUUID(), ...validated.template, updatedAt: new Date().toISOString() };
+    await writeCustomizationStepTemplates([...templates, template]);
+    res.status(201).json(template);
+  } catch (error) {
+    console.error('Create customization step template error:', error);
+    res.status(error.statusCode || 500).json({ message: error.statusCode ? error.message : 'Impossible d’enregistrer cette étape.' });
+  }
+});
+
+router.put('/customization-steps/:templateId', authenticateToken, requirePagePermission('stock'), requirePermission('admin.products'), async (req, res) => {
+  try {
+    const templates = await readCustomizationStepTemplates();
+    const index = templates.findIndex(template => template.id === req.params.templateId);
+    if (index < 0) return res.status(404).json({ message: 'Modèle introuvable.' });
+    const validated = validateCustomizationStepTemplate(req.body?.name, req.body?.group);
+    if (validated.error) return res.status(400).json({ message: validated.error });
+    const invalidReference = await validateCustomizationReferences(prisma, { optionGroups: [validated.template.group] });
+    if (invalidReference) return res.status(400).json({ message: invalidReference });
+    const template = { id: req.params.templateId, ...validated.template, updatedAt: new Date().toISOString() };
+    templates[index] = template;
+    await writeCustomizationStepTemplates(templates);
+    res.json(template);
+  } catch (error) {
+    console.error('Update customization step template error:', error);
+    res.status(error.statusCode || 500).json({ message: error.statusCode ? error.message : 'Impossible de mettre à jour cette étape.' });
+  }
+});
+
+router.delete('/customization-steps/:templateId', authenticateToken, requirePagePermission('stock'), requirePermission('admin.products'), async (req, res) => {
+  try {
+    const templates = await readCustomizationStepTemplates();
+    const remaining = templates.filter(template => template.id !== req.params.templateId);
+    if (remaining.length === templates.length) return res.status(404).json({ message: 'Modèle introuvable.' });
+    await writeCustomizationStepTemplates(remaining);
+    res.json({ message: 'Modèle supprimé.' });
+  } catch (error) {
+    console.error('Delete customization step template error:', error);
+    res.status(error.statusCode || 500).json({ message: error.statusCode ? error.message : 'Impossible de supprimer ce modèle.' });
+  }
+});
 
 // Get all products
 router.get('/', async (req, res) => {
